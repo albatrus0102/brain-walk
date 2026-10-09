@@ -343,8 +343,8 @@ body.in-chat main{padding-bottom:var(--composer-h,170px)!important;padding-top:4
 .composer{position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--md-sys-color-surface-container);border-top:1px solid var(--md-sys-color-outline-variant);padding-bottom:env(safe-area-inset-bottom)}
 .composer-in{max-width:720px;margin-inline:auto;padding:8px 16px 10px;display:flex;flex-direction:column;gap:8px}
 /* 한 번에 답장하기: 옆으로 숨지 않게 줄을 바꿔요 (아주 크게에서 오른쪽 칩이 화면 밖으로 밀려났어요) */
-.quick{display:flex;flex-wrap:wrap;gap:8px}
-.quick .chip{flex:1 1 auto;min-height:56px;padding-inline:16px;font-size:var(--md-sys-typescale-title-small-size);white-space:nowrap}
+.quick{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,96px),1fr));gap:8px}
+.quick .chip{min-height:56px;padding:6px 10px;font-size:var(--md-sys-typescale-title-small-size);line-height:1.25;text-align:center}
 .cbar{display:flex;gap:8px;align-items:flex-end}
 .cbar .input{border-radius:var(--md-sys-shape-corner-extra-large);min-height:56px;max-height:140px;padding:12px 18px}
 .sendbtn{flex:none;width:64px;height:64px;border-radius:50%;border:0;background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary);display:flex;align-items:center;justify-content:center;cursor:pointer}
