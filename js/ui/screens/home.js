@@ -33,7 +33,7 @@ SCREENS.home = {
     const cg = courseGames(now), saved = LS.get('bw.course', null), doneN = (saved && saved.date === today) ? saved.results.length : 0, cs = courseStatus();
     const resume = doneN > 0 && doneN < COURSE_N, shown = cs.done ? COURSE_N : Math.max(doneN, 0);
     const pi = programInfo(S.program.startDate, today, dateSet(list)), lastA = allAssessments()[0], nc = nextCheckInfo(lastA && lastA.date, today), cis = allCheckins();
-    const ncText = nc.state === 'none' ? ['아직 두뇌 건강 점검을 하지 않았어요', '처음 상태를 기록해 두면 변화를 비교할 수 있어요. (8~10분)', '점검 시작하기']
+    const ncText = nc.state === 'none' ? ['아직 두뇌 건강 점검을 하지 않았어요', '처음 상태를 기록해 두면 변화를 비교할 수 있어요. (약 15분, 나눠서 해도 돼요)', '점검 시작하기']
       : nc.state === 'due' ? ['다시 점검할 때예요', '마지막 점검이 ' + nc.days + '일 전이에요. 한 달에 한 번 같은 문제로 비교해요.', '점검 시작하기']
       : ['다음 점검은 ' + nc.remain + '일 뒤예요', '마지막 점검: ' + mdLabel(lastA.date) + ' (총점 ' + lastA.total + ')', '점검 결과 보기'];
     return '<div class="stack"><div id="home-banner"></div>' + hero + '<div id="cheer-slot"></div>' +

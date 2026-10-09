@@ -26,7 +26,7 @@ export async function startFlow() {
     if (!LS.get('bw.seenDisc', false)) await askDialog('처음 오셨네요', DISCLAIMER_LONG, [{ label: '확인', kind: 'filled', run: () => LS.set('bw.seenDisc', true) }]);
     if (isTrainee() && !allAssessments().length && !LS.get('bw.offered', false)) {
       LS.set('bw.offered', true);
-      await askDialog('두뇌 건강 점검을 먼저 해 볼까요?', '지금 상태를 한 번 기록해 두면 나중에 변화를 비교할 수 있어요. 8~10분쯤 걸려요. 건너뛰어도 괜찮아요.', [
+      await askDialog('두뇌 건강 점검을 먼저 해 볼까요?', '지금 상태를 한 번 기록해 두면 나중에 변화를 비교할 수 있어요. 약 15분 걸려요 (두 번에 나눠 해도 돼요). 건너뛰어도 괜찮아요.', [
         { label: '점검 시작하기', kind: 'filled', run: () => { S.firstRunBusy = false; startAssessment(); } }, { label: '나중에 할게요', kind: 'text' }]);
     }
   } catch (e) {}
@@ -79,7 +79,7 @@ export async function boot() {
   applyPrefs();
   S.screen = 'ob-loading'; render();
   registerServiceWorker();
-  if (window.__DEBUG) { window.__S = S; }
+  if (window.__DEBUG) { window.__S = S; window.__go = go; window.__render = render; }
   const r = await Store.init();
   await afterInit(r);
 }

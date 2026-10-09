@@ -146,6 +146,7 @@ export async function connectData() {
     subscribe('sessions', { orderBy: ['ts', 'desc'], limit: 300 }, list => { S.dbSessions = list; onData(); });
     subscribe('assessments', { orderBy: ['ts', 'desc'], limit: 60 }, list => { S.dbAssess = list; onData(); });
     subscribe('checkins', { orderBy: ['date', 'desc'], limit: 120 }, list => { S.dbCheckins = list; onData(); });
+    subscribe('taskRuns', { orderBy: ['ts', 'desc'], limit: 30 }, list => { S.taskRuns = list; onData(); });
     if (Store.shared && S.myId) {
       subscribe('reads', {}, list => { S.reads = {}; list.forEach(d => { S.reads[d.id] = Number(d.lastReadTs) || 0; }); onData(); });
       subscribeMessages();

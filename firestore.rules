@@ -355,6 +355,18 @@ service cloud.firestore {
         allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));
       }
 
+      // ---- 점검 과제 상세 (낱말·점 잇기·숫자 기억 등): 한 번의 월간 점검의 과제별 점수와 세부 수치
+      match /taskRuns/{rid} {
+        allow read: if isMember(fid);
+        allow create: if isMember(fid) && okId(rid)
+          && newData().keys().hasOnly(['date', 'ts', 'userId', 'v', 'tasks'])
+          && newData().userId == myId(fid)
+          && okDate(newData().date) && okMs(newData().ts)
+          && newData().tasks is map && newData().tasks.size() <= 12;
+        allow update: if false;
+        allow delete: if isMember(fid) && (resource.data.userId == myId(fid) || isOwner(fid));
+      }
+
       // ---- 설문 결과 (Short IQCODE, KDSQ-C, SMCQ, GDS-15, PHQ-9) : 가족만 읽기
       // 훈련하는 분이 직접 답한 설문도 저장은 되지만(create) 읽을 수는 없어요.
       function validSurvey() {

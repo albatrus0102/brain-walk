@@ -1,9 +1,9 @@
 import { allAssessments, isTrainee } from '../../data.js';
 import { hubHtml } from './hub.js';
-import { DOM, DOMAINS } from '../../games/registry.js';
+import { DOM, DOMAINS, GAMES } from '../../games/registry.js';
 import { changeWord, nextCheckInfo } from '../../logic.js';
 import { mdLabel } from '../../records.js';
-import { ASSESS_STEPS } from '../../session.js';
+import { ASSESS_STEPS, assessDraft } from '../../session.js';
 import { say } from '../../sound.js';
 import { S } from '../../state.js';
 import { SCREENS } from '../registry.js';
@@ -19,9 +19,11 @@ function assessMainHtml() {
   {
     const as = allAssessments(), last = as[0], prev = as[1], today = ymd(new Date()), nc = nextCheckInfo(last && last.date, today);
     let h2 = '<div class="stack"><h1 class="t-headline" id="as-h">두뇌 건강 점검</h1>' +
-      '<section class="card elevated"><p class="t-body">다섯 가지 영역(기억력, 주의집중력, 계산·실행기능, 지남력·언어, 처리속도)을 <b>항상 같은 난이도</b>로 살펴봐요. 약 8~10분이 걸리고, 한 달에 한 번 다시 해서 변화를 비교해요.</p>' +
+      '<section class="card elevated"><p class="t-body">다섯 가지 영역(기억력, 주의집중력, 계산·실행기능, 지남력·언어, 처리속도)을 <b>항상 같은 난이도</b>로 살펴봐요. 약 15분이 걸리고(두 번에 나눠 해도 돼요), 한 달에 한 번 다시 해서 변화를 비교해요.</p>' +
       '<p class="t-small muted mt">진단이 아니라 변화를 살펴보는 참고용이에요. 천천히, 편하게 해 주세요.</p>' +
       '<div class="mt"><button class="btn filled" id="btn-assess-start" type="button" data-act="assessstart">' + (nc.state === 'wait' ? '다시 점검해 보기' : '점검 시작하기') + '</button></div></section>';
+    const dr = assessDraft();
+    if (dr) h2 += '<section class="card primary" id="assess-resume"><p class="t-title-m">점검을 이어서 할 수 있어요</p><p class="t-body mt">1부분은 마쳤어요. 남은 2부분(약 7분)을 이어서 해 볼까요?</p><div class="mt"><button class="btn filled" id="btn-assess-resume" type="button" data-act="assessresume">이어서 하기</button></div></section>';
     if (nc.state === 'due') h2 += '<section class="card tertiary"><p class="t-title-m">다시 점검할 때예요</p><p class="t-body">마지막 점검이 ' + nc.days + '일 전이에요.</p></section>';
     if (last) {
       h2 += '<section class="card outlined" aria-labelledby="la-h"><h2 class="t-title" id="la-h">가장 최근 점검 · ' + mdLabel(last.date) + '</h2><p class="t-display mt">' + last.total + '점</p>' +
@@ -36,10 +38,22 @@ SCREENS.assessView = { html: assessMainHtml };
 SCREENS.assess = { html() { return isTrainee() ? assessMainHtml() : hubHtml(); } };
 SCREENS.assessStep = {
   html() {
-    const i = S.assess.idx, st = ASSESS_STEPS[i], d = DOM[st.key];
-    return '<div class="stack"><div class="prog-label"><span>점검 ' + (i + 1) + ' / ' + ASSESS_STEPS.length + '</span></div>' + progressBar(i / ASSESS_STEPS.length * 100, '점검 진행') +
-      '<h1 class="t-headline" id="ast-h">' + d.name + '</h1><section class="card elevated"><p class="t-body">' + esc(d.desc) + '. 짧은 문제를 풀어 볼게요. 맞고 틀린 것보다 편하게 해 보는 게 중요해요.</p></section>' +
-      '<button class="btn filled" id="btn-assess-begin" type="button" data-act="assessbegin">시작하기</button></div>';
+    const i = S.assess.idx, st = ASSESS_STEPS[i], d = DOM[st.key], g = GAMES[st.gameId], n = ASSESS_STEPS.length;
+    const title = st.task ? g.name : d.name, desc = st.task ? g.desc : d.desc;
+    return '<div class="stack"><div class="prog-label"><span>점검 ' + (i + 1) + ' / ' + n + '</span><span>' + (st.part === 2 ? '2부분' : '1부분') + '</span></div>' + progressBar(i / n * 100, '점검 진행') +
+      '<h1 class="t-headline" id="ast-h">' + esc(title) + '</h1><section class="card elevated"><p class="t-body">' + esc(desc) + '. 짧은 문제를 풀어 볼게요. 맞고 틀린 것보다 편하게 해 보는 게 중요해요.</p></section>' +
+      '<div class="cta"><button class="btn filled" id="btn-assess-begin" type="button" data-act="assessbegin">시작하기</button></div></div>';
+  }
+};
+SCREENS.assessBreak = {
+  html() {
+    const left = ASSESS_STEPS.filter(x => x.part === 2).length;
+    return '<div class="stack"><h1 class="t-headline" id="ab-h">1부분을 마치셨어요</h1>' +
+      '<section class="card primary"><p class="t-title">여기까지 약 8분 걸렸어요.</p><p class="t-body mt">남은 과제는 ' + left + '개, 약 7분이에요. 이어서 해도 되고, 힘들면 내일 이어서 해도 괜찮아요. (3일 안에)</p></section>' +
+      '<p class="t-small muted">남은 과제는 낱말 기억, 점 잇기, 숫자 기억, 반응 속도, 색 고르기, 동물 이름 대기예요. 마지막에 처음 본 낱말을 다시 물어봐요.</p>' +
+      '<div class="cta"><button class="btn filled" id="btn-ab-continue" type="button" data-act="assesscontinue">이어서 하기 (약 7분)</button>' +
+      '<button class="btn tonal" id="btn-ab-later" type="button" data-act="assesslater">내일 이어서 하기</button>' +
+      '<button class="btn text" id="btn-ab-end" type="button" data-act="assessend">여기서 마치기</button></div></div>';
   }
 };
 SCREENS.assessDone = {

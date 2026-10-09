@@ -30,7 +30,7 @@ SCREENS.game = {
       replay() { say(spoken, true); },
       finish(r) {
         if (ctx.finished) return; ctx.finished = true;
-        s.correct += r.correct; s.total += r.total; s.roundSec.push(Math.round((Date.now() - rt0) / 100) / 10);
+        s.correct += r.correct; s.total += r.total; if (r.metrics) s.taskMetrics = r.metrics; s.roundSec.push(Math.round((Date.now() - rt0) / 100) / 10);
         beep(r.ok ? 'ok' : 'soft');
         const msg = (r.ok ? praise() + ' ' : '') + r.msg;
         $('#fb', el).innerHTML = '<div class="fb ' + (r.ok ? 'good' : 'soft') + '" id="fb-card">' + esc(msg) + '</div>';

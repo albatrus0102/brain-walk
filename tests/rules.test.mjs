@@ -121,6 +121,16 @@ await t('A (owner) can list B devices', getDocs(collection(dA, `families/${F}/me
   await t('family deletes own survey', deleteDoc(doc(dB, `families/${F}/surveys/s2`)));
   await t('owner (trainee role) cannot delete either', deleteDoc(doc(dA, `families/${F}/surveys/s1`)), false);
 }
+// ---- taskRuns (점검 과제 상세): 가족 모두 읽기, 본인 userId 로만 쓰기
+{
+  const tr = (who, extra = {}) => Object.assign({ date: today, ts: Date.now(), userId: who, v: 1, tasks: { t_digits: { domain: 'attention', score: 60, m: { fwd: 5, bwd: 3 } } } }, extra);
+  await t('trainee writes taskRun', setDoc(doc(dA, `families/${F}/taskRuns/r1`), tr('mA')));
+  await t('family reads taskRun', getDoc(doc(dB, `families/${F}/taskRuns/r1`)));
+  await t('taskRun forged userId denied', setDoc(doc(dB, `families/${F}/taskRuns/r2`), tr('mA')), false);
+  await t('taskRun extra field denied', setDoc(doc(dA, `families/${F}/taskRuns/r3`), tr('mA', { note: 1 })), false);
+  await t('taskRun update denied', updateDoc(doc(dA, `families/${F}/taskRuns/r1`), { v: 2 }), false);
+  await t('non-member taskRun read denied', getDoc(doc(db('stranger'), `families/${F}/taskRuns/r1`)), false);
+}
 // ---- transfer: B issues recovery code for A; new device uidA2 redeems
 {
   const T = 'TRF234';

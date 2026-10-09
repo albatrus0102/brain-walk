@@ -8,7 +8,7 @@ import { NO_WRITE_MSG, connectFamilyOnly, writeErrMsg, allCheckins, allSessions,
 import { buildIcs } from './logic.js';
 import { Platform } from './platform.js';
 import { recordOfCheck, recordOfSession, shareSummary, talkAbout } from './records.js';
-import { beginAssessStep, finishSession, nextCourseStep, startAssessment, startCourse, startSession } from './session.js';
+import { beginAssessStep, completeAssessment, resumeAssessment, saveAssessLater, finishSession, nextCourseStep, startAssessment, startCourse, startSession } from './session.js';
 import { say, stopSpeech } from './sound.js';
 import { S } from './state.js';
 import { Store } from './store/store.js';
@@ -87,6 +87,10 @@ document.addEventListener('click', e => {
   else if (a === 'again') startSession(S.last.rec.gameId, { inCourse: false });
   else if (a === 'assessstart') startAssessment();
   else if (a === 'assessbegin') beginAssessStep();
+  else if (a === 'assesscontinue') go('assessStep');
+  else if (a === 'assesslater') { saveAssessLater(); toast('여기까지 저장했어요. 내일 이어서 해 주세요.'); go('home'); }
+  else if (a === 'assessend') completeAssessment();
+  else if (a === 'assessresume') resumeAssessment();
   else if (a === 'ci') {
     const k = b.dataset.k, v = b.dataset.v; S.ci[k] = v === 'true' ? true : v === 'false' ? false : Number(v);
     render(true); const nb = $('#ci-' + (k === 'mood' ? 'mood-' + v : k === 'sleepHours' ? 'sleep-' + v : k + '-' + (v === 'true' ? 'yes' : 'no'))); if (nb) nb.focus();

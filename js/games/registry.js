@@ -11,3 +11,6 @@ export const GAMES = {};
 export const GAME_ORDER = [];
 export function reg(g) { GAMES[g.id] = g; GAME_ORDER.push(g.id); }
 export const gamesOf = d => GAME_ORDER.filter(id => GAMES[id].domain === d);
+/* 월간 점검 전용 과제: GAMES 에는 등록하되 GAME_ORDER 에는 넣지 않아서 훈련 코스·골라서 하기에 나오지 않아요.
+ * play(ctx) 는 ctx.finish({ correct: 점수(0~100), total: 100, ok, msg, metrics }) 로 끝내요. 규준이나 기준점은 없고, 본인의 처음 기록과 비교해서만 봐요. */
+export function regTask(g) { g.task = true; GAMES[g.id] = g; }
