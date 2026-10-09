@@ -1,0 +1,176 @@
+# 오늘의 두뇌 산책 (brain-walk)
+
+가족이 함께 응원하는 두뇌 훈련 앱이에요. 훈련하는 분(예: 아버지)은 매일 짧은 두뇌 게임을 하고, 가족은 기록을 보고 응원 메시지와 알림을 보내요.
+휴대폰 홈 화면에 설치해서 앱처럼 쓸 수 있고(PWA), 서버는 Firebase(무료 사용량 안), 화면은 GitHub Pages에 올려요.
+
+> **의료기기가 아니에요.** 이 앱은 두뇌 활동을 돕는 생활 도구예요. 치매나 경도인지장애를 진단·치료·예방하지 않고, 점수는 의학적 판단의 근거가 아니에요.
+> 걱정되는 변화가 있으면 가까운 **치매안심센터(치매상담콜센터 1899-9988, 국번 없이)** 나 병원과 상담하세요.
+
+설정은 처음 한 번만 하면 돼요. 코딩을 몰라도 아래 순서대로 따라 하면 됩니다. (약 40분)
+
+---
+
+## 목차
+1. [준비물](#1-준비물)
+2. [저장소 만들기](#2-저장소-만들기)
+3. [Firebase 프로젝트 만들기](#3-firebase-프로젝트-만들기)
+4. [웹 앱 등록하고 설정값 복사하기](#4-웹-앱-등록하고-설정값-복사하기)
+5. [익명 로그인 켜기](#5-익명-로그인-켜기)
+6. [Firestore 만들기 (서울)](#6-firestore-만들기-서울)
+7. [보안 규칙 넣기](#7-보안-규칙-넣기)
+8. [푸시 알림 키(VAPID) 만들기](#8-푸시-알림-키vapid-만들기)
+9. [firebase-config.js 채우기](#9-firebase-configjs-채우기)
+10. [GitHub Pages 켜고 배포하기](#10-github-pages-켜고-배포하기)
+11. [휴대폰에 설치하기](#11-휴대폰에-설치하기)
+12. [가족 초대하기](#12-가족-초대하기)
+13. [알림 보내는 방법 고르기](#13-알림-보내는-방법-고르기-둘-중-하나)
+14. [(선택) 보안 강화](#14-선택-보안-강화)
+15. [기기를 바꿨을 때 / 잃어버렸을 때](#15-기기를-바꿨을-때--잃어버렸을-때)
+16. [문제 해결](#16-문제-해결)
+17. [개인정보와 삭제](#17-개인정보와-삭제)
+18. [개발자용: 폴더 구조와 시험](#18-개발자용-폴더-구조와-시험)
+19. [SOURCES (출처와 이용 조건)](#sources-출처와-이용-조건)
+
+---
+
+## 1. 준비물
+- Google 계정 (Firebase용)
+- GitHub 계정 (화면을 올리는 곳)
+- PC (처음 설정할 때만 필요해요)
+
+## 2. 저장소 만들기
+1. 이 저장소를 **Fork** 하거나, "Use this template"으로 내 계정에 복사해요.
+2. 이름은 `brain-walk`, 공개 범위는 **Public** 으로 해요. (이름을 바꾸면 주소도 바뀌어요. 이 안내는 `brain-walk` 기준이에요.)
+
+앱 주소는 `https://내아이디.github.io/brain-walk/` 가 돼요.
+
+## 3. Firebase 프로젝트 만들기
+1. <https://console.firebase.google.com> 에 들어가 **프로젝트 추가**를 눌러요.
+2. 이름을 정하고(예: `brain-walk-우리집`), **Google 애널리틱스는 "사용 안 함"** 으로 해요. 개인정보 수집을 줄이기 위해서예요.
+
+## 4. 웹 앱 등록하고 설정값 복사하기
+1. 프로젝트 첫 화면의 `</>` (웹) 아이콘을 눌러요. (또는 프로젝트 설정 ⚙ › 일반 › 내 앱)
+2. 앱 닉네임을 쓰고 "Firebase 호스팅"은 **체크하지 않고** 등록해요.
+3. 화면에 나오는 `firebaseConfig = { apiKey: "...", authDomain: "...", ... }` 값을 메모장에 복사해 둬요. (9번에서 써요.)
+
+## 5. 익명 로그인 켜기
+1. 왼쪽 메뉴 **Authentication** › 시작하기 › **로그인 방법** 탭 › **익명** › 사용 설정 › 저장.
+2. (선택) **Google** 도 사용 설정하고, 설정 › **승인된 도메인**에 `내아이디.github.io` 를 추가해요.
+
+> ⚠ "Identity Platform으로 업그레이드"는 **하지 마세요.** 업그레이드하면 30일이 지난 익명 계정이 자동 삭제될 수 있어요.
+
+## 6. Firestore 만들기 (서울)
+1. **Firestore Database** › 데이터베이스 만들기.
+2. 위치는 **asia-northeast3 (서울)**, 모드는 **프로덕션 모드**로 해요. (위치는 나중에 바꿀 수 없어요.)
+
+## 7. 보안 규칙 넣기
+가족이 아닌 사람이 데이터를 보지 못하게 하는 가장 중요한 단계예요.
+- **콘솔로 하기(쉬움):** Firestore › **규칙** 탭에서 기존 내용을 모두 지우고, 이 저장소의 `firestore.rules` 파일 내용을 전부 붙여넣은 뒤 **게시**를 눌러요.
+- **CLI로 하기:** PC에서 `npm i -g firebase-tools` → `firebase login` → `firebase use 프로젝트ID` → `firebase deploy --only firestore`
+
+규칙을 고치면 `tests/` 의 시험을 꼭 다시 돌려요. ([18번](#18-개발자용-폴더-구조와-시험))
+
+## 8. 푸시 알림 키(VAPID) 만들기
+프로젝트 설정 ⚙ › **클라우드 메시징** › 웹 구성 › **웹 푸시 인증서** › **키 쌍 생성** 을 누르고, 나온 **공개 키**를 복사해 둬요.
+
+## 9. firebase-config.js 채우기
+1. GitHub 저장소에서 `firebase-config.js` 를 열고 연필 아이콘(편집)을 눌러요.
+2. `REPLACE_ME` 자리에 4번의 값(`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`)과 8번의 공개 키(`vapidKey`)를 붙여넣어요.
+3. **Commit changes** 를 눌러요.
+
+이 값들은 공개되어도 괜찮아요(웹 설정은 원래 공개용). 단, **서비스 계정 키(JSON)는 절대 이 저장소에 올리면 안 돼요.**
+
+## 10. GitHub Pages 켜고 배포하기
+1. 저장소 **Settings › Pages › Build and deployment › Source: GitHub Actions** 로 바꿔요.
+2. 배포는 **`main` 브랜치에 올라올 때마다** 자동으로 돼요. 이 작업 브랜치(`claude/digital-cognitive-therapy-app-lff0ze`)에서 작업했다면, **Pull request를 만들어 `main` 에 병합(Merge)** 해요.
+3. **Actions** 탭에서 "deploy pages"가 초록색이 되면 `https://내아이디.github.io/brain-walk/` 로 접속해요.
+4. 아직 9번을 하지 않았다면 "관리자 설정이 필요해요" 화면이 보여요. 이때 **체험 모드 (이 기기에만 저장)** 로 둘러볼 수 있어요.
+
+## 11. 휴대폰에 설치하기
+- **아이폰 (iOS 16.4 이상):** 반드시 **Safari**로 열어요 › 아래 **공유** 버튼 › **홈 화면에 추가** › 추가 › **홈 화면의 아이콘으로 다시 열기** › 가족 만들기/코드 입력 › 설정에서 **알림 받기**.
+  아이폰은 알림을 **홈 화면에 추가한 앱**에서만 받을 수 있고, Safari와 홈 화면 앱은 저장 공간이 따로예요. 그래서 홈 화면 앱을 연 다음에 가입하는 것이 가장 편해요.
+- **안드로이드:** Chrome으로 열어요 › 메뉴 › **앱 설치**(또는 설정의 "앱으로 설치") › **알림 허용**.
+
+## 12. 가족 초대하기
+1. 처음 쓰는 사람이 **새 가족 만들기**를 눌러 이름과 역할(훈련하는 분 / 가족)을 정해요.
+2. 화면에 6글자 **가족 코드**와 **초대 링크**가 나와요. **카톡으로 초대 보내기**를 누르면 초대 문구가 복사돼요. 카톡에 붙여넣어 보내세요.
+3. 가족은 링크를 열면 코드가 미리 입력되어 있어요. 이름을 쓰고 **가족**을 선택하면 끝이에요. (링크가 안 열리면 앱에서 **가족 코드로 들어가기**에 코드를 직접 입력해요.)
+4. 코드는 **7일** 동안 쓸 수 있어요. 설정 › **가족 코드 다시 보기 / 새로 만들기**에서 다시 볼 수 있어요. 누군가를 내보낸 뒤에는 새 코드를 만드는 것이 좋아요.
+5. 코드의 글자는 헷갈리지 않게 `0, O, 1, I`를 쓰지 않아요.
+
+## 13. 알림 보내는 방법 고르기 (둘 중 하나)
+가족의 응원과 훈련 시간 알림을 폰으로 보내려면 "보내는 곳"이 필요해요.
+
+| | A. Cloud Functions (추천) | B. GitHub Actions |
+|---|---|---|
+| 요금제 | Blaze (카드 등록, 이 규모는 사실상 무료) | 무료, 카드 불필요 |
+| 알림 속도 | 1~3초 | 10~40분 늦을 수 있고 가끔 건너뜀 |
+| 비밀 키 | 구글 안에서만 | 서비스 계정 키를 GitHub Secret에 보관 |
+
+### A. Cloud Functions (즉시 알림)
+1. Firebase 콘솔 왼쪽 아래 **요금제 업그레이드 → Blaze** 로 바꿔요(카드 등록). 바로 **예산 알림**(예: 월 5,000원)을 설정해요.
+2. PC에서:
+   ```
+   npm i -g firebase-tools
+   firebase login
+   firebase use 프로젝트ID
+   cd functions && npm install && cd ..
+   firebase deploy --only functions,firestore
+   ```
+3. `APP_URL` 을 물으면 `https://내아이디.github.io/brain-walk/` 를 입력해요.
+
+### B. GitHub Actions (무료)
+1. Google Cloud 콘솔 › IAM › 서비스 계정에서 서비스 계정을 만들고 `Cloud Datastore User`, `Firebase Cloud Messaging API Admin` 역할을 준 뒤 키(JSON)를 만들어요. (더 간단한 방법: Firebase 콘솔 › 프로젝트 설정 › 서비스 계정 › 새 비공개 키 생성)
+2. GitHub **Settings › Secrets and variables › Actions › New repository secret** 에 이름 `FIREBASE_SERVICE_ACCOUNT`, 값에 JSON **전체**를 붙여넣어요. 그 뒤 내려받은 JSON 파일은 지워요.
+3. 같은 화면의 **Variables** 탭에 `APP_URL` = `https://내아이디.github.io/brain-walk/` 를 추가해요.
+4. **Actions › reminders (push fallback) › Run workflow** 로 시험해요.
+
+> ⚠ 키 파일을 저장소에 절대 올리지 마세요. (`.gitignore` 가 막아 주지만 직접 확인하세요.)
+> ⚠ 저장소에 60일 동안 변화가 없으면 GitHub가 예약 실행을 멈춰요. 메일이 오면 Actions에서 다시 켜 주세요.
+> 둘을 함께 켜 둬도 안전해요. 같은 알림이 두 번 가지 않아요.
+
+## 14. (선택) 보안 강화
+- **API 키를 주소로 제한:** Google Cloud 콘솔 › API 및 서비스 › 사용자 인증 정보 › "Browser key (auto created by Firebase)" › 애플리케이션 제한 = HTTP 리퍼러 → `https://내아이디.github.io/brain-walk/*` (개발용으로 `http://localhost:*/*` 추가). API 제한 목록에는 Identity Toolkit, Token Service, Cloud Firestore, Firebase Installations, FCM Registration API를 꼭 넣어요. 너무 좁히면 알림 켜기가 조용히 실패하니, 제한한 뒤 알림을 꼭 시험하세요.
+- **App Check(reCAPTCHA v3):** 사이트 키를 만들어 `firebase-config.js` 의 `appCheckSiteKey` 에 넣고, 일주일 지켜본 뒤 Firestore에서 "시행"을 켜요.
+- **예산 알림**(Blaze를 쓸 때).
+
+## 15. 기기를 바꿨을 때 / 잃어버렸을 때
+- **기기를 바꿀 때:** 옛 폰의 설정 › **다른 기기로 옮기기** → 나오는 코드(약 25분, 한 번만 쓸 수 있어요)를 새 폰의 첫 화면 **기기 옮기기 코드가 있어요**에 입력해요. 기록과 가족 연결이 그대로 이어져요.
+- **폰을 잃어버렸을 때:** 가족의 폰에서 같은 방법으로 코드를 만들어 새 폰에 입력해요. 잃어버린 폰은 연결된 기기에서 끊어요.
+- 브라우저 데이터를 지우거나 앱을 지우면 그 기기의 로그인이 사라져요. 이때도 위 방법으로 복구해요.
+
+## 16. 문제 해결
+- **알림이 안 와요:** 아이폰은 *홈 화면에 추가한 앱*에서만 와요(iOS 16.4 이상). 설정 › 알림 허용 상태와 앱 설정의 "알림 받기" 스위치를 확인해요. 차단했다면 폰 설정에서 이 앱의 알림을 허용한 뒤 앱에서 다시 켜 주세요.
+- **"관리자 설정이 필요해요"가 떠요:** 9번을 확인해요. `REPLACE_ME` 가 남아 있으면 이 화면이 나와요.
+- **코드가 안 맞아요:** 7일이 지났거나 새로 만들어진 경우예요. 가족에게 새 코드를 부탁해요. `0/O`, `1/I` 는 코드에 없어요.
+- **"연결하지 못했어요"가 떠요:** 인터넷을 확인하고, 익명 로그인(5번)과 Firestore(6번)가 켜져 있는지 봐요.
+- **새 버전이 반영되지 않아요:** 앱을 완전히 닫았다가 다시 열어요. "새 버전이 있어요" 창이 뜨면 업데이트를 눌러요.
+
+## 17. 개인정보와 삭제
+- 저장되는 정보: 직접 정한 이름, 훈련·점검 기록, 생활 체크, 대화. 전화번호·이메일·사진은 받지 않아요. 분석(Analytics)도 쓰지 않아요.
+- 가족방 사람만 볼 수 있고, 데이터는 Google Firebase(서울 리전)에 저장돼요. 알림과 로그인에 쓰이는 Google 서비스는 해외에서 처리될 수 있어요.
+- 설정에서 직접 지울 수 있어요:
+  - **가족 나가기:** 내 기기 연결·기록·알림이 지워지고, 지난 대화는 "떠난 가족"으로 남아요.
+  - **모든 기록 삭제:** 가족방을 만든 분은 가족방 전체(대화, 모든 기록, 코드)를 지워요(확인 창 두 번, "삭제"를 직접 입력). 그 밖의 분은 *내 기록*만 지워요.
+  - 체험 모드는 "모든 기록 삭제 (이 기기)".
+- 이 앱은 진단 도구가 아니에요. 점수가 계속 낮아지면 치매안심센터(1899-9988)나 병원과 상담하세요.
+
+## 18. 개발자용: 폴더 구조와 시험
+```
+index.html            화면 틀 (firebase-config.js → js/app.js 순서로 읽어요)
+firebase-config.js    관리자가 채우는 공개 설정 (클래식 스크립트: 앱과 sw.js 가 함께 읽음)
+sw.js                 서비스 워커 한 개 = 오프라인 앱 껍데기 + FCM 알림
+manifest.webmanifest  PWA 설정, icons/ 는 tools/make-icons.py 로 생성
+styles/               m3-tokens.css (M3 토큰) + app.css
+js/app.js · boot.js   시작 순서: 설정 확인 → Store.init → 설정 안내/가입/앱
+js/store/             store.js(Store), firebase-adapter.js, local-adapter.js, membership.js
+js/games/ · js/ui/    게임 9종, 화면과 공통 컴포넌트
+js/push.js            알림 켜기(getToken) / 끄기 / 포그라운드 메시지
+firestore.rules       보안 규칙      functions/   Cloud Functions     scripts/   Actions 대체 발송
+tests/                규칙 시험, 어댑터 스모크 시험, 체험 모드 e2e (tests/README.md)
+tools/                make-icons.py, shell-list.mjs (sw.js 파일 목록 점검)
+```
+- 빌드 단계는 없어요. 브라우저가 `js/` 의 ES 모듈을 그대로 읽어요. 로컬에서 보려면 폴더 위에서 `python3 -m http.server` 를 실행하고 `http://localhost:8000/` 을 열어요(서비스 워커는 localhost에서도 동작해요).
+- 파일을 더하거나 지우면 `node tools/shell-list.mjs --write` 로 `sw.js` 의 캐시 목록을 갱신해요(`npm run check --prefix tests` 가 확인해 줘요).
+- 규칙과 시험: `cd tests && npm install && npm test` (Java 필요, Firestore 에뮬레이터). 자세한 내용은 [tests/README.md](tests/README.md).
+- 아이콘 다시 만들기: `python3 tools/make-icons.py` (Pillow).

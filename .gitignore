@@ -1,10 +1,11 @@
 # 서비스 계정 키는 절대 올리지 마세요 (GitHub Secret 에만 보관)
 *service-account*.json
 *-firebase-adminsdk-*.json
-node_modules/
-functions/node_modules/
-scripts/node_modules/
-tests/node_modules/
+node_modules
+
+functions/node_modules
+scripts/node_modules
+tests/node_modules
 functions/.env*
 .firebase/
 firebase-debug.log*
