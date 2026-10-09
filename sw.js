@@ -21,7 +21,8 @@ if (configured) {
 }
 
 const VERSION = '__BUILD__';
-const DEV = VERSION === '__BUILD__';   // 배포 전(개발) 상태면 항상 네트워크 우선
+// 비교 문자열을 둘로 나눠 써요: pages.yml 의 sed 가 이 줄까지 바꾸면 배포본도 늘 DEV 가 돼요.
+const DEV = VERSION === '__' + 'BUILD__';   // 배포 전(개발) 상태면 항상 네트워크 우선
 const SHELL = 'bw-shell-' + VERSION, CDN = 'bw-cdn-' + FB_VERSION;
 // 파일을 더하거나 지웠다면: node tools/shell-list.mjs --write
 const SHELL_FILES = /*SHELL_START*/ [

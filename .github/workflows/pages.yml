@@ -14,7 +14,8 @@ jobs:
         run: |
           mkdir _site
           cp -r index.html js styles icons manifest.webmanifest sw.js firebase-config.js _site/
-          sed -i "s/__BUILD__/${GITHUB_SHA::8}/" _site/sw.js
+          sed -i "s/^const VERSION = '__BUILD__';/const VERSION = '${GITHUB_SHA::8}';/" _site/sw.js
+          grep -q "^const VERSION = '${GITHUB_SHA::8}';" _site/sw.js || { echo "::error::sw.js VERSION was not stamped"; exit 1; }
           touch _site/.nojekyll
       - name: Warn if config is unfilled (site still deploys and shows the setup screen)
         run: grep -q REPLACE_ME _site/firebase-config.js && echo "::warning::firebase-config.js is not filled in" || true
