@@ -11,12 +11,12 @@
 self.BW_CONFIG = {
   firebase: {
     // Firebase 콘솔 > 프로젝트 설정(톱니바퀴) > 일반 > 내 앱(웹) > SDK 설정 및 구성 에서 복사
-    apiKey: "REPLACE_ME",
-    authDomain: "REPLACE_ME.firebaseapp.com",
-    projectId: "REPLACE_ME",
-    storageBucket: "REPLACE_ME.firebasestorage.app",
-    messagingSenderId: "REPLACE_ME",
-    appId: "REPLACE_ME"
+    apiKey: "AIzaSyAVX_pEi8RxqOjTq-l-MirQ-Z0vyOJjXZ8",
+    authDomain: "brain-walk.firebaseapp.com",
+    projectId: "brain-walk",
+    storageBucket: "brain-walk.firebasestorage.app",
+    messagingSenderId: "249297535846",
+    appId: "1:249297535846:web:2dc4f8128c984a54debea7"
   },
   // 프로젝트 설정 > 클라우드 메시징 > 웹 구성 > 웹 푸시 인증서 > 키 쌍 (공개 키) — 알림에 필요해요
   vapidKey: "REPLACE_ME",
