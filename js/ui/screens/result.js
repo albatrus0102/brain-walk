@@ -23,7 +23,7 @@ SCREENS.result = {
       '<div class="stat"><div><span class="t-label">정답</span><b>' + r.correct + ' / ' + r.total + '</b></div><div><span class="t-label">걸린 시간</span><b>' + fmtDur(r.durationSec) + '</b></div><div><span class="t-label">이번 단계</span><b>' + r.level + '단계</b></div></div>' +
       '<section class="card tertiary" aria-label="난이도"><p class="t-title-m">' + msgs[0] + '</p><p class="t-body mt">' + msgs[1] + '</p></section>' +
       '<p class="sync-note" id="sync-note"></p>' +
-      '<button class="btn filled" id="btn-next-after" type="button" data-act="after">' + nextLabel + '</button>' +
+      '<div class="cta"><button class="btn filled" id="btn-next-after" type="button" data-act="after">' + nextLabel + '</button>' +
       (inC ? '' : '<button class="btn tonal" id="btn-again" type="button" data-act="again">한 번 더 하기</button>') +
       '<button class="btn text" id="btn-home" type="button" data-act="home">처음으로</button></div>';
   },

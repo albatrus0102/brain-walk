@@ -19,6 +19,6 @@ SCREENS.checkin = {
         '<div><div class="t-title-m" id="wk-label">밤에 몇 번 깨셨어요?</div><div class="chips mt" role="group" aria-labelledby="wk-label">' + [0, 1, 2, 3].map(n => '<button type="button" class="chip" id="ci-wk-' + n + '" aria-pressed="' + (c.wakings === n) + '" data-act="ci" data-k="wakings" data-v="' + n + '">' + (n === 3 ? '3번 이상' : n === 0 ? '안 깼어요' : n + '번') + '</button>').join('') + '</div></div></div></details>' +
       yn('exercise', '오늘 걷기·운동을 하셨나요?') + yn('social', '사람을 만나거나 통화하셨나요?') + yn('meals', '골고루 드셨나요?') +
       '<section class="card filled">' + tipHtml() + '</section>' +
-      '<button class="btn filled" id="btn-ci-save" type="button" data-act="cisave"' + (ready ? '' : ' disabled') + '>저장하기</button>' + (ready ? '' : '<p class="t-small muted center">모두 고르시면 저장할 수 있어요.</p>') + '</div>';
+      '<div class="cta"><button class="btn filled" id="btn-ci-save" type="button" data-act="cisave"' + (ready ? '' : ' disabled') + '>저장하기</button>' + (ready ? '' : '<p class="t-small muted center">모두 고르시면 저장할 수 있어요.</p>') + '</div></div>';
   }
 };

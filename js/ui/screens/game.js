@@ -18,8 +18,7 @@ SCREENS.game = {
       '<section class="card elevated prompt" aria-label="안내"><p class="prompt-text" id="prompt"></p>' +
       '<div class="row"><button class="btn tonal" id="btn-replay" type="button" data-act="replay"' + (synth ? '' : ' disabled') + '>' + ic('vol') + (synth ? '다시 듣기' : '소리 안내 불가') + '</button></div></section>' +
       '<div id="box"></div><div id="fb" aria-live="polite"></div>' +
-      '<button class="btn filled" id="btn-next" type="button" data-act="next" hidden>다음 문제</button>' +
-      '<div class="center"><button class="btn text" id="btn-quit" type="button" data-act="quit">그만하기</button></div></div>';
+      '<div class="cta"><button class="btn filled" id="btn-next" type="button" data-act="next" hidden>다음 문제</button><button class="btn text" id="btn-quit" type="button" data-act="quit">그만하기</button></div></div>';
   },
   bind(el) {
     const s = S.sess, g = s.g, box = $('#box', el), rt0 = Date.now();

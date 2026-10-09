@@ -2,7 +2,7 @@ import { reg } from './registry.js';
 import { btnEl, h } from '../ui/dom.js';
 import { rnd } from '../util.js';
 
-/* ---------- 9. 번쩍 찾기 (처리속도, 더블 디시전 방식) ---------- */
+/* ---------- 9. 번쩍 찾기 (빠른 반응, 더블 디시전 방식) ---------- */
 reg({
   id: 'flash', name: '번쩍 찾기', domain: 'speed', desc: '잠깐 보이는 그림과 별을 찾아요', rounds: 5,
   play(ctx) {

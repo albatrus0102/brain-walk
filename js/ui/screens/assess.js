@@ -19,7 +19,7 @@ function assessMainHtml() {
   {
     const as = allAssessments(), last = as[0], prev = as[1], today = ymd(new Date()), nc = nextCheckInfo(last && last.date, today);
     let h2 = '<div class="stack"><h1 class="t-headline" id="as-h">두뇌 건강 점검</h1>' +
-      '<section class="card elevated"><p class="t-body">다섯 가지 영역(기억력, 주의집중력, 계산·실행기능, 지남력·언어, 처리속도)을 <b>항상 같은 난이도</b>로 살펴봐요. 약 15분이 걸리고(두 번에 나눠 해도 돼요), 한 달에 한 번 다시 해서 변화를 비교해요.</p>' +
+      '<section class="card elevated"><p class="t-body">다섯 가지 영역(기억력, 집중력, 계산·순서, 날짜·시간 감각, 빠른 반응)을 <b>항상 같은 난이도</b>로 살펴봐요. 약 15분이 걸리고(두 번에 나눠 해도 돼요), 한 달에 한 번 다시 해서 변화를 비교해요.</p>' +
       '<p class="t-small muted mt">진단이 아니라 변화를 살펴보는 참고용이에요. 천천히, 편하게 해 주세요.</p>' +
       '<div class="mt"><button class="btn filled" id="btn-assess-start" type="button" data-act="assessstart">' + (nc.state === 'wait' ? '다시 점검해 보기' : '점검 시작하기') + '</button></div></section>';
     const dr = assessDraft();
@@ -63,7 +63,7 @@ SCREENS.assessDone = {
       '<section class="card primary center"><p class="t-label">총점</p><p class="t-display">' + r.total + '점</p>' + (p ? '<p class="t-title-m mt">' + arrowHtml(r.total - p.total) + '</p><p class="t-small">지난번 ' + p.total + '점</p>' : '<p class="t-body mt">처음 점검이에요. 이 점수가 기준이 돼요.</p>') + '</section>' +
       '<section class="card outlined"><h2 class="t-title">영역별 점수</h2><div class="stack mt">' + scoreRows(r.scores, p && p.scores) + '</div></section>' +
       '<p class="t-small muted">이 결과는 진단이 아니에요. 점수가 계속 낮아지면 치매안심센터(1899-9988)나 병원에서 상담받으세요.</p><p class="sync-note" id="sync-note"></p>' +
-      '<button class="btn filled" id="btn-ad-home" type="button" data-act="home">처음으로</button></div>';
+      '<div class="cta"><button class="btn filled" id="btn-ad-home" type="button" data-act="home">처음으로</button></div></div>';
   },
   bind() { say('점검을 마치셨어요. 수고 많으셨어요.'); }
 };

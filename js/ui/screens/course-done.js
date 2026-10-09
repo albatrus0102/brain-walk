@@ -20,8 +20,7 @@ SCREENS.courseDone = {
       '<p class="t-small muted mt">평균 정답률 ' + avg + '% · 총 ' + fmtDur(dur) + '</p></section>' +
       (chatAvail() ? '<section class="card outlined">' + switchRow('notify-switch', '가족에게 알리기', S.notifyFamily ? '켜져 있어요. 나갈 때 가족 대화방에 알려요.' : '꺼져 있어요.', S.notifyFamily, 'notify', false) + '</section>' : '') +
       '<p class="sync-note" id="sync-note"></p>' +
-      '<button class="btn filled" id="btn-done-home" type="button" data-act="home">처음으로</button>' +
-      '<button class="btn outlined" id="btn-done-family" type="button" data-act="nav" data-to="family">가족이 보는 기록</button></div>';
+      '<div class="cta"><button class="btn filled" id="btn-done-home" type="button" data-act="home">처음으로</button></div></div>';
   },
   bind() { const st = streakOf(allSessions(), new Date()); say('오늘 훈련을 모두 마치셨어요. 정말 수고 많으셨어요. 연속 ' + st + '일째 훈련 중이에요.'); }
 };
