@@ -1,0 +1,24 @@
+name: reminders (push fallback)
+on:
+  schedule:
+    - cron: '*/10 * * * *'        # UTC; 스크립트가 Asia/Seoul 기준으로 직접 계산해요
+  workflow_dispatch: {}
+concurrency: { group: reminders, cancel-in-progress: false }
+permissions: { contents: read }
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: scripts }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: scripts/package-lock.json }
+      - run: npm ci --omit=dev
+        working-directory: scripts
+      - run: node send-reminders.mjs
+        working-directory: scripts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          APP_URL: ${{ vars.APP_URL }}          # 저장소 변수, 예: https://아이디.github.io/brain-walk/
+          WINDOW_MIN: '90'

@@ -1,0 +1,411 @@
+rules_version = '2';
+
+// =============================================================================
+//  오늘의 두뇌 산책 (brain-walk) — Firestore security rules
+//
+//  Identity model (see ARCHITECTURE.md §5):
+//    * request.auth.uid  = one Firebase Auth user = one DEVICE/browser profile
+//                          (anonymous, optionally linked to Google).
+//    * memberId          = one PERSON in one family. A person may have several
+//                          uids (phone + tablet, Safari + installed PWA, new phone).
+//    * families/{fid}/uids/{uid} -> { memberId }  is the ONLY thing that makes a
+//      uid a member. Every family-scoped rule resolves "me" through it.
+//
+//  Timestamps: the app keeps client epoch-millis numbers in `ts`/`lastReadTs`
+//  (existing schema). Anything security-relevant (rate limits, code expiry,
+//  ordering for push) uses server timestamps (== request.time).
+//
+//  Access-call budget: ≤10 get/exists per single op, ≤20 per batch; the
+//  heaviest op here (nudge message create) uses 4 distinct documents.
+// =============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- helpers
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+
+    function famPath(fid) { return /databases/$(database)/documents/families/$(fid); }
+    function linkPath(fid) { return /databases/$(database)/documents/families/$(fid)/uids/$(request.auth.uid); }
+    function memberPath(fid, mid) { return /databases/$(database)/documents/families/$(fid)/members/$(mid); }
+    function joinCodePath(code) { return /databases/$(database)/documents/joinCodes/$(code); }
+    function transferPath(code) { return /databases/$(database)/documents/transferCodes/$(code); }
+
+    function isMember(fid) { return signedIn() && exists(linkPath(fid)); }
+    function myId(fid) { return get(linkPath(fid)).data.memberId; }
+    function isOwner(fid) { return get(famPath(fid)).data.ownerMemberId == myId(fid); }
+
+    function newData() { return request.resource.data; }
+    function oldData() { return resource.data; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    function str(v, max) { return v is string && v.size() <= max; }
+    function nonEmpty(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
+    function okId(v) { return v is string && v.matches('^[A-Za-z0-9_-]{1,64}$'); }
+    // 6 chars from a 32-symbol alphabet: 2-9 and A-Z without I and O (no 0/O/1/I).
+    function okCode(v) { return v is string && v.matches('^[2-9A-HJ-NP-Z]{6}$'); }
+    function okDate(v) { return v is string && v.matches('^20[0-9]{2}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'); }
+    function okHHMM(v) { return v is string && v.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'); }
+    // Client epoch-millis: plausible, not more than 10 min in the future.
+    // (No lower bound against request.time: offline-queued writes commit late.)
+    function okMs(v) { return v is number && v > 1600000000000 && v <= request.time.toMillis() + 600000; }
+    // Optional fields: absent, null, or the right type. (The adapter initialises
+    // Firestore with ignoreUndefinedProperties so `undefined` is simply dropped.)
+    function optStr(field, max) { return !(field in newData()) || newData()[field] == null || str(newData()[field], max); }
+    function optNum(field) { return !(field in newData()) || newData()[field] == null || newData()[field] is number; }
+    function optBool(field) { return !(field in newData()) || newData()[field] == null || newData()[field] is bool; }
+
+    // ============================================================ join codes
+    // joinCodes/{CODE} -> { familyId, createdBy(memberId), createdTs, expiresTs }
+    // get-only: a guess either succeeds (valid, unexpired code) or is denied.
+    // Non-existent and expired codes both return permission-denied, and `list`
+    // is impossible, so families cannot be enumerated (see ARCHITECTURE §5.6).
+    match /joinCodes/{code} {
+      allow get: if signedIn() && resource.data.expiresTs > request.time;
+      allow list: if false;
+      allow create: if signedIn() && okCode(code)
+        && newData().keys().hasOnly(['familyId', 'createdBy', 'createdTs', 'expiresTs'])
+        && okId(newData().familyId)
+        && newData().createdTs == request.time
+        && newData().expiresTs is timestamp
+        && newData().expiresTs > request.time
+        && newData().expiresTs <= request.time + duration.value(15, 'd')
+        // creator is (or, in the founding batch, becomes) a member of that family
+        && existsAfter(/databases/$(database)/documents/families/$(newData().familyId)/uids/$(uid()))
+        && newData().createdBy == getAfter(/databases/$(database)/documents/families/$(newData().familyId)/uids/$(uid())).data.memberId;
+      allow update: if false;
+      allow delete: if signedIn() && isMember(resource.data.familyId);
+    }
+
+    // ======================================================= transfer codes
+    // One-time "다른 기기로 옮기기" / family-issued recovery code.
+    // transferCodes/{CODE} -> { familyId, memberId, createdBy, createdTs, expiresTs, usedBy?, usedTs? }
+    match /transferCodes/{code} {
+      allow get: if signedIn()
+        && resource.data.expiresTs > request.time
+        && !('usedBy' in resource.data);
+      allow list: if false;
+      allow create: if signedIn() && okCode(code)
+        && newData().keys().hasOnly(['familyId', 'memberId', 'createdBy', 'createdTs', 'expiresTs'])
+        && okId(newData().familyId) && okId(newData().memberId)
+        && isMember(newData().familyId)
+        && newData().createdBy == myId(newData().familyId)
+        && exists(memberPath(newData().familyId, newData().memberId))
+        && newData().createdTs == request.time
+        && newData().expiresTs is timestamp
+        && newData().expiresTs > request.time
+        && newData().expiresTs <= request.time + duration.value(30, 'm');
+      // Redeem: mark used by me, atomically with creating my uid link (checked
+      // from the other side in families/{fid}/uids/{uid}).
+      allow update: if signedIn()
+        && changed().hasOnly(['usedBy', 'usedTs'])
+        && !('usedBy' in resource.data)
+        && resource.data.expiresTs > request.time
+        && newData().usedBy == uid()
+        && newData().usedTs == request.time
+        && getAfter(/databases/$(database)/documents/families/$(resource.data.familyId)/uids/$(uid())).data.memberId == resource.data.memberId;
+      allow delete: if signedIn() && isMember(resource.data.familyId);
+    }
+
+    // ================================================================ users
+    // users/{uid} -> { familyId, memberId, updatedAt } : "which family is this
+    // device in" pointer, used after Google sign-in on a new device. It grants
+    // nothing by itself; membership is always checked via families/{fid}/uids.
+    match /users/{u} {
+      allow read, delete: if signedIn() && u == uid();
+      allow create, update: if signedIn() && u == uid()
+        && newData().keys().hasOnly(['familyId', 'memberId', 'updatedAt'])
+        && okId(newData().familyId) && okId(newData().memberId)
+        && newData().updatedAt == request.time;
+    }
+
+    // ============================================================= families
+    match /families/{fid} {
+
+      // ---- founding / joining / transferring (used by uids/{uid} create)
+      function founding() {
+        return newData().via == 'create'
+          && !exists(famPath(fid))
+          && getAfter(famPath(fid)).data.createdBy == uid()
+          && getAfter(famPath(fid)).data.ownerMemberId == newData().memberId;
+      }
+      function joining() {
+        return newData().via == 'join'
+          && okCode(newData().code)
+          && get(joinCodePath(newData().code)).data.familyId == fid
+          && get(joinCodePath(newData().code)).data.expiresTs > request.time
+          // a join ALWAYS creates a brand-new person; it can never attach to
+          // an existing member (that would be impersonation)
+          && !exists(memberPath(fid, newData().memberId))
+          && existsAfter(memberPath(fid, newData().memberId));
+      }
+      function transferring() {
+        return newData().via == 'transfer'
+          && okCode(newData().code)
+          && get(transferPath(newData().code)).data.familyId == fid
+          && get(transferPath(newData().code)).data.memberId == newData().memberId
+          && get(transferPath(newData().code)).data.expiresTs > request.time
+          && !('usedBy' in get(transferPath(newData().code)).data)
+          && getAfter(transferPath(newData().code)).data.usedBy == uid()
+          && exists(memberPath(fid, newData().memberId));
+      }
+
+      // ---- family root doc
+      // { createdBy(uid), createdTs, ownerMemberId, joinCode, name?, schemaVersion? }
+      allow get: if isMember(fid);
+      allow list: if false;
+      allow create: if signedIn()
+        && newData().keys().hasOnly(['createdBy', 'createdTs', 'ownerMemberId', 'joinCode', 'name', 'schemaVersion'])
+        && newData().createdBy == uid()
+        && newData().createdTs == request.time
+        && okId(newData().ownerMemberId)
+        && okCode(newData().joinCode)
+        && optStr('name', 30)
+        && optNum('schemaVersion')
+        && getAfter(linkPath(fid)).data.memberId == newData().ownerMemberId
+        && getAfter(joinCodePath(newData().joinCode)).data.familyId == fid;
+      allow update: if isMember(fid) && (
+           (changed().hasOnly(['name']) && str(newData().name, 30))
+        || (changed().hasOnly(['joinCode']) && okCode(newData().joinCode)
+              && getAfter(joinCodePath(newData().joinCode)).data.familyId == fid)
+        || (changed().hasOnly(['ownerMemberId']) && isOwner(fid)
+              && exists(memberPath(fid, newData().ownerMemberId)))
+      );
+      allow delete: if isMember(fid) && isOwner(fid);
+
+      // ---- uid -> member links (devices of a person)
+      // { memberId, via: 'create'|'join'|'transfer', code?, addedTs, device? }
+      match /uids/{u} {
+        allow read: if isMember(fid);
+        allow create: if signedIn() && u == uid()
+          && newData().keys().hasOnly(['memberId', 'via', 'code', 'addedTs', 'device'])
+          && okId(newData().memberId)
+          && newData().addedTs == request.time
+          && optStr('device', 40)
+          && (founding() || joining() || transferring());
+        allow update: if false;
+        // sign out this device / revoke one of my devices / owner removes anyone
+        allow delete: if signedIn() && (
+             u == uid()
+          || (isMember(fid) && (resource.data.memberId == myId(fid) || isOwner(fid)))
+        );
+      }
+
+      // ---- members (people)
+      // { name, role: 'trainee'|'family', joinedTs, lastNudgeAt?, leftTs? }
+      match /members/{mid} {
+        allow read: if isMember(fid);
+        // only in the same batch that creates my first link to this family
+        allow create: if signedIn()
+          && !exists(linkPath(fid))
+          && getAfter(linkPath(fid)).data.memberId == mid
+          && okId(mid)
+          && newData().keys().hasOnly(['name', 'role', 'joinedTs'])
+          && nonEmpty(newData().name, 20)
+          && newData().role in ['trainee', 'family']
+          && newData().joinedTs == request.time;
+        allow update: if isMember(fid) && (
+            // myself
+            (mid == myId(fid)
+              && changed().hasOnly(['name', 'role', 'lastNudgeAt', 'leftTs'])
+              && nonEmpty(newData().name, 20)
+              && newData().role in ['trainee', 'family']
+              // nudge rate limit: lastNudgeAt can only move to "now", and only if
+              // the previous nudge is ≥115 min old (app enforces 2 h on its side)
+              && (!('lastNudgeAt' in changed()) || (
+                    newData().lastNudgeAt == request.time
+                    && oldData().get('lastNudgeAt', timestamp.value(0)) < request.time - duration.value(115, 'm')))
+              && (!('leftTs' in changed()) || newData().leftTs == request.time))
+            // owner removes someone else
+         || (mid != myId(fid) && isOwner(fid)
+              && changed().hasOnly(['leftTs'])
+              && newData().leftTs == request.time)
+        );
+        allow delete: if isMember(fid) && isOwner(fid);
+
+        // ---- push devices of a member (private to that member)
+        // { token, uid, platform, standalone, updatedAt }
+        match /devices/{did} {
+          allow read, delete: if isMember(fid) && (mid == myId(fid) || isOwner(fid));
+          allow create, update: if isMember(fid) && mid == myId(fid) && okId(did)
+            && newData().keys().hasOnly(['token', 'uid', 'platform', 'standalone', 'updatedAt'])
+            && newData().token is string
+            && newData().token.size() > 20 && newData().token.size() <= 4096
+            && newData().uid == uid()
+            && newData().platform in ['ios', 'android', 'desktop', 'other']
+            && newData().standalone is bool
+            && newData().updatedAt == request.time;
+        }
+      }
+
+      // ---- chat
+      // { authorId, text, ts(ms), sts(server), kind, push, replyTo?, record?,
+      //   reactions?{memberId:[emoji]}, acks?{memberId:ms}, deleted?, editedTs?,
+      //   toId?(nudge), expireAt? }
+      function validNudge() {
+        return newData().toId is string
+          && newData().toId == get(/databases/$(database)/documents/families/$(fid)/state/trainee).data.userId
+          && newData().toId != myId(fid)
+          // the same batch must stamp my member doc (which enforces the 115-min gap)
+          && getAfter(memberPath(fid, myId(fid))).data.lastNudgeAt == request.time
+          && get(memberPath(fid, myId(fid))).data.get('lastNudgeAt', timestamp.value(0)) < request.time - duration.value(115, 'm');
+      }
+      function validNewMessage() {
+        return newData().keys().hasOnly(['authorId', 'text', 'ts', 'sts', 'kind', 'push', 'replyTo', 'record',
+                                         'reactions', 'acks', 'deleted', 'toId', 'expireAt'])
+          && newData().keys().hasAll(['authorId', 'text', 'ts', 'sts', 'kind', 'push'])
+          && newData().authorId == myId(fid)
+          && str(newData().text, 500)
+          && okMs(newData().ts)
+          && newData().sts == request.time
+          && newData().kind in ['text', 'record', 'summary', 'system', 'nudge']
+          && newData().push in ['pending', 'none']
+          && (!('replyTo' in newData()) || okId(newData().replyTo))
+          && (!('record' in newData()) || (newData().record is map && newData().record.size() <= 20))
+          && (!('reactions' in newData()) || (newData().reactions is map && newData().reactions.size() == 0))
+          && (!('acks' in newData()) || (newData().acks is map && newData().acks.size() == 0))
+          && (!('deleted' in newData()) || newData().deleted == false)
+          && (!('expireAt' in newData()) || (newData().expireAt is timestamp
+                && newData().expireAt > request.time
+                && newData().expireAt < request.time + duration.value(800, 'd')))
+          && ((newData().kind == 'nudge' && validNudge())
+              || (newData().kind != 'nudge' && !('toId' in newData())));
+      }
+      // Each member may change only their own key inside reactions/acks.
+      function onlyMine(field) {
+        return newData().get(field, {}) is map
+          && newData().get(field, {}).diff(oldData().get(field, {})).affectedKeys().hasOnly([myId(fid)])
+          && (!(myId(fid) in newData().get(field, {}))
+              || (field == 'reactions' && newData()[field][myId(fid)] is list && newData()[field][myId(fid)].size() <= 6)
+              || (field == 'acks' && newData()[field][myId(fid)] is number));
+      }
+      function validMessageUpdate() {
+        return (
+            changed().hasOnly(['reactions', 'acks'])
+            || (oldData().authorId == myId(fid)
+                && changed().hasOnly(['text', 'deleted', 'editedTs', 'reactions', 'acks']))
+          )
+          && (!('text' in changed()) || str(newData().text, 500))
+          && (!('deleted' in changed()) || (newData().deleted == true && newData().text == ''))
+          && (!('editedTs' in changed()) || okMs(newData().editedTs))
+          && (!('reactions' in changed()) || onlyMine('reactions'))
+          && (!('acks' in changed()) || onlyMine('acks'));
+      }
+      match /messages/{msgId} {
+        allow read: if isMember(fid);
+        allow create: if isMember(fid) && okId(msgId) && validNewMessage();
+        allow update: if isMember(fid) && validMessageUpdate();
+        allow delete: if isMember(fid) && (resource.data.authorId == myId(fid) || isOwner(fid));
+      }
+
+      // ---- training records (authored by the person who trained)
+      function validSession() {
+        return newData().size() <= 30
+          && newData().userId == myId(fid)
+          && okDate(newData().date)
+          && okMs(newData().ts)
+          && str(newData().gameId, 40)
+          && optStr('gameName', 40) && optStr('domain', 40)
+          && optNum('level') && optNum('correct') && optNum('total')
+          && optNum('accuracy') && optNum('durationSec') && optNum('roundSec')
+          && optBool('inCourse');
+      }
+      match /sessions/{sid} {
+        allow read: if isMember(fid);
+        allow create: if isMember(fid) && okId(sid) && validSession();
+        allow update: if isMember(fid) && oldData().userId == myId(fid) && validSession();
+        allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));
+      }
+
+      function validAssessment() {
+        return newData().keys().hasOnly(['date', 'ts', 'scores', 'total', 'userId'])
+          && newData().userId == myId(fid)
+          && okDate(newData().date)
+          && okMs(newData().ts)
+          && newData().scores is map && newData().scores.size() <= 12
+          && newData().total is number;
+      }
+      match /assessments/{aid} {
+        allow read: if isMember(fid);
+        allow create: if isMember(fid) && okId(aid) && validAssessment();
+        allow update: if isMember(fid) && oldData().userId == myId(fid) && validAssessment();
+        allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));
+      }
+
+      // checkins/{YYYY-MM-DD}-{memberId}: one per person per day
+      function validCheckin(cid) {
+        return newData().keys().hasOnly(['date', 'ts', 'mood', 'sleepHours', 'exercise', 'social', 'meals', 'userId'])
+          && newData().userId == myId(fid)
+          && okDate(newData().date)
+          && cid == newData().date + '-' + myId(fid)
+          && okMs(newData().ts)
+          && optNum('mood') && optNum('sleepHours')
+          && optBool('exercise') && optBool('social') && optBool('meals');
+      }
+      match /checkins/{cid} {
+        allow read: if isMember(fid);
+        allow create: if isMember(fid) && validCheckin(cid);
+        allow update: if isMember(fid) && oldData().userId == myId(fid) && validCheckin(cid);
+        allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));
+      }
+
+      // ---- per-person small docs
+      match /reads/{mid} {
+        allow read: if isMember(fid);
+        allow create, update: if isMember(fid) && mid == myId(fid)
+          && newData().keys().hasOnly(['lastReadTs'])
+          && newData().lastReadTs is number;
+        allow delete: if isMember(fid) && (mid == myId(fid) || isOwner(fid));
+      }
+      match /reminders/{mid} {
+        allow read: if isMember(fid);
+        allow create, update: if isMember(fid) && mid == myId(fid)
+          && newData().keys().hasOnly(['time', 'enabled'])
+          && okHHMM(newData().time)
+          && newData().enabled is bool;
+        allow delete: if isMember(fid) && (mid == myId(fid) || isOwner(fid));
+      }
+
+      // ---- server-managed push bookkeeping (lastAlarmSentDate etc.)
+      match /pushState/{mid} {
+        allow read: if isMember(fid);
+        allow create, update: if false;          // Admin SDK only
+        allow delete: if isMember(fid) && isOwner(fid);
+      }
+
+      // ---- shared family state
+      function validState(key) {
+        return (key == 'levels'
+                  && newData().keys().hasOnly(['levels', 'updatedTs'])
+                  && newData().levels is map && newData().levels.size() <= 40
+                  && okMs(newData().updatedTs))
+          || (key == 'program'
+                  && newData().keys().hasOnly(['startDate'])
+                  && okDate(newData().startDate))
+          || (key == 'trainee'
+                  && newData().keys().hasOnly(['userId', 'displayLabel'])
+                  && okId(newData().userId)
+                  && exists(memberPath(fid, newData().userId))
+                  && nonEmpty(newData().displayLabel, 12))
+          || (key == 'alarm'
+                  && newData().keys().hasOnly(['time', 'days', 'updatedBy', 'updatedTs'])
+                  && okHHMM(newData().time)
+                  && newData().days is list && newData().days.size() <= 7
+                  && newData().days.hasOnly([0, 1, 2, 3, 4, 5, 6])
+                  && newData().updatedBy == myId(fid)
+                  && okMs(newData().updatedTs));
+      }
+      match /state/{key} {
+        allow read: if isMember(fid);
+        allow create, update: if isMember(fid) && validState(key);
+        allow delete: if isMember(fid) && isOwner(fid);
+      }
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
