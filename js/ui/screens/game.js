@@ -14,11 +14,11 @@ SCREENS.game = {
     return '<div class="stack"><div>' +
       (s.inCourse ? '<div class="prog-label"><span>오늘의 훈련 ' + (S.course.results.length + 1) + '/' + COURSE_N + '</span><span>' + esc(DOM[g.domain].name) + '</span></div>' + progressBar(S.course.results.length / COURSE_N * 100, '오늘의 훈련 진행') + '<div style="height:12px"></div>' : '') +
       '<div class="prog-label"><span>문제 ' + (s.idx + 1) + ' / ' + s.rounds + '</span><span>' + (s.assess ? '점검' : s.level + '단계') + '</span></div>' + progressBar(pr, '문제 진행') + '</div>' +
-      '<h1 class="t-title" id="g-title">' + esc(g.name) + '</h1>' +
+      '<h1 class="t-title' + (s.inCourse || s.assess ? '' : ' sr') + '" id="g-title">' + esc(g.name) + '</h1>' +
       '<section class="card elevated prompt" aria-label="안내"><p class="prompt-text" id="prompt"></p>' +
       '<div class="row"><button class="btn tonal" id="btn-replay" type="button" data-act="replay"' + (synth ? '' : ' disabled') + '>' + ic('vol') + (synth ? '다시 듣기' : '소리 안내 불가') + '</button></div></section>' +
       '<div id="box"></div><div id="fb" aria-live="polite"></div>' +
-      '<div class="cta"><button class="btn filled" id="btn-next" type="button" data-act="next" hidden>다음 문제</button><button class="btn text" id="btn-quit" type="button" data-act="quit">그만하기</button></div></div>';
+      '<div class="cta quiet" id="game-cta"><button class="btn filled" id="btn-next" type="button" data-act="next" hidden>다음 문제</button><button class="btn text" id="btn-quit" type="button" data-act="quit">그만하기</button></div></div>';
   },
   bind(el) {
     const s = S.sess, g = s.g, box = $('#box', el), rt0 = Date.now();
@@ -34,9 +34,10 @@ SCREENS.game = {
         const msg = (r.ok ? praise() + ' ' : '') + r.msg;
         $('#fb', el).innerHTML = '<div class="fb ' + (r.ok ? 'good' : 'soft') + '" id="fb-card">' + esc(msg) + '</div>';
         say(msg);
-        const nb = $('#btn-next', el); nb.hidden = false;
+        const nb = $('#btn-next', el); nb.hidden = false; $('#game-cta', el).classList.remove('quiet');
         nb.textContent = s.idx + 1 < s.rounds ? '다음 문제' : (s.assess ? '이 영역 마치기' : '결과 보기');
-        setTimeout(() => { try { nb.scrollIntoView({ block: 'nearest', behavior: 'auto' }); nb.focus({ preventScroll: true }); } catch (e) {} }, 60);
+        // 안내 글이 먼저 보이게 하고(버튼은 아래에 고정되어 있어요), 초점은 다음 버튼으로
+        setTimeout(() => { try { $('#fb-card', el).scrollIntoView({ block: 'nearest', behavior: 'auto' }); nb.focus({ preventScroll: true }); } catch (e) {} }, 60);
       },
       mc(o) {
         const wrap = h('div', { class: 'stack' });
