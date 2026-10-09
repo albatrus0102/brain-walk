@@ -9,6 +9,7 @@ import { Store } from '../../store/store.js';
 import { clinicalReportHtml } from './clinical.js';
 import { taskReportHtml } from './tasks-report.js';
 import { surveyReportHtml } from './surveys.js';
+import { recordsOf } from '../../surveys/engine.js';
 import { SCREENS } from '../registry.js';
 import { arrowHtml } from './assess.js';
 import { levelDots, progressBar, statusChip } from '../widgets.js';
@@ -26,6 +27,9 @@ SCREENS.family = {
     let o = '<div class="stack"><h1 class="t-headline" id="fam-h">가족이 보는 기록</h1><div id="fam-status"></div>';
     if (fl.consult.flag) o += '<section class="card tertiary" id="flag-consult" role="status"><p class="t-title-m">최근 점수가 낮아지고 있어요. 치매안심센터(1899-9988)나 병원 상담을 권해요.</p><p class="t-small mt">이 안내는 진단이 아니라, 점수 변화를 보고 드리는 참고용이에요. 너무 걱정하지 말고 편하게 상담받아 보세요.</p></section>';
     if (fl.mood) o += '<section class="card tertiary" id="flag-mood" role="status"><p class="t-title-m">최근 일주일 중 5일 이상 기분이 좋지 않다고 하셨어요.</p><p class="t-small mt">마음 상태에 조금 더 관심을 가져 주세요. 필요하면 가까운 정신건강복지센터나 병원에서 우울 상담을 받아 보시길 권해요. 진단이 아니에요.</p></section>';
+    // PHQ-9 9번(죽음·자해 생각)에 0보다 큰 답이 가장 최근 기록에 있으면, 답한 사람만이 아니라 가족에게도 바로 알려요.
+    const phq = isTrainee() ? null : recordsOf('phq9')[0];
+    if (phq && Array.isArray(phq.answers) && Number(phq.answers[8]) > 0) o += '<section class="card tertiary" id="flag-phq9" role="status"><p class="t-title-m">' + mdLabel(phq.date) + ' 마음 상태 설문(PHQ-9)의 9번 문항(죽음이나 자해에 대한 생각)에 \'며칠 이상\'으로 답하셨어요.</p><p class="t-body mt">오늘 꼭 안부를 묻고 이야기를 들어 주세요. 자살예방상담전화 <b>109</b>(24시간), 정신건강위기상담 <b>1577-0199</b>, 위급하면 <b>119</b>. 진단이 아니에요.</p></section>';
     // 요약이 맨 먼저: 지난 7일을 글로 정리한 카드. 자세한 숫자는 그 아래에 있어요.
     o += '<section class="card primary" aria-labelledby="ws-h"><h2 class="t-title" id="ws-h">이번 주 요약</h2><p class="t-body mt" id="wk-text" style="white-space:pre-wrap"></p>' +
       (chatAvail() ? '<div class="stack mt"><button class="btn filled" id="btn-share-summary" type="button" data-act="sharesummary">이번 주 요약 공유하기</button><button class="btn tonal" id="btn-fam-chat2" type="button" data-act="nav" data-to="chat">대화방 열기</button></div>' : '<p class="t-small mt">가족 대화는 가족방을 만들거나 가족 코드로 들어가면 쓸 수 있어요.</p>') + '</section>';
