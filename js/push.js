@@ -66,8 +66,11 @@ export async function enablePush() {
   catch (e) { return { ok: false, reason: 'error' }; }
 }
 export async function disablePush() {
+  // 토큰을 받은 적이 없으면 deleteToken 을 부르지 않아요. 부르면 SDK 가 기본 서비스 워커(/firebase-messaging-sw.js)를
+  // 사이트 맨 위 주소에 등록하려다 404 를 내요 (알림을 켠 적 없는 사람이 가족방을 나가거나 지울 때).
+  const hadToken = LS.get('bw.pushOn', false) || !!LS.get('bw.pushTok', null);
   LS.set('bw.pushOn', false);
-  try { const { M, messaging } = await messagingParts(); await M.deleteToken(messaging); } catch (e) {}
+  if (hadToken && S.pushState === 'granted') { try { const { M, messaging } = await messagingParts(); await M.deleteToken(messaging); } catch (e) {} }
   await removeDevice(deviceId());
   LS.set('bw.pushTok', null);
 }
