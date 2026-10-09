@@ -45,6 +45,8 @@ must(!(await page.innerText('#screen')).includes('/ 27'), '본인 답 화면에 
 // 가족 기록에서 결과 구역
 await page.click('#btn-svd-home'); await page.click('#nav-family'); await page.waitForSelector('#survey-report');
 { const f = await page.locator('#flag-phq9').innerText().catch(() => ''); must(f.includes('9번') && f.includes('109') && f.includes('1577-0199'), '가족 기록 맨 위: PHQ-9 9번 안내'); }
+must(await vis('#wk-text') && !(await page.locator('#survey-report').evaluate(d => d.open)), '요약은 펼쳐져 있고 설문 결과 카드는 접혀 있음');
+await page.click('#xp-survey-report');
 const rep = await page.innerText('#survey-report'); must(rep.includes('KDSQ-C') && rep.includes('10') && rep.includes('PHQ-9'), '가족 기록의 설문 결과 구역');
 await page.screenshot({ path: (process.env.SHOT_DIR || '/tmp') + '/survey-report.png', fullPage: false });
 out('ERRORS:', JSON.stringify(errors)); await browser.close(); process.exit(errors.length ? 1 : 0);

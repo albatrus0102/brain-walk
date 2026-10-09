@@ -62,7 +62,7 @@ SCREENS.assessDone = {
     return '<div class="stack"><h1 class="t-headline" id="ad-h">점검을 마치셨어요</h1>' +
       '<section class="card primary center"><p class="t-label">총점</p><p class="t-display">' + r.total + '점</p>' + (p ? '<p class="t-title-m mt">' + arrowHtml(r.total - p.total) + '</p><p class="t-small">지난번 ' + p.total + '점</p>' : '<p class="t-body mt">처음 점검이에요. 이 점수가 기준이 돼요.</p>') + '</section>' +
       '<section class="card outlined"><h2 class="t-title">영역별 점수</h2><div class="stack mt">' + scoreRows(r.scores, p && p.scores) + '</div></section>' +
-      '<p class="t-small muted">이 결과는 진단이 아니에요. 점수가 계속 낮아지면 치매안심센터(1899-9988)나 병원에서 상담받으세요.</p><p class="sync-note" id="sync-note"></p>' +
+      '<p class="t-small muted">이 결과는 진단이 아니에요. 점수가 계속 낮아지면 치매안심센터(<span class="nw">1899-9988</span>)나 병원에서 상담받으세요.</p><p class="sync-note" id="sync-note"></p>' +
       '<div class="cta"><button class="btn filled" id="btn-ad-home" type="button" data-act="home">처음으로</button></div></div>';
   },
   bind() { say('점검을 마치셨어요. 수고 많으셨어요.'); }

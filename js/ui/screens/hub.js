@@ -13,5 +13,5 @@ export const HUB_ITEMS = [
 export function hubHtml() {
   return '<div class="stack"><h1 class="t-headline" id="hub-h">점검과 기록</h1><p class="t-body muted">' + esc(traineeLabel()) + '의 변화를 살펴보는 곳이에요. 하나씩 골라 주세요.</p><div class="rows">' +
     HUB_ITEMS.map(i => '<button type="button" class="hub-item" id="' + i.id + '" data-act="' + (i.act || 'nav') + '"' + (i.k ? ' data-k="' + i.k + '"' : ' data-to="' + i.to + '"') + '><span><strong>' + esc(i.title) + '</strong><span class="sub">' + esc(i.sub) + '</span></span><span class="t-title-m" aria-hidden="true">›</span></button>').join('') +
-    '</div>' + centerCardHtml() + '<p class="t-small muted">진단이 아니에요. 걱정되는 변화가 있으면 치매안심센터(1899-9988)나 병원과 상담하세요.</p></div>';
+    '</div>' + centerCardHtml() + '<p class="t-small muted">진단이 아니에요. 걱정되는 변화가 있으면 치매안심센터(<span class="nw">1899-9988</span>)나 병원과 상담하세요.</p></div>';
 }

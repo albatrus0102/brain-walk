@@ -29,9 +29,15 @@ async function playRound() {
 }
 await page.click('#btn-start-course');
 await page.waitForSelector('#g-title');
-let steps = 0;
+let steps = 0, fbHidden = 0;
 while (steps++ < 80 && !(await vis('#res-score'))) {
-  if (await vis('#btn-next')) { await page.click('#btn-next'); continue; }
+  if (await vis('#btn-next')) {
+    // 답한 뒤 안내 글은 위 앱 바와 아래 고정 버튼 사이에 보여야 해요 (예전에는 고정 버튼 밑에 숨었어요)
+    await page.waitForTimeout(150);
+    const fbOk = await page.evaluate(() => { const f = document.querySelector('#fb-card'); if (!f) return true; const r = f.getBoundingClientRect(), bar = document.querySelector('.appbar').getBoundingClientRect(), cta = document.querySelector('#game-cta'); const ct = getComputedStyle(cta).position === 'sticky' ? cta.querySelector('#btn-next').getBoundingClientRect().top : innerHeight; return r.top >= bar.bottom - 1 && r.bottom <= ct + 1; });
+    if (!fbOk) fbHidden++;
+    await page.click('#btn-next'); continue;
+  }
   const did = await playRound();
   if (!did) { // 알 수 없는 게임: 문제 영역의 아무 버튼이나 눌러 보고 그만하기
     const b = page.locator('#box button:not([disabled])'); if (await b.count()) await b.first().click({ timeout: 1500 }).catch(() => {}); else break;
@@ -39,6 +45,7 @@ while (steps++ < 80 && !(await vis('#res-score'))) {
   await page.waitForTimeout(30);
 }
 await must(await vis('#res-score') || await vis('#btn-next'), '게임 한 판 진행/결과');
+await must(fbHidden === 0, '답한 뒤 안내 글이 고정 버튼에 가려지지 않음 (가려진 횟수 ' + fbHidden + ')');
 await page.screenshot({ path: process.env.SHOT_DIR ? process.env.SHOT_DIR + '/game.png' : '/tmp/game.png' });
 await page.click('#btn-home').catch(() => {});
 await page.evaluate(() => { location.hash = ''; });

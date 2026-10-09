@@ -41,6 +41,7 @@ must((await page.innerText('#dlg-title')).includes('도 대화방을 보세요. 
 await page.click('#dlg-btn-0');
 // 가족 기록 화면
 await page.click('#btn-back'); await page.waitForSelector('#nav-family'); await page.click('#nav-family'); await page.waitForSelector('#clinical-report');
+await page.click('#xp-clinical-report'); must((await page.innerText('#clinical-report')).includes('CIST'), '가족 기록: 검사 카드를 펼치면 기록이 보임');
 await page.locator('#clinical-report').scrollIntoViewIfNeeded(); await page.screenshot({ path: SHOTS + '/clinical-report.png' });
 must(!(await vis('#clshare-x')), '가족 기록에는 삭제/공유 버튼 없음');
 // 훈련하는 분으로 보면 숨김

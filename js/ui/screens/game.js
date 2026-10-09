@@ -8,6 +8,22 @@ import { SCREENS } from '../registry.js';
 import { progressBar } from '../widgets.js';
 import { $, esc } from '../../util.js';
 
+/* 답한 뒤: 안내 글(#fb-card)이 위의 앱 바와 아래에 고정된 "다음 문제" 버튼 사이에 보이게 스크롤해요.
+ * 문제 글까지 한 화면에 들어가면 문제 글이 앱 바 바로 아래에 오게 하고, 안 들어가면 안내 글을 버튼 바로 위에 둬요.
+ * (예전에는 scrollIntoView 'nearest' 가 안내 글을 화면 맨 아래, 즉 고정 버튼 밑에 두어서 문제도 안내도 안 보였어요.) */
+function revealFeedback(el) {
+  const fb = $('#fb-card', el), q = $('.prompt', el), cta = $('#game-cta', el), bar = document.querySelector('.appbar');
+  if (!fb) return;
+  const top = (bar ? bar.getBoundingClientRect().bottom : 0) + 8;
+  const ctaH = cta && getComputedStyle(cta).position === 'sticky' ? cta.offsetHeight + (parseFloat(getComputedStyle(cta).bottom) || 0) : 0;
+  const bottom = window.innerHeight - ctaH - 8;
+  const f = fb.getBoundingClientRect(), qt = q ? q.getBoundingClientRect().top : f.top;
+  let dy = 0;
+  if (f.bottom - qt <= bottom - top) dy = qt - top;          // 문제 글 ~ 안내 글이 한 화면에 들어가요
+  else if (f.bottom > bottom) dy = f.bottom - bottom;         // 안내 글을 버튼 바로 위로
+  else if (f.top < top) dy = f.top - top;
+  if (Math.abs(dy) > 1) window.scrollBy(0, dy);
+}
 SCREENS.game = {
   html() {
     const s = S.sess, g = s.g, pr = Math.round(s.idx / s.rounds * 100);
@@ -37,7 +53,7 @@ SCREENS.game = {
         const nb = $('#btn-next', el); nb.hidden = false; $('#game-cta', el).classList.remove('quiet');
         nb.textContent = s.idx + 1 < s.rounds ? '다음 문제' : (s.assess ? '이 영역 마치기' : '결과 보기');
         // 안내 글이 먼저 보이게 하고(버튼은 아래에 고정되어 있어요), 초점은 다음 버튼으로
-        setTimeout(() => { try { $('#fb-card', el).scrollIntoView({ block: 'nearest', behavior: 'auto' }); nb.focus({ preventScroll: true }); } catch (e) {} }, 60);
+        setTimeout(() => { try { revealFeedback(el); nb.focus({ preventScroll: true }); } catch (e) {} }, 60);
       },
       mc(o) {
         const wrap = h('div', { class: 'stack' });

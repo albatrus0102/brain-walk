@@ -58,7 +58,7 @@ export function clinicalReportHtml(withActions) {
     });
     o += '</div>';
   }
-  if (rm.state === 'later' || rm.state === 'soon' || rm.state === 'overdue') o += '<p class="t-body mt" id="cist-reminder"><b>CIST 다음 검사:</b> ' + rm.due + (rm.state === 'overdue' ? ' (지났어요)' : '') + '</p>';
+  if (rm.state === 'later' || rm.state === 'soon' || rm.state === 'overdue') o += '<p class="t-body mt" id="cist-reminder"><b>CIST 다음 검사:</b> <span class="nw">' + rm.due + '</span>' + (rm.state === 'overdue' ? ' (지났어요)' : '') + '</p>';
   o += '<p class="t-small muted mt">병원·센터에서 받은 점수를 옮겨 적은 기록이에요. 앱이 검사하거나 해석하지 않아요. 진단이 아니에요.</p>' +
     '<div class="mt"><button class="btn tonal" id="btn-clinical-add" type="button" data-act="clform" data-t="">검사 결과 기록하기</button></div></section>';
   return o;

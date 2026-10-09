@@ -59,6 +59,8 @@ SCREENS.clockDone = {
 };
 
 /* 가족: 시간 순서대로 나란히 보기 */
+/* 날짜는 '2026년 9월 4일'처럼 띄어 써서 좁은 칸에서도 낱말 단위로 줄바꿈해요 */
+const longDate = s => { const p = String(s).split('-'); return p.length === 3 ? p[0] + '년 ' + Number(p[1]) + '월 ' + Number(p[2]) + '일' : String(s); };
 const label = d => esc(String(d.date).slice(5).replace('-', '/'));
 /* 저장된 그림만 보여 줘요: PNG/JPEG data URL 이고 base64 글자만 있는 것 (규칙과 같은 조건) */
 const IMG_OK = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+=*$/;
@@ -70,8 +72,8 @@ SCREENS.clocks = {
     if (!list.length) o += '<section class="card outlined empty"><p class="t-title">아직 그림이 없어요</p><p class="t-body muted">"' + CLOCK_PROMPT + '"라고 부탁해 보세요.</p></section>';
     else {
       const first = list[list.length - 1], lastc = list[0];
-      if (list.length > 1) o += '<section class="card elevated" id="clk-compare" aria-labelledby="cmp-h"><h2 class="t-title" id="cmp-h">처음과 가장 최근</h2><div class="thumbs mt"><figure><img alt="처음 시계 그림 ' + label(first) + '" src="' + esc(first.img) + '"><figcaption>처음 · ' + esc(first.date) + '</figcaption></figure><figure><img alt="가장 최근 시계 그림 ' + label(lastc) + '" src="' + esc(lastc.img) + '"><figcaption>최근 · ' + esc(lastc.date) + '</figcaption></figure></div></section>';
-      o += '<section class="card outlined" aria-labelledby="all-h"><h2 class="t-title" id="all-h">모두 보기 (' + list.length + '장)</h2><div class="thumbs mt" id="clk-grid">' + list.map((c, i) => '<figure><button type="button" class="hub-item" style="padding:6px;min-height:0" data-act="clockopen" data-i="' + i + '" id="clk-' + i + '" aria-label="' + esc(c.date) + ' 시계 그림 크게 보기"><img alt="' + esc(c.date) + ' 시계 그림" src="' + esc(c.img) + '"></button><figcaption>' + esc(c.date) + '</figcaption></figure>').join('') + '</div></section>';
+      if (list.length > 1) o += '<section class="card elevated" id="clk-compare" aria-labelledby="cmp-h"><h2 class="t-title" id="cmp-h">처음과 가장 최근</h2><div class="thumbs mt"><figure><img alt="처음 시계 그림 ' + label(first) + '" src="' + esc(first.img) + '"><figcaption>처음 · ' + esc(longDate(first.date)) + '</figcaption></figure><figure><img alt="가장 최근 시계 그림 ' + label(lastc) + '" src="' + esc(lastc.img) + '"><figcaption>최근 · ' + esc(longDate(lastc.date)) + '</figcaption></figure></div></section>';
+      o += '<section class="card outlined" aria-labelledby="all-h"><h2 class="t-title" id="all-h">모두 보기 (' + list.length + '장)</h2><div class="thumbs mt" id="clk-grid">' + list.map((c, i) => '<figure><button type="button" class="hub-item" style="padding:6px;min-height:0" data-act="clockopen" data-i="' + i + '" id="clk-' + i + '" aria-label="' + esc(c.date) + ' 시계 그림 크게 보기"><img alt="' + esc(c.date) + ' 시계 그림" src="' + esc(c.img) + '"></button><figcaption>' + esc(longDate(c.date)) + '</figcaption></figure>').join('') + '</div></section>';
     }
     return o + '<div class="cta"><button class="btn filled" id="btn-clk-draw" type="button" data-act="nav" data-to="clock">' + esc(traineeLabel()) + '께 그리기 부탁하기</button></div></div>';
   }

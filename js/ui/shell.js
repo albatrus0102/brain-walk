@@ -42,6 +42,8 @@ export function renderChrome() {
     nav.append(h('button', { type: 'button', class: 'nav-item', id: 'nav-' + n[0], 'data-act': 'nav', 'data-to': n[0], 'aria-current': S.screen === n[0] ? 'page' : null }, pill, n[1]));
   });
   // 채팅 화면에서는 하단 메뉴 대신 입력창이 있으므로 숨김 (위 showNav=false)
+  // 하단 메뉴 높이(글자 크기에 따라 달라요): 맨 아래 안내 글과 고정 버튼(.cta)이 메뉴에 가려지지 않게 써요
+  document.documentElement.style.setProperty('--nav-h', showNav ? $('#navbar').offsetHeight + 'px' : '0px');
 }
 
 export function render(soft) {

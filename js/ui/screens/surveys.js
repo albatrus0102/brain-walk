@@ -23,7 +23,7 @@ SCREENS.surveys = {
       '<p class="t-body muted">' + (fam ? '결과는 가족만 볼 수 있어요. 한 번에 한 문항씩 천천히 답해요.' : '하고 싶을 때만 해도 괜찮아요. 한 번에 한 문항씩 답해요.') + '</p><div class="rows">';
     kinds.forEach(k => {
       const sv = SURVEYS[k], sm = fam ? summaryOf(k) : null;
-      o += '<button type="button" class="hub-item" id="sv-open-' + k + '" data-act="svopen" data-k="' + k + '"><span><strong>' + esc(sv.name) + '</strong><span class="sub">' + sv.items.length + '문항 · 약 ' + sv.minutes + '분 · ' + whoText(sv) + (sm ? ' · 마지막 ' + sm.last.date : '') + '</span></span><span class="t-title-m" aria-hidden="true">›</span></button>';
+      o += '<button type="button" class="hub-item" id="sv-open-' + k + '" data-act="svopen" data-k="' + k + '"><span><strong>' + esc(sv.name).replace(/[A-Za-z0-9]+(-[A-Za-z0-9]+)+/g, '<span class="nw">$&</span>') + '</strong><span class="sub">' + sv.items.length + '문항 · 약 ' + sv.minutes + '분 · ' + whoText(sv) + (sm ? ' · 마지막 <span class="nw">' + esc(sm.last.date) + '</span>' : '') + '</span></span><span class="t-title-m" aria-hidden="true">›</span></button>';
     });
     o += '</div>';
     if (fam) o += '<p class="t-small muted">' + SURVEY_GAP_NOTE + '</p><p class="t-small muted">' + NOT_DIAGNOSIS + '</p>' + sourceBlock(kinds);
@@ -97,7 +97,7 @@ SCREENS.surveyDone = {
     const sm = summaryOf(v.kind);
     return '<div class="stack"><h1 class="t-headline" id="svd-h">저장했어요</h1><section class="card elevated"><p class="t-label">' + esc(sv.name) + '</p><p class="t-display" id="svd-score">' + rec.score + '<span class="t-title">' + esc(sv.unit.startsWith('점') ? '점' : sv.unit) + '</span></p>' +
       (sm && sm.band.text ? '<p class="mt"><span class="refband" id="svd-band">' + esc(sm.band.text) + '</span></p><p class="t-small mt">' + esc(sm.band.note) + '</p>' : '') +
-      '<p class="t-small muted mt">' + NOT_DIAGNOSIS + ' 걱정되면 치매안심센터(1899-9988)나 병원과 상담해 보세요.</p></section>' +
+      '<p class="t-small muted mt">' + NOT_DIAGNOSIS + ' 걱정되면 치매안심센터(<span class="nw">1899-9988</span>)나 병원과 상담해 보세요.</p></section>' +
       (sm && sm.trend ? '<p class="t-body" id="svd-trend">' + esc(sm.trend.text) + '</p>' : '') +
       '<div class="cta"><button class="btn filled" id="btn-svd-list" type="button" data-act="nav" data-to="surveys">설문 목록으로</button><button class="btn text" id="btn-svd-home" type="button" data-act="home">처음으로</button></div></div>';
   },

@@ -74,6 +74,10 @@ must(saved === 1, 'taskRuns 저장 ' + saved);
 const dom = await page.evaluate(() => window.__S.lastAssess.rec.scores); must(Object.keys(dom).length === 5, '영역 점수 5개 유지 ' + JSON.stringify(dom));
 // 가족 화면에서 상세
 await page.evaluate(() => { localStorage.setItem('bw.role', JSON.stringify('family')); }); await page.goto(BASE); await page.waitForSelector('#appbar-title'); if (await vis('.dialog')) await page.click('#dlg-btn-1').catch(() => {});
-await page.click('#nav-family'); await page.waitForSelector('#task-report'); const rep = await page.innerText('#task-report');
+await page.click('#nav-family'); await page.waitForSelector('#task-report'); await page.click('#xp-task-report');
+// 펼친 카드는 화면을 다시 그려도(기록 변경) 펼쳐진 채로 남아요
+await page.click('#nav-home'); await page.click('#nav-family'); await page.waitForSelector('#task-report');
+must(await page.locator('#task-report').evaluate(d => d.open), '펼친 카드는 다른 화면에 다녀와도 펼쳐져 있음');
+const rep = await page.innerText('#task-report');
 must(rep.includes('점 잇기') && rep.includes('동물 이름') && rep.includes('기준점은 없어요'), '가족 기록의 점검 과제 상세');
 out('ERRORS:', JSON.stringify(errors)); await browser.close(); process.exit(errors.length ? 1 : 0);

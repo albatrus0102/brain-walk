@@ -13,7 +13,7 @@ import { recordsOf } from '../../surveys/engine.js';
 import { SCREENS } from '../registry.js';
 import { arrowHtml } from './assess.js';
 import { levelDots, progressBar, statusChip } from '../widgets.js';
-import { $, WD, addDays, daysBetween, esc, fmtDur, mean, parseYmd, ymd } from '../../util.js';
+import { $, LS, WD, addDays, daysBetween, esc, fmtDur, mean, parseYmd, ymd } from '../../util.js';
 
 const WEEK_LABELS = ['3주 전', '2주 전', '지난주', '이번 주'];
 SCREENS.family = {
@@ -25,7 +25,7 @@ SCREENS.family = {
     const last = all[0], lastTxt = !last ? '기록 없음' : last.date === today ? '오늘' : daysBetween(last.date, today) + '일 전';
     const avgDur = all.length ? fmtDur(Math.round(mean(all.map(s => Number(s.durationSec) || 0)))) : '-';
     let o = '<div class="stack"><h1 class="t-headline" id="fam-h">가족이 보는 기록</h1><div id="fam-status"></div>';
-    if (fl.consult.flag) o += '<section class="card tertiary" id="flag-consult" role="status"><p class="t-title-m">최근 점수가 낮아지고 있어요. 치매안심센터(1899-9988)나 병원 상담을 권해요.</p><p class="t-small mt">이 안내는 진단이 아니라, 점수 변화를 보고 드리는 참고용이에요. 너무 걱정하지 말고 편하게 상담받아 보세요.</p></section>';
+    if (fl.consult.flag) o += '<section class="card tertiary" id="flag-consult" role="status"><p class="t-title-m">최근 점수가 낮아지고 있어요. 치매안심센터(<span class="nw">1899-9988</span>)나 병원 상담을 권해요.</p><p class="t-small mt">이 안내는 진단이 아니라, 점수 변화를 보고 드리는 참고용이에요. 너무 걱정하지 말고 편하게 상담받아 보세요.</p></section>';
     if (fl.mood) o += '<section class="card tertiary" id="flag-mood" role="status"><p class="t-title-m">최근 일주일 중 5일 이상 기분이 좋지 않다고 하셨어요.</p><p class="t-small mt">마음 상태에 조금 더 관심을 가져 주세요. 필요하면 가까운 정신건강복지센터나 병원에서 우울 상담을 받아 보시길 권해요. 진단이 아니에요.</p></section>';
     // PHQ-9 9번(죽음·자해 생각)에 0보다 큰 답이 가장 최근 기록에 있으면, 답한 사람만이 아니라 가족에게도 바로 알려요.
     const phq = isTrainee() ? null : recordsOf('phq9')[0];
@@ -61,16 +61,44 @@ SCREENS.family = {
     o += sleepReportHtml();
     if (!isTrainee()) o += taskReportHtml() + surveyReportHtml() + clinicalReportHtml(false);
     o += '<section class="card outlined" aria-labelledby="lv-h"><h2 class="t-title" id="lv-h">훈련별 현재 단계</h2><div class="mt">' + GAME_ORDER.map(id => '<div class="lvrow"><span>' + esc(GAMES[id].name) + '</span><span class="t-body">' + getLevel(id) + '단계 ' + levelDots(getLevel(id)) + '</span></div>').join('') + '</div></section>';
-    o += '<section class="card tertiary" id="report-disclaimer"><p class="t-body">이 리포트는 <b>진단이 아니에요.</b> 의료기기가 아니며 훈련 기록을 보기 쉽게 정리한 것뿐이에요. 점수가 계속 낮아지면 치매안심센터(국번 없이 1899-9988)나 병원에서 상담받으세요.</p></section>';
-    o += '<p class="sync-note t-small" id="family-note-static">' + (Store.shared && !S.dbError ? '이 기록은 같은 가족방에 들어온 가족만 볼 수 있어요.' : '지금은 이 기기에 저장된 기록만 보여요. (체험 모드)') + '</p><p class="sync-note" id="sync-note"></p></div>';
+    o += '<section class="card tertiary" id="report-disclaimer"><p class="t-body">이 리포트는 <b>진단이 아니에요.</b> 의료기기가 아니며 훈련 기록을 보기 쉽게 정리한 것뿐이에요. 점수가 계속 낮아지면 치매안심센터(국번 없이 <span class="nw">1899-9988</span>)나 병원에서 상담받으세요.</p></section>';
+    o += '<p class="t-small muted" id="family-note-static">' + (Store.shared && !S.dbError ? '이 기록은 같은 가족방에 들어온 가족만 볼 수 있어요.' : '지금은 이 기기에 저장된 기록만 보여요. (체험 모드)') + '</p><p class="sync-note" id="sync-note"></p></div>';
     return o;
   },
   bind(el) {
+    foldSections(el);
     $('#fam-status', el).append(statusChip());
     const wk = $('#wk-text', el); if (wk) wk.textContent = currentSummary().text;
     if (!isTrainee() && chatAvail()) { $('#nudge-card', el).hidden = false; $('#nudge-slot', el).append(nudgePanel('fam-nudge')); }
   }
 };
+
+/* 리포트가 길어서, 맨 위의 안내(주의 카드)·이번 주 요약·훈련 알림·면책 문구를 뺀 나머지 구역은
+ * 접었다 펼 수 있는 카드(<details>)로 바꿔요. 처음에는 접혀 있고, 펼친 구역은 이 기기에 기억해요
+ * (기록이 바뀌면 화면을 다시 그리므로, 기억하지 않으면 펼친 카드가 저절로 닫혀요). */
+function foldSections(el) {
+  const root = el.querySelector('.stack'); if (!root) return;
+  const open = S.famOpen || (S.famOpen = LS.get('bw.famOpen', {}) || {});
+  [...root.children].forEach(sec => {
+    if (sec.tagName !== 'SECTION' || sec.id === 'nudge-card' || sec.id === 'report-disclaimer' || /\b(primary|tertiary|empty)\b/.test(sec.className)) return;
+    const h2 = sec.querySelector(':scope > h2'); if (!h2) return;
+    const key = sec.id || h2.id;
+    const d = document.createElement('details');
+    d.className = 'card outlined xp'; d.dataset.xp = key;   // 접는 카드는 모두 같은 모양(외곽선)으로
+    if (sec.id) d.id = sec.id;
+    if (sec.getAttribute('aria-labelledby')) d.setAttribute('aria-labelledby', sec.getAttribute('aria-labelledby'));
+    const sum = document.createElement('summary'); sum.className = 'xp-sum'; sum.id = 'xp-' + key;
+    sum.append(h2); sum.insertAdjacentHTML('beforeend', ic('expand'));
+    const body = document.createElement('div'); body.className = 'xp-body';
+    while (sec.firstChild) body.append(sec.firstChild);
+    // 이번 주 훈련한 날 카드 바로 뒤의 숫자 묶음(연속·전체·평균·마지막 훈련)은 같은 카드 안으로
+    const next = sec.nextElementSibling; if (key === 'wk-h' && next && next.classList.contains('stat')) { next.classList.add('mt'); body.append(next); }
+    d.append(sum, body);
+    if (open[key]) d.open = true;
+    d.addEventListener('toggle', () => { open[key] = d.open; LS.set('bw.famOpen', open); });
+    sec.replaceWith(d);
+  });
+}
 
 /* 잠 기록: 최근 7일 (잠든 시각 → 일어난 시각, 깬 횟수) */
 function sleepReportHtml() {

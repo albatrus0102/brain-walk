@@ -47,6 +47,9 @@ must((await page.innerText('#q-stem')).includes('요즘'), '일상생활 체크 
 for (let i = 0; i < 8; i++) await page.click('#ans-' + (i % 4)); await page.waitForSelector('#svd-h');
 must(/^12/.test((await page.innerText('#svd-score')).trim()), '일상생활 체크 점수 12 (0+1+2+3)×2');
 await page.click('#btn-svd-home'); await page.click('#nav-family'); await page.waitForSelector('#sleep-report');
+// 리포트 아래쪽 구역은 접힌 카드: 펼쳐서 확인
+must(!(await page.locator('#sleep-report').evaluate(d => d.open)), '잠 기록 카드는 처음에 접혀 있음');
+await page.click('#xp-sleep-report'); await page.click('#xp-survey-report');
 must((await page.innerText('#sleep-report')).includes('22:30 → 06:40'), '가족 기록: 잠 기록');
 must((await page.innerText('#survey-report')).includes('일상생활 체크'), '가족 기록: 일상생활 체크 결과');
 out('ERRORS:', JSON.stringify(errors)); await browser.close(); process.exit(errors.length ? 1 : 0);
