@@ -41,7 +41,9 @@ async function bindForeground() {
 /* 토큰을 받아 기기 문서에 저장. 토큰이 바뀌었거나 7일이 지났을 때만 다시 써요. */
 async function syncToken(onlyIfStale) {
   const { M, reg, messaging } = await messagingParts();
-  const token = await M.getToken(messaging, { vapidKey: self.BW_CONFIG.vapidKey, serviceWorkerRegistration: reg });
+  const vk = self.BW_CONFIG.vapidKey;
+  // vapidKey 를 비워 두면 Firebase 기본 웹 푸시 키를 써요.
+  const token = await M.getToken(messaging, vk ? { vapidKey: vk, serviceWorkerRegistration: reg } : { serviceWorkerRegistration: reg });
   if (!token) throw { code: 'no-token' };
   const last = LS.get('bw.pushTok', null);
   if (!(onlyIfStale && last && last.token === token && Date.now() - last.ts < WEEK)) {
@@ -55,7 +57,7 @@ async function syncToken(onlyIfStale) {
 export async function enablePush() {
   const st = S.pushState || 'unsupported';
   if (st === 'ios-install-first' || st === 'unsupported') return { ok: false, reason: st };
-  if (!self.BW_CONFIG || !self.BW_CONFIG.vapidKey || /REPLACE_ME/.test(self.BW_CONFIG.vapidKey)) return { ok: false, reason: 'error' };
+  if (!self.BW_CONFIG || /REPLACE_ME/.test(self.BW_CONFIG.vapidKey || '')) return { ok: false, reason: 'error' };
   let perm;
   try { perm = await Notification.requestPermission(); } catch (e) { return { ok: false, reason: 'error' }; }   // 탭 직후 첫 await
   S.pushState = perm;

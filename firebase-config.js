@@ -19,7 +19,7 @@ self.BW_CONFIG = {
     appId: "1:249297535846:web:2dc4f8128c984a54debea7"
   },
   // 프로젝트 설정 > 클라우드 메시징 > 웹 구성 > 웹 푸시 인증서 > 키 쌍 (공개 키) — 알림에 필요해요
-  vapidKey: "REPLACE_ME",
+  vapidKey: "",   // 비워 두면 Firebase 기본 웹 푸시 키를 써요
   // (선택) App Check 의 reCAPTCHA v3 사이트 키. 쓰지 않으면 빈 문자열("")로 두세요.
   appCheckSiteKey: ""
 };

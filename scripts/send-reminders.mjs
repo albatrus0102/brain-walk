@@ -34,9 +34,12 @@ const env = process.env;
 const DRY_RUN = env.DRY_RUN === '1';
 if (env.FIRESTORE_EMULATOR_HOST) {
   initializeApp({ projectId: env.GCLOUD_PROJECT || 'demo-bw' });
+} else if (!env.FIREBASE_SERVICE_ACCOUNT && env.GOOGLE_APPLICATION_CREDENTIALS && env.GCLOUD_PROJECT) {
+  // Keyless: google-github-actions/auth (Workload Identity Federation) sets up ADC.
+  initializeApp({ projectId: env.GCLOUD_PROJECT });
 } else {
   if (!env.FIREBASE_SERVICE_ACCOUNT) {
-    console.error('FIREBASE_SERVICE_ACCOUNT secret is missing. See README (GitHub Actions 설정).');
+    console.error('No credentials: set up Workload Identity (see README) or the FIREBASE_SERVICE_ACCOUNT secret.');
     process.exit(1);
   }
   let sa;

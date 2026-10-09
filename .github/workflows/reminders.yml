@@ -4,7 +4,7 @@ on:
     - cron: '*/10 * * * *'        # UTC; 스크립트가 Asia/Seoul 기준으로 직접 계산해요
   workflow_dispatch: {}
 concurrency: { group: reminders, cancel-in-progress: false }
-permissions: { contents: read }
+permissions: { contents: read, id-token: write }
 jobs:
   send:
     runs-on: ubuntu-latest
@@ -12,6 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { sparse-checkout: scripts }
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/249297535846/locations/global/workloadIdentityPools/github/providers/brain-walk
+          service_account: bw-reminders@brain-walk.iam.gserviceaccount.com
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm, cache-dependency-path: scripts/package-lock.json }
       - run: npm ci --omit=dev
@@ -19,6 +23,6 @@ jobs:
       - run: node send-reminders.mjs
         working-directory: scripts
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          APP_URL: ${{ vars.APP_URL }}          # 저장소 변수, 예: https://아이디.github.io/brain-walk/
+          GCLOUD_PROJECT: brain-walk
+          APP_URL: https://albatrus0102.github.io/brain-walk/
           WINDOW_MIN: '90'
