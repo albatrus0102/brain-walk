@@ -131,6 +131,31 @@ await t('A (owner) can list B devices', getDocs(collection(dA, `families/${F}/me
   await t('taskRun update denied', updateDoc(doc(dA, `families/${F}/taskRuns/r1`), { v: 2 }), false);
   await t('non-member taskRun read denied', getDoc(doc(db('stranger'), `families/${F}/taskRuns/r1`)), false);
 }
+// ---- clocks (시계 그림, 가족 전용) / sleeplogs / iadl 설문
+{
+  const png = 'data:image/png;base64,' + 'A'.repeat(1000);
+  const ck = (who, extra = {}) => Object.assign({ date: today, ts: Date.now(), userId: who, img: png, w: 320, h: 320 }, extra);
+  await t('trainee saves clock drawing', setDoc(doc(dA, `families/${F}/clocks/c1`), ck('mA')));
+  await t('trainee cannot read clock', getDoc(doc(dA, `families/${F}/clocks/c1`)), false);
+  await t('trainee cannot list clocks', getDocs(collection(dA, `families/${F}/clocks`)), false);
+  await t('family reads clock', getDoc(doc(dB, `families/${F}/clocks/c1`)));
+  await t('clock forged userId denied', setDoc(doc(dB, `families/${F}/clocks/c2`), ck('mA')), false);
+  await t('clock not an image denied', setDoc(doc(dA, `families/${F}/clocks/c3`), ck('mA', { img: 'http://evil/x.png' })), false);
+  await t('clock > 200KB denied', setDoc(doc(dA, `families/${F}/clocks/c4`), ck('mA', { img: 'data:image/png;base64,' + 'A'.repeat(200001) })), false);
+  await t('clock 190KB ok', setDoc(doc(dA, `families/${F}/clocks/c5`), ck('mA', { img: 'data:image/png;base64,' + 'A'.repeat(190000) })));
+  await t('clock update denied', updateDoc(doc(dA, `families/${F}/clocks/c1`), { w: 1 }), false);
+  await t('trainee cannot delete clock', deleteDoc(doc(dA, `families/${F}/clocks/c1`)), false);
+  await t('family deletes clock', deleteDoc(doc(dB, `families/${F}/clocks/c5`)));
+  const sl = (who, extra = {}) => Object.assign({ date: today, ts: Date.now(), userId: who, bed: '22:30', wake: '06:40', wakings: 2, quality: 3 }, extra);
+  await t('sleep log own id', setDoc(doc(dA, `families/${F}/sleeplogs/${today}-mA`), sl('mA')));
+  await t('sleep log readable by family', getDoc(doc(dB, `families/${F}/sleeplogs/${today}-mA`)));
+  await t('sleep log wrong id denied', setDoc(doc(dA, `families/${F}/sleeplogs/x1`), sl('mA')), false);
+  await t('sleep log for another member denied', setDoc(doc(dB, `families/${F}/sleeplogs/${today}-mA`), sl('mA')), false);
+  await t('sleep log bad time denied', setDoc(doc(dA, `families/${F}/sleeplogs/${today}-mA`), sl('mA', { bed: '25:99' })), false);
+  await t('sleep log wakings too high denied', setDoc(doc(dA, `families/${F}/sleeplogs/${today}-mA`), sl('mA', { wakings: 99 })), false);
+  await t('iadl survey kind allowed (family)', setDoc(doc(dB, `families/${F}/surveys/i1`), { kind: 'iadl', version: '1', answers: [0, 1, 0, 2, 0, 0, 1, 0], score: 4, ts: Date.now(), date: today, mode: 'family', answeredBy: 'mB', relation: '아들' }));
+  await t('trainee cannot read iadl survey', getDoc(doc(dA, `families/${F}/surveys/i1`)), false);
+}
 // ---- transfer: B issues recovery code for A; new device uidA2 redeems
 {
   const T = 'TRF234';

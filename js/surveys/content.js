@@ -71,6 +71,28 @@ export const SURVEYS = {
     source: '한국판 치매선별 설문지(KDSQ-C). 인천광역시·인천광역시광역치매센터·인천광역시치매안심센터 「치매예방 GO! GO! 캠페인」 치매 자가진단 테스트 (2024-08-09), https://www.incheon.go.kr/IC010601/2201927',
     license: '공공누리 제1유형(출처표시) 공공저작물. 원 개발자(대한치매학회 등)의 저작권은 확인하지 못했어요. 출처를 표기하고 비영리로만 써요.'
   },
+  iadl: {
+    id: 'iadl', enabled: true, version: '1',
+    name: '일상생활 체크 (가족이 답해요)', formal: '이 앱의 자체 일상생활 체크리스트 (8문항)',
+    who: 'family', modes: ['family'], minutes: 3,
+    intro: '최근 한 달 동안 지켜본 모습을 떠올려 답해 주세요. 정답은 없어요. 가족이 함께 보려고 기록해 두는 거예요.',
+    stem: '요즘 {이름}은(는) 이 일을 어떻게 하나요?',
+    scale: [{ v: 0, t: '혼자 잘해요' }, { v: 1, t: '가끔 도움이 필요해요' }, { v: 2, t: '자주 도움이 필요해요' }, { v: 3, t: '혼자 하기 어려워요' }],
+    items: [
+      '정해진 시간에 약 챙겨 먹기',
+      '물건값과 거스름돈 계산하기',
+      '전화 걸고 받기',
+      '집 밖에서 가려는 곳까지 길 찾아가기',
+      '약속과 일정 기억하기',
+      '간단한 식사나 간식 준비하기',
+      '세탁기·전자레인지 같은 집안 기계 쓰기',
+      '버스나 지하철 이용하기'
+    ],
+    score(a) { return a.reduce((x, y) => x + y, 0); },
+    unit: '점', max: 24, ref: null, higherWorse: true,
+    source: '이 앱이 직접 만든 체크리스트예요. 일상생활 도구 활동(약, 돈, 전화, 길 찾기, 일정 등) 영역을 참고했을 뿐 K-IADL·S-IADL 등 공개 도구의 문항이 아니에요. 기준점 없이 점수 변화만 보여 줘요.',
+    license: '자체 문항 (이 저장소의 라이선스를 따라요).'
+  },
   smcq: {
     id: 'smcq', enabled: true, version: '1',
     name: '내 기억력 설문 (SMCQ)', formal: '주관적 기억감퇴 설문 SMCQ (14문항)',
@@ -163,7 +185,7 @@ export const SURVEYS = {
     license: 'Pfizer PHQ 안내(phqscreeners.com)는 "복제·번역·배포에 허락이 필요 없다"고 밝혀요. 다만 이 한국어판 문서에는 "© 2005 Pfizer, 무단 복제를 금합니다" 표기가 있어 이용 조건이 분명하지 않아요. 공개 배포 전에 확인이 필요해요.'
   }
 };
-export const SURVEY_ORDER = ['iqcode', 'kdsq', 'smcq', 'gds', 'phq9'];
+export const SURVEY_ORDER = ['iqcode', 'kdsq', 'iadl', 'smcq', 'gds', 'phq9'];
 
 /* 점수 → 참고 기준 안내 (중립 문구, 빨강 없음) */
 export function bandOf(sv, score) {

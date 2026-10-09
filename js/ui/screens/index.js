@@ -8,4 +8,5 @@ import './checkin.js';
 import './family.js';
 import './settings.js';
 import './surveys.js';
+import './clock.js';
 import '../onboarding.js';

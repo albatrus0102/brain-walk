@@ -1,4 +1,5 @@
 /* 앱 전용 스타일. 색·크기·모양은 모두 m3-tokens.css 의 토큰만 써요 (리터럴 색 금지). */
+*,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--md-sys-color-surface);color:var(--md-sys-color-on-surface);
   font-family:var(--md-ref-typeface);font-size:var(--md-sys-typescale-body-large-size);

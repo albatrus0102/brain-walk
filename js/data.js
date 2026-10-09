@@ -146,6 +146,7 @@ export async function connectData() {
     subscribe('sessions', { orderBy: ['ts', 'desc'], limit: 300 }, list => { S.dbSessions = list; onData(); });
     subscribe('assessments', { orderBy: ['ts', 'desc'], limit: 60 }, list => { S.dbAssess = list; onData(); });
     subscribe('checkins', { orderBy: ['date', 'desc'], limit: 120 }, list => { S.dbCheckins = list; onData(); });
+    subscribe('sleeplogs', { orderBy: ['date', 'desc'], limit: 30 }, list => { S.sleeplogs = list; onData(); });
     subscribe('taskRuns', { orderBy: ['ts', 'desc'], limit: 30 }, list => { S.taskRuns = list; onData(); });
     if (Store.shared && S.myId) {
       subscribe('reads', {}, list => { S.reads = {}; list.forEach(d => { S.reads[d.id] = Number(d.lastReadTs) || 0; }); onData(); });
@@ -159,7 +160,7 @@ export async function connectData() {
 }
 /* ---- 가족 전용 자료 (설문·일상생활 체크·시계 그림·병원 검사): 규칙상 role 이 'family' 인 사람만 읽을 수 있어요 ---- */
 export const FAMILY_ONLY = [
-  ['surveys', 'surveys', 'ts', 100], ['iadl', 'iadl', 'ts', 60], ['clocks', 'clocks', 'ts', 40], ['clinicalTests', 'clinical', 'ts', 100]
+  ['surveys', 'surveys', 'ts', 100], ['clocks', 'clocks', 'ts', 40], ['clinicalTests', 'clinical', 'ts', 100]
 ];
 let famUnsubs = [];
 /* 체험 모드는 한 기기에서 두 역할을 다 써 보는 곳이라 항상 읽어요. 가족방에서는 내 member 문서의 role 이 family 일 때만요. */

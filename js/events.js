@@ -1,5 +1,6 @@
 import { alarmTick } from './alarm.js';
 import { SURVEYS } from './surveys/content.js';
+import { openClock } from './ui/screens/clock.js';
 import { answerSurvey } from './ui/screens/surveys.js';
 import { togglePush } from './ui/room-settings.js';
 import { setMyRole } from './store/membership.js';
@@ -72,6 +73,7 @@ document.addEventListener('click', e => {
   else if (a === 'notify') { S.notifyFamily = !S.notifyFamily; b.setAttribute('aria-checked', String(S.notifyFamily)); const stt = $('#notify-switch-state'); if (stt) stt.textContent = S.notifyFamily ? '켜져 있어요. 나갈 때 가족 대화방에 알려요.' : '꺼져 있어요.'; }
   else if (a === 'size') { S.prefs.size = b.dataset.v; LS.set('bw.size', S.prefs.size); applyPrefs(); render(true); const nb = $('#size-' + S.prefs.size); if (nb) nb.focus(); }
   else if (a === 'push') togglePush(b);
+  else if (a === 'clockopen') openClock(Number(b.dataset.i));
   else if (a === 'svopen') { const sv = SURVEYS[b.dataset.k]; S.sv = { kind: sv.id, mode: isTrainee() ? 'self' : sv.modes[0], relation: LS.get('bw.relation', null), idx: 0, answers: [] }; go('surveyIntro'); }
   else if (a === 'svmode') { S.sv.mode = b.dataset.v; render(true); }
   else if (a === 'svrel') { S.sv.relation = b.dataset.v; render(true); const nb = $('#btn-sv-start'); if (nb) nb.focus(); }
@@ -98,6 +100,7 @@ document.addEventListener('click', e => {
   else if (a === 'cisave') {
     const c = S.ci, date = todayS(), doc = { date, ts: Date.now(), mood: c.mood, sleepHours: c.sleepHours, exercise: !!c.exercise, social: !!c.social, meals: !!c.meals, userId: S.myId || null };
     S.ciLocal[date] = doc; LS.set('bw.checkins', S.ciLocal); remoteSet('checkins/' + date + '-' + (S.myId || 'local'), doc, true);
+    if (/^\d{2}:\d{2}$/.test(c.bed || '') && /^\d{2}:\d{2}$/.test(c.wake || '')) remoteSet('sleeplogs/' + date + '-' + (S.myId || 'local'), { date, ts: doc.ts, userId: S.myId || null, bed: c.bed, wake: c.wake, wakings: c.wakings == null ? 0 : c.wakings }, true);
     S.ci = {}; toast('저장했어요. 잘하셨어요!'); go('home');
   }
   else if (a === 'nudgego') { go('family'); setTimeout(() => { const n = $('#nudge-card'); if (n) n.scrollIntoView({ block: 'center' }); }, 60); }
@@ -115,8 +118,11 @@ document.addEventListener('click', e => {
     remoteSet('reminders/' + S.myId, doc, true).then(ok => toast(ok ? '저장했어요.' : NO_WRITE_MSG)); alarmTick();
   }
 });
+document.addEventListener('toggle', e => { if (e.target && e.target.id === 'sl-details') S.ci._sl = e.target.open; }, true);
 document.addEventListener('input', e => {
   const t = e.target;
-  if (t.id === 'alarm-time' && S.alarmDraft) S.alarmDraft.time = t.value;
+  if (t.id === 'sl-bed') S.ci.bed = t.value;
+  else if (t.id === 'sl-wake') S.ci.wake = t.value;
+  else if (t.id === 'alarm-time' && S.alarmDraft) S.alarmDraft.time = t.value;
   else if (t.id === 'rem-time' && S.remDraft) S.remDraft.time = t.value;
 });

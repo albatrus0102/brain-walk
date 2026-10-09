@@ -367,12 +367,12 @@ service cloud.firestore {
         allow delete: if isMember(fid) && (resource.data.userId == myId(fid) || isOwner(fid));
       }
 
-      // ---- 설문 결과 (Short IQCODE, KDSQ-C, SMCQ, GDS-15, PHQ-9) : 가족만 읽기
+      // ---- 설문 결과 (Short IQCODE, KDSQ-C, SMCQ, GDS-15, PHQ-9, 자체 일상생활 체크 'iadl') : 가족만 읽기
       // 훈련하는 분이 직접 답한 설문도 저장은 되지만(create) 읽을 수는 없어요.
       function validSurvey() {
         return newData().keys().hasOnly(['kind', 'version', 'answers', 'score', 'ts', 'date', 'mode', 'answeredBy', 'subjectId', 'relation'])
           && newData().keys().hasAll(['kind', 'version', 'answers', 'score', 'ts', 'date', 'mode', 'answeredBy'])
-          && newData().kind in ['iqcode', 'kdsq', 'smcq', 'gds', 'phq9']
+          && newData().kind in ['iqcode', 'kdsq', 'smcq', 'gds', 'phq9', 'iadl']
           && str(newData().version, 10)
           && newData().answers is list && newData().answers.size() <= 30
           && newData().score is number
@@ -387,6 +387,41 @@ service cloud.firestore {
         allow create: if isMember(fid) && okId(sid) && validSurvey();
         allow update: if false;
         allow delete: if isMember(fid) && isFamilyRole(fid) && (resource.data.answeredBy == myId(fid) || isOwner(fid));
+      }
+
+      // ---- 시계 그림: 훈련하는 분이 그리면 저장(create)되고, 가족만 볼 수 있어요. 자동 채점 없음.
+      // img 는 작게 줄인 data URL (PNG/JPEG, 200KB 이하).
+      match /clocks/{cid} {
+        allow read: if isMember(fid) && isFamilyRole(fid);
+        allow create: if isMember(fid) && okId(cid)
+          && newData().keys().hasOnly(['date', 'ts', 'userId', 'img', 'w', 'h'])
+          && newData().keys().hasAll(['date', 'ts', 'userId', 'img'])
+          && newData().userId == myId(fid)
+          && okDate(newData().date) && okMs(newData().ts)
+          && newData().img is string && newData().img.size() <= 200000
+          && newData().img.matches('^data:image/(png|jpeg);base64,.*')
+          && optNum('w') && optNum('h');
+        allow update: if false;
+        // 그린 사람(훈련하는 분)은 자기 그림을 읽을 수 없으니, 지우는 일은 가족 역할인 사람이 해요.
+        allow delete: if isMember(fid) && isFamilyRole(fid);
+      }
+
+      // ---- 수면 기록: checkins 처럼 사람마다 하루 한 개 (문서 id = YYYY-MM-DD-memberId), 가족 모두 읽기
+      match /sleeplogs/{lid} {
+        function validSleep() {
+          return newData().keys().hasOnly(['date', 'ts', 'userId', 'bed', 'wake', 'wakings', 'quality'])
+            && newData().keys().hasAll(['date', 'ts', 'userId', 'bed', 'wake'])
+            && newData().userId == myId(fid)
+            && okDate(newData().date) && lid == newData().date + '-' + myId(fid)
+            && okMs(newData().ts)
+            && okHHMM(newData().bed) && okHHMM(newData().wake)
+            && (!('wakings' in newData()) || (newData().wakings is number && newData().wakings >= 0 && newData().wakings <= 20))
+            && (!('quality' in newData()) || newData().quality == null || (newData().quality is number && newData().quality >= 1 && newData().quality <= 5));
+        }
+        allow read: if isMember(fid);
+        allow create: if isMember(fid) && validSleep();
+        allow update: if isMember(fid) && oldData().userId == myId(fid) && validSleep();
+        allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));
       }
 
       // ---- per-person small docs

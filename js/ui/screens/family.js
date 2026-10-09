@@ -49,6 +49,7 @@ SCREENS.family = {
       l7.map((d, i) => '<div class="day" role="listitem" aria-label="' + mdLabel(d) + ' 기분 ' + (c7[i] && FACES[c7[i].mood] ? FACES[c7[i].mood][1] : '기록 없음') + '"><span style="font-size:calc(30px * var(--text-scale))" aria-hidden="true">' + (c7[i] && FACES[c7[i].mood] ? FACES[c7[i].mood][0] : '–') + '</span><span class="t-small">' + WD[parseYmd(d).getDay()] + '</span></div>').join('') + '</div>' +
       '<div class="stat mt"><div><span class="t-label">평균 수면(14일)</span><b>' + (sl.length ? (Math.round(mean(sl) * 10) / 10) + '시간' : '-') + '</b></div><div><span class="t-label">걷기·운동(7일)</span><b>' + cnt('exercise') + '/7일</b></div><div><span class="t-label">사람 만남(7일)</span><b>' + cnt('social') + '/7일</b></div></div>' +
       (cis[today] ? '<div class="mt"><button class="btn text fit" id="talk-check" type="button" data-act="talkcheck"' + (chatAvail() ? '' : ' hidden') + '>오늘 생활 체크에 대해 이야기하기</button></div>' : '') + '</section>';
+    o += sleepReportHtml();
     o += '<section class="card filled" aria-labelledby="ws-h"><h2 class="t-title" id="ws-h">이번 주 요약</h2><p class="t-body mt" id="wk-text" style="white-space:pre-wrap"></p><div class="stack mt">' +
       (chatAvail() ? '<button class="btn filled" id="btn-share-summary" type="button" data-act="sharesummary">이번 주 요약 공유하기</button><button class="btn tonal" id="btn-fam-chat2" type="button" data-act="nav" data-to="chat">대화방 열기</button>' : '<p class="t-small muted">가족 대화는 가족방을 만들거나 가족 코드로 들어가면 쓸 수 있어요</p>') + '</div></section>';
     if (!isTrainee()) o += taskReportHtml() + surveyReportHtml();
@@ -63,3 +64,10 @@ SCREENS.family = {
     if (!isTrainee() && chatAvail()) { $('#nudge-card', el).hidden = false; $('#nudge-slot', el).append(nudgePanel('fam-nudge')); }
   }
 };
+
+/* 잠 기록: 최근 7일 (잠든 시각 → 일어난 시각, 깬 횟수) */
+function sleepReportHtml() {
+  const rows = (S.sleeplogs || []).filter(x => x && x.date).sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 7);
+  if (!rows.length) return '';
+  return '<section class="card outlined" id="sleep-report" aria-labelledby="slp-h"><h2 class="t-title" id="slp-h">잠 기록</h2><ul class="slist">' + rows.map(r => { const d = parseYmd(r.date); return '<li><span class="t-small muted">' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')</span><span class="t-title-m">' + esc(r.bed) + ' → ' + esc(r.wake) + '</span><span class="t-body">' + (r.wakings ? '밤에 ' + esc(r.wakings) + '번 깼어요' : '깨지 않고 잤어요') + '</span></li>'; }).join('') + '</ul></section>';
+}
