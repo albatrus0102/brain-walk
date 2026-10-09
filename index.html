@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>오늘의 두뇌 산책</title>
+<meta name="description" content="가족이 함께 응원하는 두뇌 훈련 앱. 의료기기가 아닌 생활 도구예요.">
+<meta name="theme-color" content="#386A20" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#A0D47F" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="두뇌산책">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="styles/m3-tokens.css">
+<link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+<header class="appbar" id="appbar"><div class="pad appbar-in" id="appbar-in"></div></header>
+<main class="pad" id="screen" tabindex="-1" style="padding-top:8px;padding-bottom:40px"></main>
+<div class="pad foot-wrap"><footer class="foot" id="disclaimer">이 앱은 두뇌 활동을 돕는 훈련용이며 의료기기나 치료를 대신하지 않아요. 기억력이 걱정되시면 가까운 치매안심센터(국번 없이 1899-9988 치매상담콜센터)나 병원에서 상담받으세요.</footer></div>
+<nav class="navbar" id="navbar" aria-label="주요 메뉴" hidden><div class="navbar-in" id="navbar-in"></div></nav>
+<div class="snack" id="snackbar" role="status" aria-live="polite" hidden></div>
+<div class="scrim" id="scrim" hidden></div>
+<div class="scrim bottom" id="sheet" hidden></div>
+<noscript><p style="padding:16px">이 앱은 자바스크립트가 켜져 있어야 해요.</p></noscript>
+
+<!-- 공개 설정값(관리자가 채움). 클래식 스크립트라서 sw.js 도 같은 파일을 importScripts 로 읽어요. -->
+<script src="firebase-config.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

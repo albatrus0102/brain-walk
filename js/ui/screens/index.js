@@ -1,0 +1,10 @@
+import './home.js';
+import './pick.js';
+import './assess.js';
+import './game.js';
+import './result.js';
+import './course-done.js';
+import './checkin.js';
+import './family.js';
+import './settings.js';
+import '../onboarding.js';

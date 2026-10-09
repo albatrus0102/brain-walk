@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "오늘의 두뇌 산책",
+  "short_name": "두뇌산책",
+  "description": "가족이 함께 응원하는 두뇌 훈련 앱",
+  "lang": "ko",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F8FAF0",
+  "theme_color": "#386A20",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
