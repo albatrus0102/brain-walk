@@ -58,6 +58,7 @@ export async function startLocalDemo(remember) {
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator) || !(location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) return;
+  const hadController = !!navigator.serviceWorker.controller;   // 처음 설치할 때는 새로고침하지 않아요 (업데이트일 때만)
   navigator.serviceWorker.register('./sw.js', { scope: './' }).then(reg => {
     reg.addEventListener('updatefound', () => {
       const w = reg.installing; if (!w) return;
@@ -69,7 +70,7 @@ function registerServiceWorker() {
     });
   }).catch(() => {});
   let reloaded = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloaded || !navigator.serviceWorker.controller) return; reloaded = true; if (S.screen === 'home') location.reload(); });
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!hadController || reloaded || !navigator.serviceWorker.controller) return; reloaded = true; if (S.screen === 'home') location.reload(); });
 }
 
 export async function boot() {
