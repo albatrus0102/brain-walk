@@ -77,13 +77,15 @@ export async function joinFamily({ code, name, role }) {
 }
 
 /* ---- 기기 옮기기 ---- */
-export async function createTransferCode() {
-  const { F, db } = FA.sdk;
+/* forMember 를 주면 "가족 기기 복구 코드": 폰을 잃어버린 다른 가족(예: 아버지)의 새 기기용.
+ * 규칙: 방 주인이거나, 가입한 지 24시간이 지난 '가족' 역할만 다른 사람의 코드를 만들 수 있어요. */
+export async function createTransferCode(forMember) {
+  const { F, db } = FA.sdk, target = forMember || FA.mid;
   let lastErr;
   for (let i = 0; i < 3; i++) {
     const code = newCode(), expires = Date.now() + TRANSFER_MIN * 60000;
     try {
-      await F.setDoc(F.doc(db, 'transferCodes', code), { familyId: FA.fid, memberId: FA.mid, createdBy: FA.mid, createdTs: sv(), expiresTs: ts(expires) });
+      await F.setDoc(F.doc(db, 'transferCodes', code), { familyId: FA.fid, memberId: target, createdBy: FA.mid, createdTs: sv(), expiresTs: ts(expires) });
       return { code, expires };
     } catch (e) { lastErr = e; if (!(e && e.code === 'permission-denied')) break; }
   }
@@ -102,6 +104,17 @@ export async function redeemTransfer(code) {
   await FA.setMembership(t.familyId, t.memberId);
   await sendSystem((FA.me().name || '가족') + '님이 새 기기에서 연결되었어요');
   return { fid: t.familyId, mid: t.memberId };
+}
+
+/* ---- 연결된 기기: 이 사람(memberId)에 연결된 기기(uid) 목록과 연결 끊기 ---- */
+export async function listMyDevices() {
+  const { F } = FA.sdk, s = await F.getDocs(F.query(FA._col('uids'), F.where('memberId', '==', FA.mid)));
+  return s.docs.map(d => ({ uid: d.id, device: d.data().device || '', addedTs: d.data().addedTs && d.data().addedTs.toMillis ? d.data().addedTs.toMillis() : 0, current: d.id === FA.uid }))
+    .sort((a, b) => b.addedTs - a.addedTs);
+}
+export async function revokeDevice(uid) {
+  if (uid === FA.uid) throw { code: 'self' };
+  await FA.sdk.F.deleteDoc(FA._ref('uids/' + uid));
 }
 
 /* ---- 가족 코드 보기 / 새로 만들기 ---- */
@@ -198,9 +211,16 @@ export async function deleteFamily() {
 /* 내 기록만 지우기 (소유자가 아닌 분의 "모든 기록 삭제") */
 export async function deleteMyRecords() {
   const { F } = FA.sdk;
-  for (const c of ['sessions', 'assessments', 'checkins', 'taskRuns', 'sleeplogs']) await deleteRefs(await refsOf(c, [F.where('userId', '==', FA.mid)]));
-  // 내가 쓴 가족 전용 기록 (훈련하는 분은 읽기 권한이 없어 건너뛰어요)
-  for (const [c, f] of [['surveys', 'answeredBy'], ['clocks', 'userId'], ['clinicalTests', 'recordedBy']]) { try { await deleteRefs(await refsOf(c, [F.where(f, '==', FA.mid)])); } catch (e) {} }
+  for (const c of ['sessions', 'assessments', 'checkins']) await deleteRefs(await refsOf(c, [F.where('userId', '==', FA.mid)]));
+  // 내가 쓴 가족 전용 기록(설문·시계 그림·잠 기록·과제 상세 등)은 role 이 'family' 일 때만 찾을 수 있어요.
+  // 훈련하는 분이면 지우는 동안만 role 을 바꿨다가 되돌려요 (deleteFamily 와 같은 방식).
+  const role = (FA.members()[FA.mid] || {}).role;
+  if (role !== 'family') { try { await F.updateDoc(FA._ref('members/' + FA.mid), { role: 'family' }); } catch (e) {} }
+  try {
+    for (const [c, f] of [['taskRuns', 'userId'], ['sleeplogs', 'userId'], ['surveys', 'answeredBy'], ['clocks', 'userId'], ['clinicalTests', 'recordedBy']]) { try { await deleteRefs(await refsOf(c, [F.where(f, '==', FA.mid)])); } catch (e) {} }
+  } finally {
+    if (role && role !== 'family') { try { await F.updateDoc(FA._ref('members/' + FA.mid), { role }); } catch (e) {} }
+  }
   for (const p of ['reads/' + FA.mid, 'reminders/' + FA.mid]) { try { await F.deleteDoc(FA._ref(p)); } catch (e) {} }
   ['bw.sessions', 'bw.levels', 'bw.hist', 'bw.assess', 'bw.checkins', 'bw.course'].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
 }

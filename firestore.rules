@@ -97,6 +97,12 @@ service cloud.firestore {
         && isMember(newData().familyId)
         && newData().createdBy == myId(newData().familyId)
         && exists(memberPath(newData().familyId, newData().memberId))
+        // 다른 사람의 복구 코드: 방 주인이거나, 가입한 지 24시간이 지난 '가족' 역할만.
+        // (방금 가족 코드로 들어온 사람이 곧바로 아버지·방 주인으로 옮겨 타는 것을 막아요)
+        && (newData().memberId == myId(newData().familyId)
+            || isOwner(newData().familyId)
+            || (isFamilyRole(newData().familyId)
+                && get(memberPath(newData().familyId, myId(newData().familyId))).data.joinedTs < request.time - duration.value(24, 'h')))
         && newData().createdTs == request.time
         && newData().expiresTs is timestamp
         && newData().expiresTs > request.time
@@ -355,9 +361,9 @@ service cloud.firestore {
         allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));
       }
 
-      // ---- 점검 과제 상세 (낱말·점 잇기·숫자 기억 등): 한 번의 월간 점검의 과제별 점수와 세부 수치
+      // ---- 점검 과제 상세 (낱말·점 잇기·숫자 기억 등): 한 번의 월간 점검의 과제별 점수와 세부 수치. 가족만 읽기(훈련하는 분은 쓰기만).
       match /taskRuns/{rid} {
-        allow read: if isMember(fid);
+        allow read: if isMember(fid) && isFamilyRole(fid);
         allow create: if isMember(fid) && okId(rid)
           && newData().keys().hasOnly(['date', 'ts', 'userId', 'v', 'tasks'])
           && newData().userId == myId(fid)
@@ -399,14 +405,15 @@ service cloud.firestore {
           && newData().userId == myId(fid)
           && okDate(newData().date) && okMs(newData().ts)
           && newData().img is string && newData().img.size() <= 200000
-          && newData().img.matches('^data:image/(png|jpeg);base64,.*')
+          // base64 글자만 허용: 따옴표 등이 섞이면 화면의 <img src> 를 깨고 스크립트를 넣을 수 있어요
+          && newData().img.matches('^data:image/(png|jpeg);base64,[A-Za-z0-9+/]+=*$')
           && optNum('w') && optNum('h');
         allow update: if false;
         // 그린 사람(훈련하는 분)은 자기 그림을 읽을 수 없으니, 지우는 일은 가족 역할인 사람이 해요.
         allow delete: if isMember(fid) && isFamilyRole(fid);
       }
 
-      // ---- 수면 기록: checkins 처럼 사람마다 하루 한 개 (문서 id = YYYY-MM-DD-memberId), 가족 모두 읽기
+      // ---- 수면 기록: checkins 처럼 사람마다 하루 한 개 (문서 id = YYYY-MM-DD-memberId). 가족만 읽기(훈련하는 분은 쓰기만).
       match /sleeplogs/{lid} {
         function validSleep() {
           return newData().keys().hasOnly(['date', 'ts', 'userId', 'bed', 'wake', 'wakings', 'quality'])
@@ -418,7 +425,7 @@ service cloud.firestore {
             && (!('wakings' in newData()) || (newData().wakings is number && newData().wakings >= 0 && newData().wakings <= 20))
             && (!('quality' in newData()) || newData().quality == null || (newData().quality is number && newData().quality >= 1 && newData().quality <= 5));
         }
-        allow read: if isMember(fid);
+        allow read: if isMember(fid) && isFamilyRole(fid);
         allow create: if isMember(fid) && validSleep();
         allow update: if isMember(fid) && oldData().userId == myId(fid) && validSleep();
         allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));

@@ -74,6 +74,14 @@ await t('B edits own text', updateDoc(doc(dB, `families/${F}/messages/m1`), { te
 await t('B soft-deletes', updateDoc(doc(dB, `families/${F}/messages/m1`), { deleted: true, text: '' }));
 await t('A deletes B msg (owner) ok', deleteDoc(doc(dA, `families/${F}/messages/m1`)));
 await t('B change push denied', (async () => { await setDoc(doc(dB, `families/${F}/messages/m5`), msg()); await updateDoc(doc(dB, `families/${F}/messages/m5`), { push: 'sent' }); })(), false);
+await t('A soft-deletes B msg denied (not author)', updateDoc(doc(dA, `families/${F}/messages/m5`), { deleted: true, text: '' }), false);
+await t('B changes own msg kind denied', updateDoc(doc(dB, `families/${F}/messages/m5`), { kind: 'system' }), false);
+await t('B changes own msg authorId denied', updateDoc(doc(dB, `families/${F}/messages/m5`), { authorId: 'mA' }), false);
+await t('B adds record to own msg denied', updateDoc(doc(dB, `families/${F}/messages/m5`), { record: { title: 'x' } }), false);
+await t('B forges ack for A denied', updateDoc(doc(dB, `families/${F}/messages/m5`), { 'acks.mA': Date.now() }), false);
+await t('B reaction list > 6 denied', updateDoc(doc(dB, `families/${F}/messages/m5`), { 'reactions.mB': ['1', '2', '3', '4', '5', '6', '7'] }), false);
+await t('new message with pre-filled reactions denied', setDoc(doc(dB, `families/${F}/messages/m6`), msg({ reactions: { mA: ['👍'] } })), false);
+await t('B deletes A msg (not owner) denied', (async () => { await setDoc(doc(dA, `families/${F}/messages/m7`), msg({ authorId: 'mA' })); await deleteDoc(doc(dB, `families/${F}/messages/m7`)); })(), false);
 // ---- nudge
 const nudge = d => { const b = writeBatch(d); b.set(doc(d, `families/${F}/messages/n${Math.random().toString(36).slice(2, 8)}`), msg({ kind: 'nudge', toId: 'mA', text: '아버지, 산책 가요', acks: {} })); b.update(doc(d, `families/${F}/members/mB`), { lastNudgeAt: serverTimestamp() }); return b.commit(); };
 await t('nudge without member stamp denied', setDoc(doc(dB, `families/${F}/messages/nx`), msg({ kind: 'nudge', toId: 'mA' })), false);
@@ -81,6 +89,12 @@ await t('nudge #1', nudge(dB));
 await t('nudge #2 within 115m denied', nudge(dB), false);
 await t('nudge to non-trainee denied', (async () => { const d = dA; const b = writeBatch(d); b.set(doc(d, `families/${F}/messages/ny`), msg({ authorId: 'mA', kind: 'nudge', toId: 'mB' })); b.update(doc(d, `families/${F}/members/mA`), { lastNudgeAt: serverTimestamp() }); await b.commit(); })(), false);
 await t('set lastNudgeAt to past denied', updateDoc(doc(dB, `families/${F}/members/mB`), { lastNudgeAt: Timestamp.fromMillis(0) }), false);
+await t('remove lastNudgeAt (reset limit) denied', updateDoc(doc(dB, `families/${F}/members/mB`), { lastNudgeAt: deleteField() }), false);
+await t('text message carrying toId denied', setDoc(doc(dB, `families/${F}/messages/nz`), msg({ toId: 'mA' })), false);
+await t('B renames A denied', updateDoc(doc(dB, `families/${F}/members/mA`), { name: '가짜' }), false);
+await t('B changes A role denied', updateDoc(doc(dB, `families/${F}/members/mA`), { role: 'family' }), false);
+await t('B makes self owner denied', updateDoc(doc(dB, 'families', F), { ownerMemberId: 'mB' }), false);
+await t('B reads A users pointer denied', getDoc(doc(dB, 'users', 'uidA')), false);
 // ---- records
 const today = new Date().toISOString().slice(0, 10);
 await t('session by trainee', setDoc(doc(dA, `families/${F}/sessions/s1`), { date: today, ts: Date.now(), gameId: 'flash', gameName: '번쩍', domain: 'speed', level: 2, correct: 4, total: 5, accuracy: 0.8, durationSec: 60, inCourse: true, roundSec: null, userId: 'mA' }));
@@ -102,6 +116,7 @@ await t('pushState write denied', setDoc(doc(dB, `families/${F}/pushState/mB`), 
 await t('own device', setDoc(doc(dB, `families/${F}/members/mB/devices/dev1`), { token: 'x'.repeat(100), uid: 'uidB', platform: 'android', standalone: true, updatedAt: serverTimestamp() }));
 await t('device for other member denied', setDoc(doc(dB, `families/${F}/members/mA/devices/dev2`), { token: 'x'.repeat(100), uid: 'uidB', platform: 'android', standalone: true, updatedAt: serverTimestamp() }), false);
 await t('A (owner) can list B devices', getDocs(collection(dA, `families/${F}/members/mB/devices`)));
+await t('B (not owner) cannot list A devices', getDocs(collection(dB, `families/${F}/members/mA/devices`)), false);
 // ---- 가족 전용 자료: surveys (mA 훈련하는 분·소유자, mB 가족)
 {
   const sv = (who, extra = {}) => Object.assign({ kind: 'phq9', version: '1', answers: [0, 1, 0, 0, 1, 0, 0, 0, 0], score: 2, ts: Date.now(), date: today, mode: 'self', answeredBy: who, relation: '본인' }, extra);
@@ -130,6 +145,8 @@ await t('A (owner) can list B devices', getDocs(collection(dA, `families/${F}/me
   await t('taskRun extra field denied', setDoc(doc(dA, `families/${F}/taskRuns/r3`), tr('mA', { note: 1 })), false);
   await t('taskRun update denied', updateDoc(doc(dA, `families/${F}/taskRuns/r1`), { v: 2 }), false);
   await t('non-member taskRun read denied', getDoc(doc(db('stranger'), `families/${F}/taskRuns/r1`)), false);
+  await t('trainee cannot read taskRun (family-only)', getDoc(doc(dA, `families/${F}/taskRuns/r1`)), false);
+  await t('trainee cannot list taskRuns', getDocs(collection(dA, `families/${F}/taskRuns`)), false);
 }
 // ---- clocks (시계 그림, 가족 전용) / sleeplogs / iadl 설문
 {
@@ -143,12 +160,17 @@ await t('A (owner) can list B devices', getDocs(collection(dA, `families/${F}/me
   await t('clock not an image denied', setDoc(doc(dA, `families/${F}/clocks/c3`), ck('mA', { img: 'http://evil/x.png' })), false);
   await t('clock > 200KB denied', setDoc(doc(dA, `families/${F}/clocks/c4`), ck('mA', { img: 'data:image/png;base64,' + 'A'.repeat(200001) })), false);
   await t('clock 190KB ok', setDoc(doc(dA, `families/${F}/clocks/c5`), ck('mA', { img: 'data:image/png;base64,' + 'A'.repeat(190000) })));
+  await t('clock img with quote (XSS) denied', setDoc(doc(dA, `families/${F}/clocks/c6`), ck('mA', { img: 'data:image/png;base64,AAAA" onerror="alert(1)' })), false);
+  await t('clock img svg denied', setDoc(doc(dA, `families/${F}/clocks/c7`), ck('mA', { img: 'data:image/svg+xml;base64,AAAA' })), false);
   await t('clock update denied', updateDoc(doc(dA, `families/${F}/clocks/c1`), { w: 1 }), false);
   await t('trainee cannot delete clock', deleteDoc(doc(dA, `families/${F}/clocks/c1`)), false);
   await t('family deletes clock', deleteDoc(doc(dB, `families/${F}/clocks/c5`)));
   const sl = (who, extra = {}) => Object.assign({ date: today, ts: Date.now(), userId: who, bed: '22:30', wake: '06:40', wakings: 2, quality: 3 }, extra);
   await t('sleep log own id', setDoc(doc(dA, `families/${F}/sleeplogs/${today}-mA`), sl('mA')));
   await t('sleep log readable by family', getDoc(doc(dB, `families/${F}/sleeplogs/${today}-mA`)));
+  await t('trainee cannot read sleep log (family-only)', getDoc(doc(dA, `families/${F}/sleeplogs/${today}-mA`)), false);
+  await t('trainee cannot list sleep logs', getDocs(collection(dA, `families/${F}/sleeplogs`)), false);
+  await t('trainee can still update own sleep log', setDoc(doc(dA, `families/${F}/sleeplogs/${today}-mA`), sl('mA', { wakings: 1 }), { merge: true }));
   await t('sleep log wrong id denied', setDoc(doc(dA, `families/${F}/sleeplogs/x1`), sl('mA')), false);
   await t('sleep log for another member denied', setDoc(doc(dB, `families/${F}/sleeplogs/${today}-mA`), sl('mA')), false);
   await t('sleep log bad time denied', setDoc(doc(dA, `families/${F}/sleeplogs/${today}-mA`), sl('mA', { bed: '25:99' })), false);
@@ -180,6 +202,19 @@ await t('A (owner) can list B devices', getDocs(collection(dA, `families/${F}/me
 // ---- transfer: B issues recovery code for A; new device uidA2 redeems
 {
   const T = 'TRF234';
+  // 방금 가족 코드로 들어온 사람(mC)은 다른 사람(아버지·방 주인 mA)의 복구 코드를 만들 수 없어요.
+  {
+    const dC = db('uidC2'), bj = writeBatch(dC);
+    bj.set(doc(dC, `families/${F}/uids/uidC2`), { memberId: 'mC2', via: 'join', code: 'NEW234', addedTs: serverTimestamp() });
+    bj.set(doc(dC, `families/${F}/members/mC2`), { name: '새 사람', role: 'family', joinedTs: serverTimestamp() });
+    await t('newcomer joins with code', bj.commit());
+    await t('newcomer cannot issue recovery code for owner', setDoc(doc(dC, 'transferCodes', 'TRF777'), { familyId: F, memberId: 'mA', createdBy: 'mC2', createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 15 * 60e3) }), false);
+    await t('newcomer can issue own transfer code', setDoc(doc(dC, 'transferCodes', 'TRF778'), { familyId: F, memberId: 'mC2', createdBy: 'mC2', createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 15 * 60e3) }));
+    await t('list transferCodes denied', getDocs(collection(dC, 'transferCodes')), false);
+    await t('get unknown transfer code denied', getDoc(doc(db('x2'), 'transferCodes', 'ZZZ999')), false);
+  }
+  // 하루 전에 들어온 가족(mB)은 아버지의 복구 코드를 만들 수 있어요 (joinedTs 를 하루 전으로).
+  await env.withSecurityRulesDisabled(async c => { await updateDoc(doc(c.firestore(), `families/${F}/members/mB`), { joinedTs: Timestamp.fromMillis(Date.now() - 2 * 864e5) }); });
   await t('issue transfer code', setDoc(doc(dB, 'transferCodes', T), { familyId: F, memberId: 'mA', createdBy: 'mB', createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 15 * 60e3) }));
   await t('transfer code TTL > 30m denied', setDoc(doc(dB, 'transferCodes', 'TRF999'), { familyId: F, memberId: 'mA', createdBy: 'mB', createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 60 * 60e3) }), false);
   const d = db('uidA2');
@@ -187,6 +222,7 @@ await t('A (owner) can list B devices', getDocs(collection(dA, `families/${F}/me
   const redeem = (dd, u) => { const b = writeBatch(dd); b.update(doc(dd, 'transferCodes', T), { usedBy: u, usedTs: serverTimestamp() }); b.set(doc(dd, `families/${F}/uids/${u}`), { memberId: 'mA', via: 'transfer', code: T, addedTs: serverTimestamp() }); return b.commit(); };
   await t('redeem transfer', redeem(d, 'uidA2'));
   await t('second redeem denied', redeem(db('uidA3'), 'uidA3'), false);
+  await t('get used transfer code denied', getDoc(doc(db('uidA5'), 'transferCodes', T)), false);
   await t('new device acts as mA', setDoc(doc(d, `families/${F}/reads/mA`), { lastReadTs: Date.now() }));
   await t('transfer without marking used denied', (async () => { const dd = db('uidA4'); await setDoc(doc(db('uidB'), 'transferCodes', 'TRF555'), { familyId: F, memberId: 'mA', createdBy: 'mB', createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 10 * 60e3) }); await setDoc(doc(dd, `families/${F}/uids/uidA4`), { memberId: 'mA', via: 'transfer', code: 'TRF555', addedTs: serverTimestamp() }); })(), false);
   await t('revoke lost device (owner A2)', deleteDoc(doc(d, `families/${F}/uids/uidA`)));

@@ -91,7 +91,7 @@ SCREENS.surveyDone = {
     const hideScore = v.mode === 'self' || isTrainee();
     if (hideScore) {
       return '<div class="stack"><h1 class="t-headline center" id="svd-h">오늘도 수고하셨어요</h1><section class="card primary center"><p class="t-title">답해 주셔서 고마워요.</p><p class="t-body mt">' +
-        (isTrainee() ? '결과는 가족이 함께 살펴볼게요.' : traineeLabel() + '께 고맙다고 전해 주세요. 이제 기기를 돌려받으세요. 결과는 가족만 볼 수 있어요.') + '</p></section>' +
+        (isTrainee() ? '결과는 가족이 함께 살펴볼게요.' : esc(traineeLabel()) + '께 고맙다고 전해 주세요. 이제 기기를 돌려받으세요. 결과는 가족만 볼 수 있어요.') + '</p></section>' +
         '<div class="cta"><button class="btn filled" id="btn-svd-home" type="button" data-act="home">처음으로</button></div></div>';
     }
     const sm = summaryOf(v.kind);

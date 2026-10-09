@@ -3,7 +3,7 @@ import { Platform } from '../platform.js';
 import { disablePush, enablePush, pushIsOn, pushReasonText } from '../push.js';
 import { S } from '../state.js';
 import { FirebaseAdapter } from '../store/firebase-adapter.js';
-import { TRANSFER_MIN, clearLocalData, createTransferCode, deleteFamily, deleteMyRecords, getInviteInfo, isOwner, leaveFamily, renameSelf, rotateJoinCode, transferLink } from '../store/membership.js';
+import { TRANSFER_MIN, clearLocalData, createTransferCode, deleteFamily, deleteMyRecords, getInviteInfo, isOwner, leaveFamily, listMyDevices, renameSelf, revokeDevice, rotateJoinCode, transferLink } from '../store/membership.js';
 import { Store } from '../store/store.js';
 import { LS } from '../util.js';
 import { closeSheet, dialog, h, openSheet, toast } from './dom.js';
@@ -58,19 +58,46 @@ function openInvite() {
     }).catch(e => { body.textContent = ''; body.append(h('p', { class: 't-body', text: Store.explain(e) }), btn('닫기', 'text', closeSheet)); });
   });
 }
-function openTransfer() {
-  openSheet('다른 기기로 옮기기', (body) => {
-    body.append(h('p', { class: 't-body muted', text: '새 기기에서 앱을 열고 "기기 옮기기 코드가 있어요"를 눌러 아래 코드를 입력하세요. 코드는 약 ' + TRANSFER_MIN + '분 동안, 한 번만 쓸 수 있어요.' }));
+/* forMember: 다른 가족의 새 기기용 복구 코드 (예: 아버지가 폰을 잃어버렸을 때) */
+function openTransfer(forMember, forName) {
+  openSheet(forMember ? forName + '님의 새 기기 연결 코드' : '다른 기기로 옮기기', (body) => {
+    body.append(h('p', { class: 't-body muted', text: (forMember ? forName + '님의 새 기기에서' : '새 기기에서') + ' 앱을 열고 "기기 옮기기 코드가 있어요"를 눌러 아래 코드를 입력하세요. 코드는 약 ' + TRANSFER_MIN + '분 동안, 한 번만 쓸 수 있어요.' + (forMember ? ' 이 코드를 받은 기기는 ' + forName + '님으로 연결되니, 다른 사람에게 보내지 마세요.' : '') }));
     const slot = h('div', { class: 'stack' }, h('p', { class: 't-body', text: '코드를 만드는 중이에요…' })); body.append(slot);
-    createTransferCode().then(({ code, expires }) => {
+    createTransferCode(forMember).then(({ code, expires }) => {
       slot.textContent = '';
       const link = transferLink(code);
       slot.append(h('p', { class: 't-display center', id: 'transfer-code-show', text: code, style: 'letter-spacing:.2em;user-select:all' }),
         h('input', { class: 'input', id: 'transfer-link', readonly: '', value: link, 'aria-label': '옮기기 링크' }),
         btn('링크 복사', 'tonal', async () => { toast((await Platform.copy(link, document.getElementById('transfer-link'))) ? '복사했어요.' : '길게 눌러 복사해 주세요.'); }, 'transfer-copy'),
         h('p', { class: 't-small muted', text: new Date(expires).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' }) + '까지 쓸 수 있어요.' }));
-    }).catch(e => { slot.textContent = ''; slot.append(h('p', { class: 't-body', text: Store.explain(e) })); });
+    }).catch(e => { slot.textContent = ''; slot.append(h('p', { class: 't-body', id: 'transfer-err', text: forMember && e && e.code === 'permission-denied' ? '다른 가족의 코드는 방을 만든 분이나, 가족방에 들어온 지 하루가 지난 가족만 만들 수 있어요.' : Store.explain(e) })); });
     body.append(btn('닫기', 'text', closeSheet, 'transfer-close'));
+  });
+}
+/* 가족 기기 복구 코드: 누구의 새 기기인지 고르기 */
+function openRecover() {
+  openSheet('가족 기기 복구 코드', (body) => {
+    const others = Object.entries(FirebaseAdapter.members()).filter(([id, m]) => id !== FirebaseAdapter.mid && m && !m.leftTs);
+    body.append(h('p', { class: 't-body muted', text: '폰을 잃어버렸거나 앱을 지운 가족의 새 기기를 연결할 코드를 만들어요. 누구의 새 기기인가요?' }));
+    if (!others.length) body.append(h('p', { class: 't-body', text: '다른 가족이 아직 없어요.' }));
+    others.forEach(([id, m], i) => body.append(btn(String(m.name || '가족'), 'outlined menuitem', () => openTransfer(id, String(m.name || '가족')), 'recover-' + i)));
+    body.append(btn('닫기', 'text', closeSheet, 'recover-close'));
+  });
+}
+/* 연결된 기기: 내 이름으로 연결된 기기 목록. 잃어버린 기기는 여기서 끊어요. */
+function openDevices() {
+  openSheet('연결된 기기', (body) => {
+    const slot = h('div', { class: 'stack' }, h('p', { class: 't-body muted', text: '불러오는 중이에요…' })); body.append(slot);
+    const load = () => listMyDevices().then(list => {
+      slot.textContent = '';
+      slot.append(h('p', { class: 't-body muted', text: '내 이름으로 연결된 기기예요. 잃어버린 기기는 연결을 끊어 주세요.' }));
+      list.forEach((d, i) => slot.append(h('div', { class: 'card outlined', id: 'dev-' + i },
+        h('p', { class: 't-title-m', text: (d.device || '기기') + (d.current ? ' (지금 이 기기)' : '') }),
+        h('p', { class: 't-small muted', text: d.addedTs ? new Date(d.addedTs).toLocaleDateString('ko-KR') + ' 연결' : '' }),
+        d.current ? null : h('div', { class: 'mt' }, btn('연결 끊기', 'outlined', () => dialog('이 기기의 연결을 끊을까요?', '그 기기에서는 더 이상 가족방을 볼 수 없어요.', [{ label: '취소', kind: 'text' }, { label: '연결 끊기', kind: 'filled', run: async () => { try { await revokeDevice(d.uid); toast('연결을 끊었어요.'); load(); } catch (e) { toast(Store.explain(e)); } } }]), 'dev-revoke-' + i)))));
+    }).catch(e => { slot.textContent = ''; slot.append(h('p', { class: 't-body', text: Store.explain(e) })); });
+    load();
+    body.append(btn('닫기', 'text', closeSheet, 'devices-close'));
   });
 }
 function openRename() {
@@ -121,7 +148,9 @@ export function buildRoomSection(slot) {
     slot.append(
       sec('가족방', h('p', { class: 't-body', text: '내 이름: ' + (me.name || '') }),
         btn('가족 코드 다시 보기 / 새로 만들기', 'tonal', openInvite, 'btn-invite'),
-        btn('다른 기기로 옮기기', 'tonal', openTransfer, 'btn-transfer'),
+        btn('다른 기기로 옮기기', 'tonal', () => openTransfer(), 'btn-transfer'),
+        btn('가족 기기 복구 코드 만들기', 'tonal', openRecover, 'btn-recover'),
+        btn('연결된 기기', 'tonal', openDevices, 'btn-devices'),
         btn('내 이름 바꾸기', 'tonal', openRename, 'btn-rename')),
       (() => { const c = h('section', { class: 'card outlined' }, h('h2', { class: 't-title', text: '알림' })); const row = pushRow(); row.className = 'mt'; c.append(row); if (S.pushState === 'ios-install-first') c.append(iosSteps()); if (S.installEvt) c.append(btn('앱으로 설치', 'outlined', async () => { S.installEvt.prompt(); S.installEvt = null; render(true); }, 'btn-install')); return c; })(),
       sec('내 정보 정리', btn('가족 나가기', 'outlined', confirmLeave, 'btn-leave'), btn('모든 기록 삭제', 'outlined', confirmDeleteAll, 'btn-delete-all')));
