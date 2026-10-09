@@ -74,6 +74,12 @@ try {
     const t = await M.createTransferCode();
     signal('transfer', { code: t.code });
     await wait('c-done');
+    const devs = await M.listMyDevices();
+    ok(devs.length === 2 && devs.filter(d => d.current).length === 1, '연결된 기기 2대 (이 기기 + 옮긴 기기)');
+    await M.revokeDevice(devs.find(d => !d.current).uid);
+    ok((await M.listMyDevices()).length === 1, '다른 기기 연결 끊기');
+    await FA.setDoc('taskRuns/' + Date.now(), { date: '2026-10-09', ts: Date.now(), userId: FA.mid, v: 1, tasks: {} });
+    ok(await denied(FA.query('taskRuns', { limit: 5 })), '훈련하는 분은 점검 과제 상세를 읽을 수 없음(쓰기만)');
     const inv = await M.getInviteInfo();
     ok(inv.code === r.code && !inv.expired, '가족 코드 다시 보기');
     const rot = await M.rotateJoinCode();
@@ -108,6 +114,7 @@ try {
     ok(await denied(FA.setDoc('messages/' + mid1(), msg('또 보내요', 'nudge'))), '넛지 2시간 제한(규칙)');
     ok(await denied(FA.updateDoc('state/trainee', { userId: 'nope', displayLabel: 'x' })), '없는 사람은 훈련하는 분이 될 수 없음');
     ok(await denied(FA.deleteDoc('state/trainee')), '소유자가 아니면 훈련하는 분 해제 불가');
+    ok(await denied(M.createTransferCode(c.mid)), '방금 들어온 가족은 아버지(방 주인)의 복구 코드를 만들 수 없음');
     await wait('a-survey');
     const svs = await FA.query('surveys', { orderBy: ['ts', 'desc'], limit: 10 });
     ok(svs.length === 1 && svs[0].kind === 'smcq', '가족은 설문을 읽을 수 있음');
