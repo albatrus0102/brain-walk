@@ -1,6 +1,6 @@
 name: deploy pages
 on:
-  push: { branches: [main, claude/digital-cognitive-therapy-app-lff0ze] }
+  push: { branches: [claude/digital-cognitive-therapy-app-lff0ze] }   # 저장소 기본 브랜치 (github-pages 환경이 이 브랜치만 허용)
   workflow_dispatch: {}
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: true }
