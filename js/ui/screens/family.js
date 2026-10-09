@@ -14,6 +14,7 @@ import { arrowHtml } from './assess.js';
 import { levelDots, progressBar, statusChip } from '../widgets.js';
 import { $, WD, addDays, daysBetween, esc, fmtDur, mean, parseYmd, ymd } from '../../util.js';
 
+const WEEK_LABELS = ['3주 전', '2주 전', '지난주', '이번 주'];
 SCREENS.family = {
   html() {
     const now = new Date(), today = ymd(now), all = allSessions(), ds = dateSet(all), st = streakOf(all, now), asm = allAssessments(), cis = allCheckins(), fl = currentFlags();
@@ -25,6 +26,9 @@ SCREENS.family = {
     let o = '<div class="stack"><h1 class="t-headline" id="fam-h">가족이 보는 기록</h1><div id="fam-status"></div>';
     if (fl.consult.flag) o += '<section class="card tertiary" id="flag-consult" role="status"><p class="t-title-m">최근 점수가 낮아지고 있어요. 치매안심센터(1899-9988)나 병원 상담을 권해요.</p><p class="t-small mt">이 안내는 진단이 아니라, 점수 변화를 보고 드리는 참고용이에요. 너무 걱정하지 말고 편하게 상담받아 보세요.</p></section>';
     if (fl.mood) o += '<section class="card tertiary" id="flag-mood" role="status"><p class="t-title-m">최근 일주일 중 5일 이상 기분이 좋지 않다고 하셨어요.</p><p class="t-small mt">마음 상태에 조금 더 관심을 가져 주세요. 필요하면 가까운 정신건강복지센터나 병원에서 우울 상담을 받아 보시길 권해요. 진단이 아니에요.</p></section>';
+    // 요약이 맨 먼저: 지난 7일을 글로 정리한 카드. 자세한 숫자는 그 아래에 있어요.
+    o += '<section class="card primary" aria-labelledby="ws-h"><h2 class="t-title" id="ws-h">이번 주 요약</h2><p class="t-body mt" id="wk-text" style="white-space:pre-wrap"></p>' +
+      (chatAvail() ? '<div class="stack mt"><button class="btn filled" id="btn-share-summary" type="button" data-act="sharesummary">이번 주 요약 공유하기</button><button class="btn tonal" id="btn-fam-chat2" type="button" data-act="nav" data-to="chat">대화방 열기</button></div>' : '<p class="t-small mt">가족 대화는 가족방을 만들거나 가족 코드로 들어가면 쓸 수 있어요.</p>') + '</section>';
     if (empty) o += '<section class="card outlined empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="' + P.leaf + '"/></svg><p class="t-title">아직 기록이 없어요</p><p class="t-body muted">첫 훈련을 마치시면 이곳에 훈련한 날과 정답률이 차곡차곡 쌓여요.</p></section>';
     o += '<section class="card elevated" id="nudge-card" aria-labelledby="nd-h" hidden><h2 class="t-title" id="nd-h">훈련 알림 보내기</h2><div class="mt" id="nudge-slot"></div></section>';
     o += '<section class="card elevated" aria-labelledby="wk-h"><h2 class="t-title" id="wk-h">이번 주 훈련한 날 <span class="muted t-body">(' + weekDone + '/7일 · ' + Math.round(weekDone / 7 * 100) + '%)</span></h2><div class="week mt" role="list">' +
@@ -35,13 +39,13 @@ SCREENS.family = {
     o += '<section class="card outlined" aria-labelledby="dom-h"><h2 class="t-title" id="dom-h">영역별 평균 정답률 <span class="muted t-body">(최근 14일)</span></h2><div class="stack mt">' +
       DOMAINS.map(d => { const rs = rec14.filter(s => s.domain === d.id), avg = rs.length ? Math.round(mean(rs.map(s => (Number(s.accuracy) || 0))) * 100) : null;
         return '<div class="bar-row"><div class="bar-top"><span>' + d.name + '</span><span>' + (avg == null ? '기록 없음' : avg + '%') + '</span></div><div class="bar' + (avg == null ? ' none' : '') + '" role="img" aria-label="' + d.name + ' ' + (avg == null ? '기록 없음' : avg + '퍼센트') + '"><span style="width:' + (avg || 0) + '%"></span></div></div>'; }).join('') + '</div></section>';
-    o += '<section class="card outlined" aria-labelledby="tr-h"><h2 class="t-title" id="tr-h">4주간 정답률 흐름</h2><p class="t-small muted">왼쪽이 4주 전, 오른쪽이 최근 1주예요.</p><div class="stack mt">' +
+    o += '<section class="card outlined" aria-labelledby="tr-h"><h2 class="t-title" id="tr-h">4주간 정답률 흐름</h2><p class="t-small muted">주마다 평균 정답률(%)이에요. 오른쪽이 이번 주예요.</p><div class="stack mt">' +
       DOMAINS.map(d => { const tr = weeklyTrend(all, d.id, today);
         return '<div><div class="bar-top"><span>' + d.name + '</span></div><div class="spark" role="img" aria-label="' + d.name + ' 주별 정답률 ' + tr.map(x => x.avg == null ? '기록 없음' : Math.round(x.avg) + '퍼센트').join(', ') + '">' +
-          tr.map(x => '<div class="col">' + (x.avg == null ? '<span aria-hidden="true">-</span><i class="none"></i>' : '<span>' + Math.round(x.avg) + '</span><i style="height:' + Math.max(4, Math.round(x.avg * 0.6)) + 'px"></i>') + '</div>').join('') + '</div></div>'; }).join('') + '</div></section>';
+          tr.map((x, k) => '<div class="col">' + (x.avg == null ? '<span aria-hidden="true">-</span><i class="none"></i>' : '<span>' + Math.round(x.avg) + '</span><i style="height:' + Math.max(4, Math.round(x.avg * 0.6)) + 'px"></i>') + '<span class="wk" aria-hidden="true">' + WEEK_LABELS[k] + '</span></div>').join('') + '</div></div>'; }).join('') + '</div></section>';
     o += '<section class="card elevated" aria-labelledby="as-hh"><h2 class="t-title" id="as-hh">두뇌 건강 점검 기록</h2>' + (asm.length ? '<ul class="slist">' + asm.slice(0, 8).map((a, i) => '<li><span class="t-small muted">' + mdLabel(a.date) + '</span><span class="t-title-m">총점 ' + a.total + '점' + (asm[i + 1] ? ' ' + arrowHtml(a.total - asm[i + 1].total) : '') + '</span></li>').join('') + '</ul>' : '<p class="t-body muted mt">아직 점검 기록이 없어요.</p>') + '</section>';
-    o += '<section class="card elevated" aria-labelledby="rec-h"><h2 class="t-title" id="rec-h">최근 훈련</h2>' + (empty ? '<p class="t-body muted mt">아직 없어요.</p>' :
-      '<ul class="slist">' + all.slice(0, 20).map(s => { const d = parseYmd(s.date); return '<li><span class="t-small muted">' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')</span><span class="t-title-m">' + esc(s.gameName || (GAMES[s.gameId] && GAMES[s.gameId].name) || s.gameId) + ' · ' + esc(s.level) + '단계</span><span class="t-body">정답 ' + esc(s.correct) + '/' + esc(s.total) + ' · ' + fmtDur(Number(s.durationSec) || 0) + '</span>' +
+    o += '<section class="card elevated" aria-labelledby="rec-h"><h2 class="t-title" id="rec-h">최근 훈련 <span class="muted t-body">(최근 10개)</span></h2>' + (empty ? '<p class="t-body muted mt">아직 없어요.</p>' :
+      '<ul class="slist">' + all.slice(0, 10).map(s => { const d = parseYmd(s.date); return '<li><span class="t-small muted">' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')</span><span class="t-title-m">' + esc(s.gameName || (GAMES[s.gameId] && GAMES[s.gameId].name) || s.gameId) + ' · ' + esc(s.level) + '단계</span><span class="t-body">정답 ' + esc(s.correct) + '/' + esc(s.total) + ' · ' + fmtDur(Number(s.durationSec) || 0) + '</span>' +
         (chatAvail() ? '<span><button class="btn text fit" type="button" id="talk-' + esc(s.id) + '" data-act="talk" data-id="' + esc(s.id) + '">이 기록에 대해 이야기하기</button></span>' : '') + '</li>'; }).join('') + '</ul>') + '</section>';
     // 생활 체크 추세
     const l7 = Array.from({ length: 7 }, (_, i) => addDays(today, -(6 - i))), c7 = l7.map(d => cis[d]), c14 = Array.from({ length: 14 }, (_, i) => cis[addDays(today, -i)]).filter(Boolean);
@@ -51,8 +55,6 @@ SCREENS.family = {
       '<div class="stat mt"><div><span class="t-label">평균 수면(14일)</span><b>' + (sl.length ? (Math.round(mean(sl) * 10) / 10) + '시간' : '-') + '</b></div><div><span class="t-label">걷기·운동(7일)</span><b>' + cnt('exercise') + '/7일</b></div><div><span class="t-label">사람 만남(7일)</span><b>' + cnt('social') + '/7일</b></div></div>' +
       (cis[today] ? '<div class="mt"><button class="btn text fit" id="talk-check" type="button" data-act="talkcheck"' + (chatAvail() ? '' : ' hidden') + '>오늘 생활 체크에 대해 이야기하기</button></div>' : '') + '</section>';
     o += sleepReportHtml();
-    o += '<section class="card filled" aria-labelledby="ws-h"><h2 class="t-title" id="ws-h">이번 주 요약</h2><p class="t-body mt" id="wk-text" style="white-space:pre-wrap"></p><div class="stack mt">' +
-      (chatAvail() ? '<button class="btn filled" id="btn-share-summary" type="button" data-act="sharesummary">이번 주 요약 공유하기</button><button class="btn tonal" id="btn-fam-chat2" type="button" data-act="nav" data-to="chat">대화방 열기</button>' : '<p class="t-small muted">가족 대화는 가족방을 만들거나 가족 코드로 들어가면 쓸 수 있어요</p>') + '</div></section>';
     if (!isTrainee()) o += taskReportHtml() + surveyReportHtml() + clinicalReportHtml(false);
     o += '<section class="card outlined" aria-labelledby="lv-h"><h2 class="t-title" id="lv-h">훈련별 현재 단계</h2><div class="mt">' + GAME_ORDER.map(id => '<div class="lvrow"><span>' + esc(GAMES[id].name) + '</span><span class="t-body">' + getLevel(id) + '단계 ' + levelDots(getLevel(id)) + '</span></div>').join('') + '</div></section>';
     o += '<section class="card tertiary" id="report-disclaimer"><p class="t-body">이 리포트는 <b>진단이 아니에요.</b> 의료기기가 아니며 훈련 기록을 보기 쉽게 정리한 것뿐이에요. 점수가 계속 낮아지면 치매안심센터(국번 없이 1899-9988)나 병원에서 상담받으세요.</p></section>';

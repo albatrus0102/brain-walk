@@ -1,5 +1,6 @@
 import { S } from '../../state.js';
 import { esc } from '../../util.js';
+import { barsHtml, mdShort } from '../widgets.js';
 
 /* 점검 과제 상세 (가족용): 규준·기준점 없이 "처음 기록(기준선)"과만 비교해요. */
 const INFO = {
@@ -26,7 +27,7 @@ export function taskReportHtml() {
     const trend = hist.length < 2 ? '첫 기록이에요. 다음 점검부터 비교해요.' : Math.abs(d) < 5 ? '처음과 비슷해요' : d > 0 ? '처음보다 점수가 높아요 (+' + d + ')' : '처음보다 점수가 낮아요 (' + d + ')';
     o += '<div id="tk-' + id + '"><div class="rowline"><b>' + esc(INFO[id].name) + '</b><span class="t-small muted">' + last.date + '</span></div><p class="t-body">' + esc(INFO[id].show(last.m)) + '</p>' +
       (hist.length > 1 ? '<p class="t-small muted">처음: ' + esc(INFO[id].show(first.m)) + '</p>' : '') + '<p class="t-small">' + trend + '</p>' +
-      (hist.length > 1 ? '<div class="hbar" role="img" aria-label="점수 변화">' + hist.slice(-6).map((h, i, a) => '<i class="' + (i === a.length - 1 ? 'last' : '') + '" style="height:' + Math.max(6, h.sc) + '%"></i>').join('') + '</div>' : '') + '</div>';
+      (hist.length > 1 ? barsHtml(hist.slice(-6).map(x => ({ t: mdShort(x.date), v: x.sc, s: String(x.sc) })), INFO[id].name + ' 점수 변화') : '') + '</div>';
   });
   return o + '</div><p class="t-small muted mt">점수 환산은 이 앱 자체 눈금이며 규준이 아니에요. 진단이 아니에요.</p></section>';
 }

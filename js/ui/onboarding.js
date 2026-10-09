@@ -15,6 +15,8 @@ const NAMES = ['아버지', '어머니', '큰아들', '큰딸', '나'];
 const KAKAO_BTN = '카톡으로 초대 보내기';
 
 const root = () => document.getElementById('ob-root');
+/* append 에 null 이 섞이면 'null' 글자가 찍히므로 걸러요 */
+const fill = (...kids) => root().append(...kids.filter(Boolean));
 const ob = () => (S.ob = S.ob || {});
 const card = (cls, ...kids) => h('section', { class: 'card ' + cls }, ...kids);
 const big = (label, cls, onclick, id) => h('button', { class: 'btn ' + cls, type: 'button', id, onclick }, label);
@@ -37,7 +39,7 @@ function iosCard(code) {
 SCREENS.setup = {
   html() { return '<div class="stack" id="ob-root"></div>'; },
   bind() {
-    root().append(
+    fill(
       h('h1', { class: 't-headline', id: 'setup-h', text: '관리자 설정이 필요해요' }),
       card('outlined', h('p', { class: 't-body', text: '가족과 함께 쓰려면 먼저 Firebase 연결 정보(firebase-config.js)를 채워야 해요. 이 앱을 설치한 분(관리자)이 한 번만 설정하면 돼요.' }),
         h('p', { class: 't-body mt', text: '자세한 순서는 저장소의 README.md 를 따라 주세요. (Firebase 프로젝트 만들기 → 설정값 붙여넣기 → GitHub Pages 켜기)' })),
@@ -51,7 +53,7 @@ SCREENS.setup = {
 SCREENS['ob-error'] = {
   html() { return '<div class="stack" id="ob-root"></div>'; },
   bind() {
-    root().append(h('h1', { class: 't-headline', id: 'err-h', text: '연결하지 못했어요' }),
+    fill(h('h1', { class: 't-headline', id: 'err-h', text: '연결하지 못했어요' }),
       card('outlined', h('p', { class: 't-body', text: '인터넷 연결을 확인하고 다시 시도해 주세요. 계속 안 되면 관리자에게 Firebase 설정(README 의 문제 해결)을 확인해 달라고 해 주세요.' })),
       big('다시 시도', 'filled', async () => { const r = await Store.retry(); await afterInit(r); }, 'btn-retry'),
       big('체험 모드 (이 기기에만 저장)', 'tonal', () => startLocalDemo(false), 'btn-demo'));
@@ -74,7 +76,7 @@ export async function afterInit(result) {
 SCREENS['ob-start'] = {
   html() { return '<div class="stack" id="ob-root"></div>'; },
   bind() {
-    root().append(
+    fill(
       h('h1', { class: 't-headline', id: 'ob-start-h', text: '오늘의 두뇌 산책에 오신 걸 환영해요' }),
       h('p', { class: 't-body muted', text: '가족이 함께 응원하는 두뇌 훈련 앱이에요. 먼저 가족방을 만들거나, 받은 코드로 들어가 주세요.' }),
       iosCard(null),
@@ -101,7 +103,7 @@ SCREENS['ob-join'] = {
     };
     const btn = big('다음', 'filled', next, 'btn-join-next');
     input.addEventListener('keydown', e => { if (e.key === 'Enter') next(); });
-    root().append(
+    fill(
       h('h1', { class: 't-headline', id: 'join-h', text: '가족 코드를 입력해 주세요' }),
       o.fromLink ? card('primary', h('p', { class: 't-body', text: '초대 링크로 오셨네요. 코드가 미리 입력되어 있어요.' })) : null,
       iosCard(o.code || null),
@@ -126,7 +128,7 @@ SCREENS['ob-transfer'] = {
       catch (e) { showErr('코드가 맞지 않거나 기간이 지났어요. 이전 기기에서 새 코드를 만들어 주세요.'); btn.disabled = false; }
     };
     const btn = big('이 기기로 옮기기', 'filled', go1, 'btn-transfer-go');
-    root().append(h('h1', { class: 't-headline', id: 'tr-h', text: '기기 옮기기 코드를 입력해 주세요' }),
+    fill(h('h1', { class: 't-headline', id: 'tr-h', text: '기기 옮기기 코드를 입력해 주세요' }),
       h('p', { class: 't-body muted', text: '이전 기기의 설정에서 "다른 기기로 옮기기"를 누르면 코드가 나와요. 코드는 잠깐만 쓸 수 있고 한 번만 쓸 수 있어요.' }),
       h('div', { class: 'field' }, h('label', { for: 'transfer-code', text: '옮기기 코드 (6글자)' }), input), errP(), btn,
       h('button', { class: 'btn text', type: 'button', onclick: () => go('ob-start') }, '처음으로'));
@@ -142,7 +144,7 @@ SCREENS['ob-name'] = {
     input.value = o.name || '';
     const next = () => { const v = input.value.trim(); if (!v) { showErr('이름을 적어 주세요.'); return; } o.name = v.slice(0, 20); go('ob-role'); };
     input.addEventListener('keydown', e => { if (e.key === 'Enter') next(); });
-    root().append(h('h1', { class: 't-headline', id: 'ob-name-h', text: '이름을 알려 주세요' }),
+    fill(h('h1', { class: 't-headline', id: 'ob-name-h', text: '이름을 알려 주세요' }),
       h('p', { class: 't-body muted', text: '가족방에서 보이는 이름이에요. (최대 20글자)' }),
       h('div', { class: 'field' }, h('label', { for: 'ob-name-input', text: '내 이름' }), input),
       h('div', { class: 'chips', 'aria-label': '이름 예시' }, NAMES.map((n, i) => h('button', { class: 'chip', type: 'button', id: 'name-chip-' + i, onclick: () => { input.value = n; input.focus(); } }, n))),
@@ -179,7 +181,7 @@ SCREENS['ob-role'] = {
       }
     };
     const choice = (id, title, desc, role) => h('button', { class: 'gamebtn', type: 'button', id, onclick: () => pick(role) }, h('span', {}, h('strong', { text: title }), h('span', { class: 't-small muted', text: desc })));
-    root().append(h('h1', { class: 't-headline', id: 'ob-role-h', text: o.name + '님은 어떻게 쓰세요?' }),
+    fill(h('h1', { class: 't-headline', id: 'ob-role-h', text: o.name + '님은 어떻게 쓰세요?' }),
       h('p', { class: 't-body muted', text: '나중에 설정에서 바꿀 수 있어요.' }),
       h('div', { class: 'pick-list' },
         choice('role-trainee', '훈련하는 분', '매일 두뇌 훈련을 하는 분이에요', 'trainee'),
@@ -209,7 +211,7 @@ SCREENS['ob-invite'] = {
   html() { return '<div class="stack" id="ob-root"></div>'; },
   bind() {
     const code = (ob().invite || {}).code;
-    root().append(h('h1', { class: 't-headline', id: 'inv-h', text: '가족방을 만들었어요!' }),
+    fill(h('h1', { class: 't-headline', id: 'inv-h', text: '가족방을 만들었어요!' }),
       h('p', { class: 't-body muted', text: '아래 코드나 링크를 가족에게 보내 주세요. 코드는 7일 동안 쓸 수 있고, 설정에서 다시 보거나 새로 만들 수 있어요.' }),
       card('primary', inviteBlock(code, { prefix: 'inv' })),
       big('시작하기', 'filled', () => { LS.set('bw.roleAsked', true); go('home'); startFlow(); }, 'btn-inv-done'));

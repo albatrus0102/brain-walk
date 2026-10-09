@@ -4,6 +4,7 @@ import { fmtClock } from '../logic.js';
 import { synth } from '../sound.js';
 import { S } from '../state.js';
 import { h } from './dom.js';
+import { esc } from '../util.js';
 
 export function switchRow(id, label, stateText, checked, act, disabled) {
   return '<div class="switch-row"><div><div class="t-title-m" id="' + id + '-label">' + label + '</div><div class="t-small muted" id="' + id + '-state">' + stateText + '</div></div>' +
@@ -21,4 +22,10 @@ export function statusChip() {
   const cs = courseStatus();
   return h('span', { class: 'chip-status' + (cs.done ? ' done' : ''), id: 'today-status' }, cs.done ? '오늘 훈련 완료 ✓ (' + fmtClock(cs.ts) + ')' : '오늘 아직 훈련 전이에요');
 }
+/* 점수 변화 막대 (가족 기록): items = [{ t: '9/8', v: 0~100, s: '24점' }]. 막대마다 값과 날짜를 적어요. */
+export function barsHtml(items, label) {
+  return '<div class="hbar" role="img" aria-label="' + esc(label) + ': ' + items.map(i => i.t + ' ' + i.s).join(', ') + '">' +
+    items.map((i, k) => '<div class="col' + (k === items.length - 1 ? ' last' : '') + '"><span class="v">' + esc(i.s) + '</span><i style="--h:' + Math.round(Math.max(6, Math.min(100, Number(i.v) || 0)) * 0.9) + 'px"></i><span>' + esc(i.t) + '</span></div>').join('') + '</div>';
+}
+export const mdShort = date => String(date).slice(5).replace('-', '/');
 export function progressBar(pct, label) { return '<div class="progress" role="progressbar" aria-label="' + label + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(pct) + '"><span style="width:' + pct + '%"></span></div>'; }

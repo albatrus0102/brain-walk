@@ -6,6 +6,7 @@ import { Store } from '../../store/store.js';
 import { $, esc, ymd } from '../../util.js';
 import { dialog, toast } from '../dom.js';
 import { SCREENS } from '../registry.js';
+import { barsHtml, mdShort } from '../widgets.js';
 import { go, render } from '../shell.js';
 
 /* 병원·센터 검사 기록 (가족 전용) */
@@ -36,7 +37,7 @@ export function cistBannerHtml() {
 /* ---- 기록 목록 ---- */
 function histBars(rs) {
   const h = rs.filter(r => r.score != null && r.max).slice(0, 6).reverse(); if (h.length < 2) return '';
-  return '<div class="hbar" role="img" aria-label="점수 변화">' + h.map((r, i) => '<i class="' + (i === h.length - 1 ? 'last' : '') + '" style="height:' + Math.max(6, Math.round(r.score / r.max * 100)) + '%"></i>').join('') + '</div>';
+  return barsHtml(h.map(r => ({ t: mdShort(r.date), v: r.score / r.max * 100, s: String(r.score) })), '점수 변화');
 }
 export function clinicalReportHtml(withActions) {
   const groups = byTest(), keys = Object.keys(groups), rm = cistReminder(today());

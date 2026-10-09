@@ -65,7 +65,7 @@ function appendMsg(list, m, prev, next) {
   const content = (k === 'text' || m.deleted) ? bubbleNode(m, mine) : cardNode(m, mine);
   const brow = h('div', { class: 'brow' }, content);
   if (!mine && !m.deleted && m.text && isTrainee()) brow.append(h('button', { type: 'button', class: 'tts-btn', id: 'tts-' + m.id, 'aria-label': '소리로 듣기', onclick: () => say(nameOf(m.authorId) + '님 말씀. ' + m.text, true) }, svgIcon('vol')));
-  brow.append(meta); col.append(brow);
+  col.append(brow, meta);
   const rx = reactionsNode(m); if (rx) col.append(rx);
   row.append(col); list.append(row);
 }

@@ -6,7 +6,7 @@ import { LS, esc } from '../../util.js';
 import { dialog, h } from '../dom.js';
 import { SCREENS } from '../registry.js';
 import { go, render } from '../shell.js';
-import { progressBar } from '../widgets.js';
+import { barsHtml, mdShort, progressBar } from '../widgets.js';
 
 /* 설문: 한 화면에 한 문항. 문항 글은 surveys/content.js (원문 그대로). */
 const visibleKinds = () => SURVEY_ORDER.filter(k => SURVEYS[k].enabled !== false && (!isTrainee() || SURVEYS[k].modes.includes('self')));
@@ -117,7 +117,7 @@ export function surveyReportHtml() {
         '<p class="t-title">' + sm.last.score + '<span class="t-body"> / ' + max + '점</span></p>' +
         (sm.band.text ? '<p><span class="refband">' + esc(sm.band.text) + '</span></p>' : '') +
         (sm.trend ? '<p class="t-small">' + esc(sm.trend.text) + '</p>' : '') +
-        (sm.history.length > 1 ? '<div class="hbar" role="img" aria-label="최근 점수 변화">' + sm.history.map((r, i) => '<i class="' + (i === sm.history.length - 1 ? 'last' : '') + '" style="height:' + Math.max(6, Math.round(r.score / max * 100)) + '%"></i>').join('') + '</div>' : '') +
+        (sm.history.length > 1 ? barsHtml(sm.history.map(r => ({ t: mdShort(r.date), v: r.score / max * 100, s: String(r.score) })), sv.name + ' 점수 변화') : '') +
         '<p class="t-small muted">' + esc(nameOf(sm.last.answeredBy)) + (sm.last.relation ? ' (' + esc(sm.last.relation) + ')' : '') + ' · ' + (sm.last.mode === 'self' ? '본인 답' : '가족 답') + ' · 문항판 v' + esc(sm.last.version) + '</p></div>';
     });
     o += '</div><p class="t-small muted mt">' + NOT_DIAGNOSIS + ' 기준은 연구에서 쓰인 참고값이에요.</p>' + sourceBlock(kinds);
