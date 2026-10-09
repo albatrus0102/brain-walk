@@ -424,6 +424,27 @@ service cloud.firestore {
         allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));
       }
 
+      // ---- 병원·센터 검사 기록: 가족이 직접 적은 '점수'만 저장해요 (검사 문항·내용은 없음). 가족 전용: 훈련하는 분은 읽기·쓰기 모두 불가.
+      function validClinical() {
+        return newData().keys().hasOnly(['test', 'testLabel', 'date', 'score', 'max', 'place', 'result', 'memo', 'recordedBy', 'ts'])
+          && newData().keys().hasAll(['test', 'date', 'recordedBy', 'ts'])
+          && newData().test in ['cist', 'mmse_ds', 'k_mmse', 'moca', 'snsb', 'cerad', 'cdr', 'gds_global', 'other']
+          && optStr('testLabel', 30) && optStr('place', 40) && optStr('memo', 500)
+          && okDate(newData().date) && okMs(newData().ts)
+          && newData().recordedBy == myId(fid)
+          && optNum('score') && optNum('max')
+          && (!('score' in newData()) || newData().score == null || newData().score >= 0)
+          && (!('max' in newData()) || newData().max == null || newData().max > 0)
+          && (!('score' in newData()) || !('max' in newData()) || newData().score == null || newData().max == null || newData().score <= newData().max)
+          && (!('result' in newData()) || newData().result == null || newData().result in ['정상', '인지저하', '경도인지장애', '치매', '기타']);
+      }
+      match /clinicalTests/{tid} {
+        allow read: if isMember(fid) && isFamilyRole(fid);
+        allow create: if isMember(fid) && isFamilyRole(fid) && okId(tid) && validClinical();
+        allow update: if isMember(fid) && isFamilyRole(fid) && oldData().recordedBy == myId(fid) && validClinical();
+        allow delete: if isMember(fid) && isFamilyRole(fid) && (resource.data.recordedBy == myId(fid) || isOwner(fid));
+      }
+
       // ---- per-person small docs
       match /reads/{mid} {
         allow read: if isMember(fid);

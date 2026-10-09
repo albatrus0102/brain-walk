@@ -6,6 +6,7 @@ import { nudgePanel } from '../../nudge.js';
 import { FACES, currentFlags, currentSummary, mdLabel } from '../../records.js';
 import { S } from '../../state.js';
 import { Store } from '../../store/store.js';
+import { clinicalReportHtml } from './clinical.js';
 import { taskReportHtml } from './tasks-report.js';
 import { surveyReportHtml } from './surveys.js';
 import { SCREENS } from '../registry.js';
@@ -52,7 +53,7 @@ SCREENS.family = {
     o += sleepReportHtml();
     o += '<section class="card filled" aria-labelledby="ws-h"><h2 class="t-title" id="ws-h">이번 주 요약</h2><p class="t-body mt" id="wk-text" style="white-space:pre-wrap"></p><div class="stack mt">' +
       (chatAvail() ? '<button class="btn filled" id="btn-share-summary" type="button" data-act="sharesummary">이번 주 요약 공유하기</button><button class="btn tonal" id="btn-fam-chat2" type="button" data-act="nav" data-to="chat">대화방 열기</button>' : '<p class="t-small muted">가족 대화는 가족방을 만들거나 가족 코드로 들어가면 쓸 수 있어요</p>') + '</div></section>';
-    if (!isTrainee()) o += taskReportHtml() + surveyReportHtml();
+    if (!isTrainee()) o += taskReportHtml() + surveyReportHtml() + clinicalReportHtml(false);
     o += '<section class="card outlined" aria-labelledby="lv-h"><h2 class="t-title" id="lv-h">훈련별 현재 단계</h2><div class="mt">' + GAME_ORDER.map(id => '<div class="lvrow"><span>' + esc(GAMES[id].name) + '</span><span class="t-body">' + getLevel(id) + '단계 ' + levelDots(getLevel(id)) + '</span></div>').join('') + '</div></section>';
     o += '<section class="card tertiary" id="report-disclaimer"><p class="t-body">이 리포트는 <b>진단이 아니에요.</b> 의료기기가 아니며 훈련 기록을 보기 쉽게 정리한 것뿐이에요. 점수가 계속 낮아지면 치매안심센터(국번 없이 1899-9988)나 병원에서 상담받으세요.</p></section>';
     o += '<p class="sync-note t-small" id="family-note-static">' + (Store.shared && !S.dbError ? '이 기록은 같은 가족방에 들어온 가족만 볼 수 있어요.' : '지금은 이 기기에 저장된 기록만 보여요. (체험 모드)') + '</p><p class="sync-note" id="sync-note"></p></div>';

@@ -9,7 +9,7 @@ import { $ } from '../util.js';
 
 /* ================= 화면 ================= */
 const NAV = [['home', '홈', 'home'], ['pick', '훈련', 'grid'], ['assess', '점검', 'clip'], ['family', '가족', 'chart'], ['chat', '대화', 'chat']];
-const TITLES = { clock: '시계 그리기', clockDone: '시계 그리기', clocks: '시계 그림', assessBreak: '두뇌 건강 점검', surveys: '설문', surveyIntro: '설문', surveyQ: '설문', surveyDone: '설문', assessView: '두뇌 건강 점검 결과', home: '오늘의 두뇌 산책', pick: '골라서 하기', assess: '두뇌 건강 점검', assessStep: '두뇌 건강 점검', assessDone: '점검 결과', game: '', result: '훈련 결과', courseDone: '오늘의 훈련', family: '가족이 보는 기록', checkin: '오늘의 생활 체크', settings: '설정', chat: '우리 가족 대화방' };
+const TITLES = { clinical: '병원·센터 검사', clinicalForm: '검사 결과 기록', clock: '시계 그리기', clockDone: '시계 그리기', clocks: '시계 그림', assessBreak: '두뇌 건강 점검', surveys: '설문', surveyIntro: '설문', surveyQ: '설문', surveyDone: '설문', assessView: '두뇌 건강 점검 결과', home: '오늘의 두뇌 산책', pick: '골라서 하기', assess: '두뇌 건강 점검', assessStep: '두뇌 건강 점검', assessDone: '점검 결과', game: '', result: '훈련 결과', courseDone: '오늘의 훈련', family: '가족이 보는 기록', checkin: '오늘의 생활 체크', settings: '설정', chat: '우리 가족 대화방' };
 const BARE = n => n === 'setup' || n.indexOf('ob-') === 0;   // 설정 안내·가입 화면: 뒤로가기/설정 버튼 없음
 const NAV_SCREENS = ['home', 'pick', 'assess', 'family'];
 

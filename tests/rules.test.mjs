@@ -156,6 +156,27 @@ await t('A (owner) can list B devices', getDocs(collection(dA, `families/${F}/me
   await t('iadl survey kind allowed (family)', setDoc(doc(dB, `families/${F}/surveys/i1`), { kind: 'iadl', version: '1', answers: [0, 1, 0, 2, 0, 0, 1, 0], score: 4, ts: Date.now(), date: today, mode: 'family', answeredBy: 'mB', relation: '아들' }));
   await t('trainee cannot read iadl survey', getDoc(doc(dA, `families/${F}/surveys/i1`)), false);
 }
+// ---- clinicalTests (병원·센터 검사 기록): 가족만 읽기·쓰기
+{
+  const ct = (who, extra = {}) => Object.assign({ test: 'cist', date: today, score: 25, max: 30, place: '서울 ○○치매안심센터', result: '정상', memo: '2년 뒤 재검', recordedBy: who, ts: Date.now() }, extra);
+  await t('family records clinical test', setDoc(doc(dB, `families/${F}/clinicalTests/k1`), ct('mB')));
+  await t('family reads clinical test', getDoc(doc(dB, `families/${F}/clinicalTests/k1`)));
+  await t('trainee cannot read clinical test', getDoc(doc(dA, `families/${F}/clinicalTests/k1`)), false);
+  await t('trainee cannot list clinical tests', getDocs(collection(dA, `families/${F}/clinicalTests`)), false);
+  await t('trainee cannot write clinical test', setDoc(doc(dA, `families/${F}/clinicalTests/k2`), ct('mA')), false);
+  await t('date-only record (no score) ok', setDoc(doc(dB, `families/${F}/clinicalTests/k3`), { test: 'cist', date: today, recordedBy: 'mB', ts: Date.now() }));
+  await t('other test with label ok', setDoc(doc(dB, `families/${F}/clinicalTests/k4`), ct('mB', { test: 'other', testLabel: '신경심리검사', max: null })));
+  await t('forged recordedBy denied', setDoc(doc(dB, `families/${F}/clinicalTests/k5`), ct('mA')), false);
+  await t('unknown test denied', setDoc(doc(dB, `families/${F}/clinicalTests/k6`), ct('mB', { test: 'mystery' })), false);
+  await t('score above max denied', setDoc(doc(dB, `families/${F}/clinicalTests/k7`), ct('mB', { score: 31 })), false);
+  await t('negative score denied', setDoc(doc(dB, `families/${F}/clinicalTests/k8`), ct('mB', { score: -1 })), false);
+  await t('bad result value denied', setDoc(doc(dB, `families/${F}/clinicalTests/k9`), ct('mB', { result: '위험' })), false);
+  await t('memo over 500 chars denied', setDoc(doc(dB, `families/${F}/clinicalTests/k10`), ct('mB', { memo: 'x'.repeat(501) })), false);
+  await t('extra field (items) denied', setDoc(doc(dB, `families/${F}/clinicalTests/k11`), ct('mB', { items: [1, 2, 3] })), false);
+  await t('author updates own record', updateDoc(doc(dB, `families/${F}/clinicalTests/k1`), { score: 26 }));
+  await t('family deletes own record', deleteDoc(doc(dB, `families/${F}/clinicalTests/k3`)));
+  await t('non-member cannot read clinical test', getDoc(doc(db('stranger'), `families/${F}/clinicalTests/k1`)), false);
+}
 // ---- transfer: B issues recovery code for A; new device uidA2 redeems
 {
   const T = 'TRF234';

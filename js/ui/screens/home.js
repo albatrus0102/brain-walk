@@ -9,6 +9,7 @@ import { COURSE_N, courseGames, startCourse } from '../../session.js';
 import { say } from '../../sound.js';
 import { S } from '../../state.js';
 import { btnEl, h, svgIcon, toast } from '../dom.js';
+import { cistBannerHtml } from './clinical.js';
 import { pushPromptCard } from '../room-settings.js';
 import { SCREENS } from '../registry.js';
 import { go, render } from '../shell.js';
@@ -56,6 +57,7 @@ SCREENS.home = {
     slotText(el, 'tlabel', traineeLabel());
     const bn = $('#home-banner', el);
     const pc = pushPromptCard(); if (pc) bn.append(pc);
+    if (!isTrainee()) bn.insertAdjacentHTML('beforeend', cistBannerHtml());
     if (S.alarmDue) {
       bn.append(h('div', { class: 'banner', role: 'alert', id: 'alarm-banner' }, h('div', { class: 't-title' }, svgIcon('alarm'), '훈련할 시간이에요!'), h('div', { class: 't-body', text: '오늘의 두뇌 산책을 시작해 볼까요? 천천히 하셔도 괜찮아요.' }),
         h('div', { class: 'row' }, btnEl('오늘의 훈련 시작', 'filled', () => startCourse(), 'banner-start'), btnEl('30분 뒤에', 'text', () => { LS.set('bw.snooze', Date.now() + 30 * 60000); alarmTick(); render(true); toast('30분 뒤에 다시 알려 드릴게요.'); }, 'banner-snooze'))));

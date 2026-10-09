@@ -9,4 +9,5 @@ import './family.js';
 import './settings.js';
 import './surveys.js';
 import './clock.js';
+import './clinical.js';
 import '../onboarding.js';

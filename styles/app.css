@@ -358,3 +358,4 @@ body.in-chat main{padding-bottom:var(--composer-h,170px)!important;padding-top:4
 .thumbs figure{margin:0}
 .thumbs img{width:100%;height:auto;border:2px solid var(--md-sys-color-outline-variant);border-radius:var(--md-sys-shape-corner-medium);background:var(--md-sys-color-surface)}
 .thumbs figcaption{font-size:var(--md-sys-typescale-body-small-size);color:var(--md-sys-color-on-surface-variant)}
+a.btn{text-decoration:none}
