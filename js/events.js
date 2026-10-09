@@ -1,7 +1,10 @@
 import { alarmTick } from './alarm.js';
+import { SURVEYS } from './surveys/content.js';
+import { answerSurvey } from './ui/screens/surveys.js';
 import { togglePush } from './ui/room-settings.js';
 import { setMyRole } from './store/membership.js';
-import { NO_WRITE_MSG, writeErrMsg, allCheckins, allSessions, chatAvail, isTrainee, remoteSet, todayS, traineeId } from './data.js';
+import { FirebaseAdapter } from './store/firebase-adapter.js';
+import { NO_WRITE_MSG, connectFamilyOnly, writeErrMsg, allCheckins, allSessions, chatAvail, isTrainee, remoteSet, todayS, traineeId } from './data.js';
 import { buildIcs } from './logic.js';
 import { Platform } from './platform.js';
 import { recordOfCheck, recordOfSession, shareSummary, talkAbout } from './records.js';
@@ -43,13 +46,13 @@ function roleSwitch() {
         catch (e) { toast(e && e.code === 'permission-denied' ? '훈련하는 분 해제는 가족방을 만든 분만 할 수 있어요.' : writeErrMsg(e)); return; }
       }
       S.roleLocal = 'family'; LS.set('bw.role', 'family');
-      if (Store.mode === 'firebase') { try { await setMyRole('family'); } catch (e) {} }
+      if (Store.mode === 'firebase') { try { await setMyRole('family'); await FirebaseAdapter.refreshMembers(); } catch (e) {} connectFamilyOnly(); }
       render(true); } }]);
   } else {
     dialog('훈련하는 분으로 바꿀까요?', traineeId() && traineeId() !== S.myId ? '지금 등록된 훈련하는 분이 바뀌어요. 정말 바꿀까요?' : '이 기기에서 훈련하는 분으로 쓰게 돼요.', [{ label: '취소', kind: 'text' }, { label: '바꾸기', kind: 'filled', run: async () => {
       if (chatAvail()) { try { const doc = { userId: S.myId, displayLabel: (S.trainee && S.trainee.displayLabel) || '아버지' }; await Store.setDoc('state/trainee', doc); S.trainee = doc; } catch (e) { toast(writeErrMsg(e)); return; } }
       S.roleLocal = 'trainee'; LS.set('bw.role', 'trainee');
-      if (Store.mode === 'firebase') { try { await setMyRole('trainee'); } catch (e) {} }
+      if (Store.mode === 'firebase') { try { await setMyRole('trainee'); await FirebaseAdapter.refreshMembers(); } catch (e) {} connectFamilyOnly(); }
       render(true); } }]);
   }
 }
@@ -69,6 +72,13 @@ document.addEventListener('click', e => {
   else if (a === 'notify') { S.notifyFamily = !S.notifyFamily; b.setAttribute('aria-checked', String(S.notifyFamily)); const stt = $('#notify-switch-state'); if (stt) stt.textContent = S.notifyFamily ? '켜져 있어요. 나갈 때 가족 대화방에 알려요.' : '꺼져 있어요.'; }
   else if (a === 'size') { S.prefs.size = b.dataset.v; LS.set('bw.size', S.prefs.size); applyPrefs(); render(true); const nb = $('#size-' + S.prefs.size); if (nb) nb.focus(); }
   else if (a === 'push') togglePush(b);
+  else if (a === 'svopen') { const sv = SURVEYS[b.dataset.k]; S.sv = { kind: sv.id, mode: isTrainee() ? 'self' : sv.modes[0], relation: LS.get('bw.relation', null), idx: 0, answers: [] }; go('surveyIntro'); }
+  else if (a === 'svmode') { S.sv.mode = b.dataset.v; render(true); }
+  else if (a === 'svrel') { S.sv.relation = b.dataset.v; render(true); const nb = $('#btn-sv-start'); if (nb) nb.focus(); }
+  else if (a === 'svstart') { S.sv.idx = 0; S.sv.answers = []; go('surveyQ'); }
+  else if (a === 'svans') answerSurvey(Number(b.dataset.v));
+  else if (a === 'svprev') { S.sv.idx = Math.max(0, S.sv.idx - 1); render(); }
+  else if (a === 'svcancel') go(isTrainee() ? 'home' : 'surveys');
   else if (a === 'course') startCourse();
   else if (a === 'game') startSession(b.dataset.id, { inCourse: false });
   else if (a === 'replay') { if (S.ctx) S.ctx.replay(); }

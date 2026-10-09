@@ -110,6 +110,11 @@ export const FirebaseAdapter = {
     return out;
   },
   members() { return this._members; },
+  /* members 스냅샷이 내 변경(예: role)을 반영할 때까지 잠깐 기다려요 */
+  async refreshMembers() {
+    const { F } = this.sdk, s = await F.getDocs(F.collection(this.sdk.db, 'families', this.fid, 'members'));
+    const m = {}; s.docs.forEach(d => { m[d.id] = d.data(); }); this._members = m;
+  },
 
   /* ---- 경로/변환 ---- */
   _ref(path) { const { db, F } = this.sdk; return F.doc(db, 'families/' + this.fid + '/' + path); },

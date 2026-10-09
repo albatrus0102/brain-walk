@@ -1,4 +1,5 @@
-import { allAssessments } from '../../data.js';
+import { allAssessments, isTrainee } from '../../data.js';
+import { hubHtml } from './hub.js';
 import { DOM, DOMAINS } from '../../games/registry.js';
 import { changeWord, nextCheckInfo } from '../../logic.js';
 import { mdLabel } from '../../records.js';
@@ -14,8 +15,8 @@ function scoreRows(scores, prevScores) {
   return DOMAINS.map(d => { const v = Number(scores[d.id]) || 0, p = prevScores ? Number(prevScores[d.id]) : null;
     return '<div class="domscore"><div class="bar-top"><span>' + d.name + '</span><span>' + v + '점</span></div><div class="bar" role="img" aria-label="' + d.name + ' ' + v + '점"><span style="width:' + v + '%"></span></div>' + (p != null && !isNaN(p) ? '<div class="t-small">' + arrowHtml(v - p) + '</div>' : '') + '</div>'; }).join('');
 }
-SCREENS.assess = {
-  html() {
+function assessMainHtml() {
+  {
     const as = allAssessments(), last = as[0], prev = as[1], today = ymd(new Date()), nc = nextCheckInfo(last && last.date, today);
     let h2 = '<div class="stack"><h1 class="t-headline" id="as-h">두뇌 건강 점검</h1>' +
       '<section class="card elevated"><p class="t-body">다섯 가지 영역(기억력, 주의집중력, 계산·실행기능, 지남력·언어, 처리속도)을 <b>항상 같은 난이도</b>로 살펴봐요. 약 8~10분이 걸리고, 한 달에 한 번 다시 해서 변화를 비교해요.</p>' +
@@ -29,7 +30,10 @@ SCREENS.assess = {
     }
     return h2 + '</div>';
   }
-};
+}
+SCREENS.assessView = { html: assessMainHtml };
+/* 점검 탭: 훈련하는 분은 월간 점검 화면, 가족은 한 가지씩 고르는 목록 */
+SCREENS.assess = { html() { return isTrainee() ? assessMainHtml() : hubHtml(); } };
 SCREENS.assessStep = {
   html() {
     const i = S.assess.idx, st = ASSESS_STEPS[i], d = DOM[st.key];

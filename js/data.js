@@ -4,6 +4,7 @@ import { checkNudgeDialog } from './nudge.js';
 import { Platform } from './platform.js';
 import { COURSE_N } from './session.js';
 import { S } from './state.js';
+import { FirebaseAdapter } from './store/firebase-adapter.js';
 import { Store } from './store/store.js';
 import { refreshChat } from './ui/chat.js';
 import { toast } from './ui/dom.js';
@@ -150,12 +151,29 @@ export async function connectData() {
       subscribeMessages();
       try { const d = await Store.getDoc('reminders/' + S.myId); if (d) { S.myReminder = d; LS.set('bw.reminder', d); } } catch (e) {}
     }
+    connectFamilyOnly();
     updateSyncNote(); onData();
   } catch (e) { S.dbState = 'none'; try { console.warn('저장소 초기화 실패', e); } catch (x) {} }
   resolveReady();
 }
+/* ---- 가족 전용 자료 (설문·일상생활 체크·시계 그림·병원 검사): 규칙상 role 이 'family' 인 사람만 읽을 수 있어요 ---- */
+export const FAMILY_ONLY = [
+  ['surveys', 'surveys', 'ts', 100], ['iadl', 'iadl', 'ts', 60], ['clocks', 'clocks', 'ts', 40], ['clinicalTests', 'clinical', 'ts', 100]
+];
+let famUnsubs = [];
+/* 체험 모드는 한 기기에서 두 역할을 다 써 보는 곳이라 항상 읽어요. 가족방에서는 내 member 문서의 role 이 family 일 때만요. */
+export function myMemberRole() { return Store.mode === 'firebase' ? ((FirebaseAdapter.members()[FirebaseAdapter.mid] || {}).role || null) : null; }
+export function canReadFamilyOnly() { return Store.mode === 'local' || myMemberRole() === 'family'; }
+export function connectFamilyOnly() {
+  famUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} });
+  if (!canReadFamilyOnly()) { FAMILY_ONLY.forEach(f => { S[f[1]] = []; }); return; }
+  FAMILY_ONLY.forEach(([coll, key, ord, lim]) => {
+    try { famUnsubs.push(Store.subscribe(coll, { orderBy: [ord, 'desc'], limit: lim, onError: () => {} }, list => { S[key] = list; onData(); })); } catch (e) {}
+  });
+}
 /* 가족을 나가거나 삭제한 뒤: 구독 해제 */
 export function disconnectData() {
+  famUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} });
   dbUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} });
   if (S.msgUnsub) { try { S.msgUnsub(); } catch (e) {} S.msgUnsub = null; }
 }

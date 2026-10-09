@@ -7,4 +7,5 @@ import './course-done.js';
 import './checkin.js';
 import './family.js';
 import './settings.js';
+import './surveys.js';
 import '../onboarding.js';

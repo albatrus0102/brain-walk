@@ -45,6 +45,11 @@ try {
     const j = await wait('joined');
     await sleep(500);
     ok((await FA.profiles([j.mid]))[j.mid].name === '큰아들', '프로필: 가입한 가족 이름');
+    const today = new Date().toISOString().slice(0, 10);
+    await FA.setDoc('surveys/a1', { kind: 'smcq', version: '1', answers: Array(14).fill(0), score: 0, ts: Date.now(), date: today, mode: 'self', answeredBy: FA.mid, relation: '본인' });
+    ok(true, '훈련하는 분이 직접 답한 설문 저장(create)');
+    ok(await denied(FA.query('surveys', { orderBy: ['ts', 'desc'], limit: 10 })), '훈련하는 분은 설문을 읽을 수 없음');
+    signal('a-survey', {});
     const b = await wait('b-sent');
     const msgs = await FA.query('messages', { orderBy: ['ts', 'desc'], limit: 20 });
     const hello = msgs.find(m => m.text === '안녕하세요 아버지');
@@ -103,6 +108,11 @@ try {
     ok(await denied(FA.setDoc('messages/' + mid1(), msg('또 보내요', 'nudge'))), '넛지 2시간 제한(규칙)');
     ok(await denied(FA.updateDoc('state/trainee', { userId: 'nope', displayLabel: 'x' })), '없는 사람은 훈련하는 분이 될 수 없음');
     ok(await denied(FA.deleteDoc('state/trainee')), '소유자가 아니면 훈련하는 분 해제 불가');
+    await wait('a-survey');
+    const svs = await FA.query('surveys', { orderBy: ['ts', 'desc'], limit: 10 });
+    ok(svs.length === 1 && svs[0].kind === 'smcq', '가족은 설문을 읽을 수 있음');
+    await FA.setDoc('surveys/b1', { kind: 'iqcode', version: '1', answers: Array(16).fill(3), score: 3, ts: Date.now(), date: new Date().toISOString().slice(0, 10), mode: 'family', answeredBy: FA.mid, subjectId: c.mid, relation: '아들' });
+    ok(true, '가족이 정보제공자 설문 저장');
     signal('b-sent', {});
     await wait('rotated');
     await M.leaveFamily();

@@ -102,6 +102,25 @@ await t('pushState write denied', setDoc(doc(dB, `families/${F}/pushState/mB`), 
 await t('own device', setDoc(doc(dB, `families/${F}/members/mB/devices/dev1`), { token: 'x'.repeat(100), uid: 'uidB', platform: 'android', standalone: true, updatedAt: serverTimestamp() }));
 await t('device for other member denied', setDoc(doc(dB, `families/${F}/members/mA/devices/dev2`), { token: 'x'.repeat(100), uid: 'uidB', platform: 'android', standalone: true, updatedAt: serverTimestamp() }), false);
 await t('A (owner) can list B devices', getDocs(collection(dA, `families/${F}/members/mB/devices`)));
+// ---- 가족 전용 자료: surveys (mA 훈련하는 분·소유자, mB 가족)
+{
+  const sv = (who, extra = {}) => Object.assign({ kind: 'phq9', version: '1', answers: [0, 1, 0, 0, 1, 0, 0, 0, 0], score: 2, ts: Date.now(), date: today, mode: 'self', answeredBy: who, relation: '본인' }, extra);
+  await t('trainee can create own survey', setDoc(doc(dA, `families/${F}/surveys/s1`), sv('mA')));
+  await t('trainee cannot read survey (doc)', getDoc(doc(dA, `families/${F}/surveys/s1`)), false);
+  await t('trainee cannot list surveys', getDocs(collection(dA, `families/${F}/surveys`)), false);
+  await t('family reads survey (doc)', getDoc(doc(dB, `families/${F}/surveys/s1`)));
+  await t('family lists surveys', getDocs(collection(dB, `families/${F}/surveys`)));
+  await t('family creates informant survey', setDoc(doc(dB, `families/${F}/surveys/s2`), sv('mB', { kind: 'iqcode', mode: 'family', score: 3.2, answers: Array(16).fill(3), relation: '아들', subjectId: 'mA' })));
+  await t('survey forged answeredBy denied', setDoc(doc(dB, `families/${F}/surveys/s3`), sv('mA')), false);
+  await t('survey unknown kind denied', setDoc(doc(dB, `families/${F}/surveys/s4`), sv('mB', { kind: 'mmse' })), false);
+  await t('survey extra field denied', setDoc(doc(dB, `families/${F}/surveys/s5`), sv('mB', { note: 'x' })), false);
+  await t('survey too many answers denied', setDoc(doc(dB, `families/${F}/surveys/s6`), sv('mB', { answers: Array(31).fill(0) })), false);
+  await t('survey update denied', updateDoc(doc(dB, `families/${F}/surveys/s2`), { score: 1 }), false);
+  await t('non-member cannot read survey', getDoc(doc(db('stranger'), `families/${F}/surveys/s1`)), false);
+  await t('trainee cannot delete survey', deleteDoc(doc(dA, `families/${F}/surveys/s2`)), false);
+  await t('family deletes own survey', deleteDoc(doc(dB, `families/${F}/surveys/s2`)));
+  await t('owner (trainee role) cannot delete either', deleteDoc(doc(dA, `families/${F}/surveys/s1`)), false);
+}
 // ---- transfer: B issues recovery code for A; new device uidA2 redeems
 {
   const T = 'TRF234';

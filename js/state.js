@@ -18,6 +18,7 @@ Object.assign(S, {
   program: LS.get('bw.program', null), assessLocal: LS.get('bw.assess', []), ciLocal: LS.get('bw.checkins', {}),
   dbAssess: null, dbCheckins: null, dbMsgs: [], pendingMsgs: {}, messages: [], msgsReady: false, msgLimit: 100, msgHasMore: false,
   reads: {}, ci: {}, notifyFamily: true, notifyPending: false, interacted: false, hist: LS.get('bw.hist', {}),
+  surveys: [], iadl: [], clocks: [], clinical: [], taskRuns: [], sleeplogs: [], sv: null,
   reply: null, attach: null, alarmDue: false, remDue: false, nudgeShown: {}, icsText: ''
 });
 if (!Array.isArray(S.assessLocal)) S.assessLocal = [];

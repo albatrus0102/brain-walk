@@ -181,7 +181,9 @@ export async function deleteFamily() {
   const { F, db } = FA.sdk, fid = FA.fid;
   const fam = await F.getDoc(F.doc(db, 'families', fid));
   const code = fam.exists() ? fam.data().joinCode : null;
-  for (const c of ['messages', 'sessions', 'assessments', 'checkins', 'reads', 'reminders', 'state', 'pushState']) await deleteRefs(await refsOf(c));
+  // 가족 전용 자료(설문 등)는 role 이 'family' 인 사람만 읽고 지울 수 있어요. 훈련하는 분이 방 주인이면 지우는 동안만 role 을 바꿔요.
+  try { await F.updateDoc(FA._ref('members/' + FA.mid), { role: 'family' }); } catch (e) {}
+  for (const c of ['messages', 'sessions', 'assessments', 'checkins', 'taskRuns', 'sleeplogs', 'surveys', 'iadl', 'clocks', 'clinicalTests', 'reads', 'reminders', 'state', 'pushState']) await deleteRefs(await refsOf(c));
   const memberRefs = await refsOf('members');
   for (const m of memberRefs) await deleteRefs(await refsOf('members/' + m.id + '/devices'));
   await deleteRefs(memberRefs);
@@ -196,7 +198,9 @@ export async function deleteFamily() {
 /* 내 기록만 지우기 (소유자가 아닌 분의 "모든 기록 삭제") */
 export async function deleteMyRecords() {
   const { F } = FA.sdk;
-  for (const c of ['sessions', 'assessments', 'checkins']) await deleteRefs(await refsOf(c, [F.where('userId', '==', FA.mid)]));
+  for (const c of ['sessions', 'assessments', 'checkins', 'taskRuns', 'sleeplogs']) await deleteRefs(await refsOf(c, [F.where('userId', '==', FA.mid)]));
+  // 내가 쓴 가족 전용 기록 (훈련하는 분은 읽기 권한이 없어 건너뛰어요)
+  for (const [c, f] of [['surveys', 'answeredBy'], ['iadl', 'answeredBy'], ['clocks', 'userId'], ['clinicalTests', 'recordedBy']]) { try { await deleteRefs(await refsOf(c, [F.where(f, '==', FA.mid)])); } catch (e) {} }
   for (const p of ['reads/' + FA.mid, 'reminders/' + FA.mid]) { try { await F.deleteDoc(FA._ref(p)); } catch (e) {} }
   ['bw.sessions', 'bw.levels', 'bw.hist', 'bw.assess', 'bw.checkins', 'bw.course'].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
 }

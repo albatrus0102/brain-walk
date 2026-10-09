@@ -9,7 +9,7 @@ import { $ } from '../util.js';
 
 /* ================= 화면 ================= */
 const NAV = [['home', '홈', 'home'], ['pick', '훈련', 'grid'], ['assess', '점검', 'clip'], ['family', '가족', 'chart'], ['chat', '대화', 'chat']];
-const TITLES = { home: '오늘의 두뇌 산책', pick: '골라서 하기', assess: '두뇌 건강 점검', assessStep: '두뇌 건강 점검', assessDone: '점검 결과', game: '', result: '훈련 결과', courseDone: '오늘의 훈련', family: '가족이 보는 기록', checkin: '오늘의 생활 체크', settings: '설정', chat: '우리 가족 대화방' };
+const TITLES = { surveys: '설문', surveyIntro: '설문', surveyQ: '설문', surveyDone: '설문', assessView: '두뇌 건강 점검 결과', home: '오늘의 두뇌 산책', pick: '골라서 하기', assess: '두뇌 건강 점검', assessStep: '두뇌 건강 점검', assessDone: '점검 결과', game: '', result: '훈련 결과', courseDone: '오늘의 훈련', family: '가족이 보는 기록', checkin: '오늘의 생활 체크', settings: '설정', chat: '우리 가족 대화방' };
 const BARE = n => n === 'setup' || n.indexOf('ob-') === 0;   // 설정 안내·가입 화면: 뒤로가기/설정 버튼 없음
 const NAV_SCREENS = ['home', 'pick', 'assess', 'family'];
 
@@ -19,6 +19,7 @@ export function renderChrome() {
   const showNav = NAV_SCREENS.includes(S.screen);
   let title = BARE(S.screen) ? '오늘의 두뇌 산책' : TITLES[S.screen];
   if (S.screen === 'game' && S.sess) title = S.sess.assess ? '점검 ' + (S.assess.idx + 1) + '/' + ASSESS_STEPS.length : S.sess.inCourse ? '오늘의 훈련 ' + (S.course.results.length + 1) + '/' + COURSE_N : S.sess.g.name;
+  if (S.screen === 'surveyQ' && S.sv) title = '설문 ' + (S.sv.idx + 1);
   if (S.screen === 'assessStep') title = '점검 ' + (S.assess.idx + 1) + '/' + ASSESS_STEPS.length;
   if (S.screen === 'chat') title = '우리 가족 대화방' + (chatAvail() ? ' · ' + memberIds().length + '명' : '');
   const bar = $('#appbar-in'); bar.textContent = '';

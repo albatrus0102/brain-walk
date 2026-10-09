@@ -174,3 +174,21 @@ tools/                make-icons.py, shell-list.mjs (sw.js 파일 목록 점검)
 - 파일을 더하거나 지우면 `node tools/shell-list.mjs --write` 로 `sw.js` 의 캐시 목록을 갱신해요(`npm run check --prefix tests` 가 확인해 줘요).
 - 규칙과 시험: `cd tests && npm install && npm test` (Java 필요, Firestore 에뮬레이터). 자세한 내용은 [tests/README.md](tests/README.md).
 - 아이콘 다시 만들기: `python3 tools/make-icons.py` (Pillow).
+
+---
+
+## SOURCES (출처와 이용 조건)
+
+앱 안의 각 설문 화면에도 "출처와 이용 조건"이 있어요(문구는 `js/surveys/content.js`). **문항 글은 아래 출처의 한국어 원문 그대로**이고, 앱에서 고쳐 쓰지 않았어요. 기준점은 연구에서 쓰인 *참고값*일 뿐이며, 앱은 어디서나 "참고용이며 진단이 아닙니다"를 함께 보여 줘요(점수는 빨간색 없이 중립 색).
+
+| 설문 | 누가 답하나 | 문항 출처 | 이용 조건 / 확인한 것 |
+|---|---|---|---|
+| **Short IQCODE (16문항)** | 가족 | 원문: Jorm AF, *Short IQCODE* (1994), 호주국립대 ANU 배포본. 한국어: **IQCODE-K 한국어판(이동우, 인제대 상계백병원)**, ANU 사이트 배포본(26문항) 중 Short IQCODE 16문항에 해당하는 문항(26문항판의 3,4,5,7,8,9,10,12,13,14,19,22,23,24,25,26번). <https://nceph.anu.edu.au/files/IQCODE_review.pdf>, <https://rightdecisions.scot.nhs.uk/media/1843/short-iqcode.pdf> | Short IQCODE: "There is no copyright on the Short IQCODE"(Jorm). 한국어 번역자는 출처로 표기. **기준 3.6은 26문항판(K-IQCODE) 연구값**이라 16문항판에 그대로 맞지 않을 수 있어요. |
+| **KDSQ-C (15문항, 0–2점)** | 가족(권장) 또는 본인 | 인천광역시·인천광역시광역치매센터·인천광역시치매안심센터 「치매예방 GO! GO! 캠페인」 치매 자가진단 테스트(2024-08-09). <https://www.incheon.go.kr/IC010601/2201927> | 공공누리 제1유형(출처표시). 원 개발자(대한치매학회 등)의 저작권은 **확인하지 못했어요**: 출처 표기, 비영리 용도로만. 원문의 오타 "센체적인"(14번)만 "신체적인"으로 바로잡았어요. 기준: 6점 이상(참고). |
+| **SMCQ (14문항, 예/아니요)** | 본인 | 문항 글: 인천광역시 연수구보건소 「본인 치매검사」 <https://www.yeonsu.go.kr/clinic/participation/selfcheck_dementia1.asp>. 원 논문: Youn JC 외, *Dement Geriatr Cogn Disord* 27:310 (2009) | 연수구 페이지는 공공누리 제3유형(출처표시+변경금지)이라 문항을 **그대로** 써요. 논문 원저작권은 확인하지 못했어요. 이 앱은 기준점 없이 점수와 변화만 보여 줘요. |
+| **GDS-15 한국어판 (SGDS-K 기준 참고)** | 본인 | Jang Y, Small BJ, Haley WE (2001) *Aging & Mental Health* 5:31-37 의 GDS 단축형 한국어판, Stanford Yesavage 사이트 배포 <https://web.stanford.edu/~yesavage/Korean5.html>. 원판: Yesavage 1983 / Sheikh & Yesavage 1986 <https://web.stanford.edu/~yesavage/GDS.html> | GDS 는 퍼블릭 도메인. Stanford 는 번역의 정확성을 보증하지 않는다고 밝혀요. **문항은 배포된 한국어판 이미지(GIF)에서 옮겨 적었어요**(이미지 화질 때문에 한 번 더 대조해 주세요). 기준 8점 이상(경도 포함 6점 이상)은 SGDS-K 연구의 참고값이라 이 번역본과 다른 판에서 나온 값이에요. |
+| **PHQ-9 (9문항 + 기능 문항)** | 본인 | 한국어판 「환자 건강 질문지-9」 <https://multiculturalmentalhealth.ca/wp-content/uploads/2019/07/PHQ-9-Korean.pdf>. 한글판 표준화: 박승진 외, 불안·기분 2010. 원판: Kroenke K, Spitzer RL, Williams JBW (2001) | Pfizer PHQ 안내 사이트는 "복제·번역·배포에 허락이 필요 없다"고 밝히지만, **위 한국어판 문서에는 "© 2005 Pfizer, 무단 복제를 금합니다" 표기가 있어요. 이용 조건이 분명하지 않으니 배포 전에 확인하세요.** 기준 5점 이상(한국 노인 연구, 참고). **9번 문항에 0보다 큰 답을 하면 즉시 109(24시간)·1577-0199 안내 창을 보여 줘요.** |
+
+설문 결과는 **가족 전용**이에요. 훈련하는 분이 직접 답한 설문은 저장되지만(쓰기), 그 분은 결과를 읽을 수 없어요(`firestore.rules` 의 `isFamilyRole`). 누가·어떤 관계로·언제·어느 문항판(version)으로 답했는지 함께 기록해요. 같은 설문은 3개월 이상 간격을 두도록 안내해요(반복하면 부담이 되고 연습 효과가 생겨요).
+
+> 법률 자문이 아니에요. 위 "확인하지 못했어요"라고 쓴 부분은 직접 확인하거나 해당 기관에 문의한 뒤 공개 배포하세요.

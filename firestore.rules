@@ -36,6 +36,11 @@ service cloud.firestore {
     function myId(fid) { return get(linkPath(fid)).data.memberId; }
     function isOwner(fid) { return get(famPath(fid)).data.ownerMemberId == myId(fid); }
 
+    // 가족 전용 자료(설문·일상생활 체크·시계 그림·병원 검사)용: 내 member 문서의 role 이 'family' 인 사람만 읽어요.
+    // 훈련하는 분(role 'trainee')은 (설문처럼) 만들 수는 있어도 읽을 수 없어요.
+    // 주의: role 은 본인이 설정에서 바꿀 수 있는 '자기 신고' 값이라, 이 규칙은 실수와 화면 노출을 막는 장치예요.
+    function isFamilyRole(fid) { return get(memberPath(fid, myId(fid))).data.role == 'family'; }
+
     function newData() { return request.resource.data; }
     function oldData() { return resource.data; }
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
@@ -348,6 +353,28 @@ service cloud.firestore {
         allow create: if isMember(fid) && validCheckin(cid);
         allow update: if isMember(fid) && oldData().userId == myId(fid) && validCheckin(cid);
         allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));
+      }
+
+      // ---- 설문 결과 (Short IQCODE, KDSQ-C, SMCQ, GDS-15, PHQ-9) : 가족만 읽기
+      // 훈련하는 분이 직접 답한 설문도 저장은 되지만(create) 읽을 수는 없어요.
+      function validSurvey() {
+        return newData().keys().hasOnly(['kind', 'version', 'answers', 'score', 'ts', 'date', 'mode', 'answeredBy', 'subjectId', 'relation'])
+          && newData().keys().hasAll(['kind', 'version', 'answers', 'score', 'ts', 'date', 'mode', 'answeredBy'])
+          && newData().kind in ['iqcode', 'kdsq', 'smcq', 'gds', 'phq9']
+          && str(newData().version, 10)
+          && newData().answers is list && newData().answers.size() <= 30
+          && newData().score is number
+          && okMs(newData().ts) && okDate(newData().date)
+          && newData().mode in ['self', 'family']
+          && newData().answeredBy == myId(fid)
+          && (!('subjectId' in newData()) || okId(newData().subjectId))
+          && optStr('relation', 20);
+      }
+      match /surveys/{sid} {
+        allow read: if isMember(fid) && isFamilyRole(fid);
+        allow create: if isMember(fid) && okId(sid) && validSurvey();
+        allow update: if false;
+        allow delete: if isMember(fid) && isFamilyRole(fid) && (resource.data.answeredBy == myId(fid) || isOwner(fid));
       }
 
       // ---- per-person small docs
