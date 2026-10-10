@@ -1,6 +1,5 @@
 import { reg } from './registry.js';
 import { beep } from '../sound.js';
-import { toast } from '../ui/dom.js';
 import { $, pick } from '../util.js';
 
 /* ---------- 4. 숫자 순서대로 누르기 ---------- */
@@ -29,7 +28,8 @@ reg({
         else $('#nexttarget', ctx.box).textContent = '다음: ' + seq[next];
       } else {
         mistakes++; beep('soft'); b.classList.add('shake'); setTimeout(() => b.classList.remove('shake'), 400);
-        toast('아직이에요. 천천히, ‘' + seq[next] + '’을(를) 찾아보세요.');
+        // 안내는 화면 아래 알림 대신 '다음' 글자 자리에 보여 줘요 (알림이 숫자 칸을 가렸어요)
+        $('#nexttarget', ctx.box).textContent = '아직이에요. 천천히 ‘' + seq[next] + '’을(를) 찾아보세요';
       }
     });
   }

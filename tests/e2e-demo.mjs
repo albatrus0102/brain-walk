@@ -23,6 +23,8 @@ if (await vis('.dialog')) { out('dialog:', await page.innerText('#dlg-title')); 
 await must(await vis('#btn-start-course'), '홈 훈련 시작 버튼');
 
 async function playRound() {
+  // 숫자 순서대로 누르기: "다음: N" 에 맞는 칸을 눌러요 (오늘의 코스 첫 게임이 날짜마다 달라져요)
+  if (await vis('#nexttarget')) { const want = (await page.innerText('#nexttarget')).replace('다음:', '').trim(); await page.locator('#trailgrid button:not([disabled])', { hasText: new RegExp('^\\s*' + want + '\\s*$') }).first().click({ timeout: 1500 }).catch(() => {}); return true; }
   if (await page.locator('.choice:not([disabled])').count()) { await page.locator('.choice:not([disabled])').first().click(); return true; }
   if (await vis('#btn-memorized')) { await page.click('#btn-memorized'); const t = await page.locator('#cnt').innerText(); const n = +t.match(/\/ (\d+)/)[1]; const chips = page.locator('#pool .chip'); for (let i = 0; i < n; i++) await chips.nth(i).click(); await page.click('#btn-check'); return true; }
   return false;
