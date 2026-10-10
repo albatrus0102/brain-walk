@@ -10,6 +10,7 @@ import { say } from '../../sound.js';
 import { S } from '../../state.js';
 import { btnEl, h, svgIcon, toast } from '../dom.js';
 import { cistBannerHtml } from './clinical.js';
+import { installSlot } from '../install.js';
 import { pushPromptCard } from '../room-settings.js';
 import { SCREENS } from '../registry.js';
 import { go, render } from '../shell.js';
@@ -51,6 +52,7 @@ SCREENS.home = {
   bind(el) {
     slotText(el, 'tlabel', traineeLabel());
     const bn = $('#home-banner', el);
+    bn.append(installSlot('home'));
     const pc = pushPromptCard(); if (pc) bn.append(pc);
     if (!isTrainee()) bn.insertAdjacentHTML('beforeend', cistBannerHtml());
     const sn = $('#banner-snooze', el);

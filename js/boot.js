@@ -4,6 +4,7 @@ import { checkNudgeDialog } from './nudge.js';
 import { startAssessment } from './session.js';
 import { S } from './state.js';
 import { Store } from './store/store.js';
+import { initInstall } from './ui/install.js';
 import { afterInit } from './ui/onboarding.js';
 import { applyPrefs } from './events.js';
 import { dialog } from './ui/dom.js';
@@ -76,7 +77,7 @@ function registerServiceWorker() {
 export async function boot() {
   const q = new URLSearchParams(location.search);
   S.openParam = q.get('open');
-  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; });
+  initInstall();
   applyPrefs();
   S.screen = 'ob-loading'; render();
   registerServiceWorker();

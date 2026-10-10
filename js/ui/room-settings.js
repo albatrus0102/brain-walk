@@ -7,6 +7,7 @@ import { TRANSFER_MIN, clearLocalData, createTransferCode, deleteFamily, deleteM
 import { Store } from '../store/store.js';
 import { LS } from '../util.js';
 import { closeSheet, dialog, h, openSheet, toast } from './dom.js';
+import { installCardShowing, iosSteps } from './install.js';
 import { inviteBlock } from './onboarding.js';
 import { render } from './shell.js';
 import { switchRow } from './widgets.js';
@@ -24,15 +25,10 @@ function pushStateText() {
   if (st === 'denied') return '차단되어 있어요. 기기 설정에서 허용해 주세요.';
   return '꺼져 있어요.';
 }
-function iosSteps() {
-  return h('ol', { class: 't-body', id: 'ios-steps', style: 'padding-left:1.4em;margin:8px 0 0' },
-    h('li', { text: '사파리 아래의 공유 버튼(네모에 위쪽 화살표)을 눌러요' }), h('li', { text: '"홈 화면에 추가"를 눌러요' }), h('li', { text: '홈 화면에 생긴 아이콘으로 앱을 다시 열어요' }), h('li', { text: '설정에서 "알림 받기"를 켜요 (아이폰은 iOS 16.4 이상)' }));
-}
-
 /* "알림 받기" 스위치 / 홈의 부드러운 안내 카드가 공통으로 써요 */
 export async function togglePush(btnEl) {
   if (pushIsOn()) { await disablePush(); toast('알림을 껐어요.'); if (S.screen === 'settings') render(true); return; }
-  if (S.pushState === 'ios-install-first') { dialog('홈 화면에 추가해 주세요', pushReasonText('ios-install-first'), [{ label: '확인', kind: 'filled' }], null, iosSteps()); return; }
+  if (S.pushState === 'ios-install-first') { dialog('홈 화면에 추가해 주세요', pushReasonText('ios-install-first'), [{ label: '확인', kind: 'filled' }], null, iosSteps('ios-steps-dlg')); return; }
   if (btnEl) btnEl.disabled = true;
   const r = await enablePush();
   if (btnEl) btnEl.disabled = false;
@@ -152,7 +148,7 @@ export function buildRoomSection(slot) {
         btn('가족 기기 복구 코드 만들기', 'tonal', openRecover, 'btn-recover'),
         btn('연결된 기기', 'tonal', openDevices, 'btn-devices'),
         btn('내 이름 바꾸기', 'tonal', openRename, 'btn-rename')),
-      (() => { const c = h('section', { class: 'card outlined' }, h('h2', { class: 't-title', text: '알림' })); const row = pushRow(); row.className = 'mt'; c.append(row); if (S.pushState === 'ios-install-first') c.append(iosSteps()); if (S.installEvt) c.append(btn('앱으로 설치', 'outlined', async () => { S.installEvt.prompt(); S.installEvt = null; render(true); }, 'btn-install')); return c; })(),
+      (() => { const c = h('section', { class: 'card outlined' }, h('h2', { class: 't-title', text: '알림' })); const row = pushRow(); row.className = 'mt'; c.append(row); return c; })(),
       sec('내 정보 정리', btn('가족 나가기', 'outlined', confirmLeave, 'btn-leave'), btn('모든 기록 삭제', 'outlined', confirmDeleteAll, 'btn-delete-all')));
   } else if (Store.mode === 'local') {
     slot.append(sec('체험 모드', h('p', { class: 't-body', text: '지금은 체험 모드예요. 기록은 이 기기에만 저장되고, 가족 대화와 알림은 쓸 수 없어요.' }), btn('모든 기록 삭제 (이 기기)', 'outlined', confirmDeleteLocal, 'btn-delete-local')));
@@ -166,6 +162,7 @@ export function pushPromptCard() {
   if (st === 'denied' || st === 'unsupported' || !st) return null;
   const dismiss = h('button', { class: 'btn text', type: 'button', id: 'push-later', onclick: () => { LS.set('bw.pushDismiss', true); render(true); } }, '나중에');
   if (st === 'ios-install-first') {
+    if (installCardShowing('home')) return null;   // 설치 안내 카드가 같은 내용을 보여 줘요
     return h('section', { class: 'card filled', id: 'push-card', 'aria-labelledby': 'push-h' }, h('h2', { class: 't-title', id: 'push-h', text: '알림을 받으려면 홈 화면에 추가해요' }), iosSteps(), h('div', { class: 'mt' }, dismiss));
   }
   return h('section', { class: 'card filled', id: 'push-card', 'aria-labelledby': 'push-h' }, h('h2', { class: 't-title', id: 'push-h', text: '알림을 받아 볼까요?' }),

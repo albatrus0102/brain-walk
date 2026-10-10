@@ -6,6 +6,7 @@ import { createFamily, inviteLink, inviteText, joinFamily, normalizeCode, previe
 import { enterApp, startFlow, startLocalDemo } from '../boot.js';
 import { LS } from '../util.js';
 import { dialog, h, toast } from './dom.js';
+import { installSlot } from './install.js';
 import { SCREENS } from './registry.js';
 import { go } from './shell.js';
 
@@ -27,13 +28,8 @@ const disclaimerCard = () => card('tertiary', h('p', { class: 't-body', text: '�
 const privacyCard = () => card('outlined', h('h2', { class: 't-title-m', text: '저장되는 정보' }),
   h('p', { class: 't-small muted mt', text: '이름, 훈련·점검 기록, 생활 체크, 대화가 저장돼요. 같은 가족방에 들어온 가족만 볼 수 있고, 설정에서 언제든 삭제할 수 있어요. 데이터는 Google Firebase(서울 리전)에 저장되며, 알림과 로그인에 쓰이는 Google 서비스는 해외에서 처리될 수 있어요.' }));
 
-function iosCard(code) {
-  if (!(Platform.isIOS() && !Platform.isStandalone())) return null;
-  return card('filled', h('h2', { class: 't-title-m', text: '아이폰이라면 먼저 홈 화면에 추가해요' }),
-    h('p', { class: 't-body mt', text: '공유 → 홈 화면에 추가 후 알림을 켤 수 있어요. 홈 화면의 앱은 사파리와 저장 공간이 따로라서, 홈 화면 앱을 연 뒤에 가입하면 한 번에 끝나요.' }),
-    code ? h('p', { class: 't-body mt', text: '홈 화면 앱을 연 뒤 이 코드를 입력해 주세요:' }) : null,
-    code ? h('p', { class: 't-display center', id: 'ob-ios-code', text: code }) : null);
-}
+/* 홈 화면 설치 안내 자리 (아이폰·앱 안 브라우저·설치 버튼). where: 'start' | 'join' */
+const iosCard = (code, where) => installSlot(where || 'join', code);
 
 /* ---------- 설정이 비어 있을 때 ---------- */
 SCREENS.setup = {
@@ -79,7 +75,7 @@ SCREENS['ob-start'] = {
     fill(
       h('h1', { class: 't-headline', id: 'ob-start-h', text: '오늘의 두뇌 산책에 오신 걸 환영해요' }),
       h('p', { class: 't-body muted', text: '가족이 함께 응원하는 두뇌 훈련 앱이에요. 먼저 가족방을 만들거나, 받은 코드로 들어가 주세요.' }),
-      iosCard(null),
+      installSlot('start'),
       big('새 가족 만들기', 'filled', () => { ob().flow = 'create'; go('ob-name'); }, 'btn-create'),
       big('가족 코드로 들어가기', 'tonal', () => { ob().code = ''; go('ob-join'); }, 'btn-join'),
       h('button', { class: 'btn text', type: 'button', id: 'btn-have-transfer', onclick: () => { ob().tcode = ''; go('ob-transfer'); } }, '기기 옮기기 코드가 있어요'),

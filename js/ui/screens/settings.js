@@ -2,6 +2,7 @@ import { alarmCfg } from '../../alarm.js';
 import { chatAvail, isTrainee, traineeLabel } from '../../data.js';
 import { Platform } from '../../platform.js';
 import { S } from '../../state.js';
+import { installSlot } from '../install.js';
 import { buildRoomSection } from '../room-settings.js';
 import { SCREENS } from '../registry.js';
 import { prefsCard, slotText, switchRow } from '../widgets.js';
@@ -16,6 +17,7 @@ SCREENS.settings = {
     return '<div class="stack"><h1 class="t-headline" id="set-main-h">설정</h1>' +
       '<section class="card outlined" aria-labelledby="role-h"><h2 class="t-title" id="role-h">사용 방식</h2><p class="t-body mt">지금은 <b>' + (isTrainee() ? '훈련하는 분' : '가족') + '</b>으로 쓰고 있어요.</p>' +
       '<div class="mt"><button class="btn tonal" id="btn-role-switch" type="button" data-act="roleswitch">' + (isTrainee() ? '가족으로 바꾸기' : '훈련하는 분으로 바꾸기') + '</button></div></section>' +
+      '<section class="card outlined" aria-labelledby="inst-h"><h2 class="t-title" id="inst-h">앱 설치</h2><div class="mt" id="install-slot"></div></section>' +
       '<div class="stack" id="room-slot"></div>' +
       '<section class="card elevated" aria-labelledby="alarm-h"><h2 class="t-title" id="alarm-h">훈련 알람 (함께 쓰는 설정)</h2><p class="t-small muted">앱이 열려 있을 때 이 시간이 지나면 \'훈련할 시간이에요\'를 알려 드려요. 가족 누구나 바꿀 수 있어요.</p>' +
       '<div class="field mt"><label for="alarm-time">알람 시간</label><input class="input" type="time" id="alarm-time" value="' + esc(d.time) + '"></div>' +
@@ -29,5 +31,5 @@ SCREENS.settings = {
         '<div class="mt"><button class="btn filled" id="btn-rem-save" type="button" data-act="remsave">저장</button></div></section>' : '') +
       prefsCard() + '</div>';
   },
-  bind(el) { buildRoomSection($('#room-slot', el)); slotText(el, 'tlabel', traineeLabel()); const t = $('#ics-text', el); if (t) t.value = S.icsText; }
+  bind(el) { $('#install-slot', el).append(installSlot('settings')); buildRoomSection($('#room-slot', el)); slotText(el, 'tlabel', traineeLabel()); const t = $('#ics-text', el); if (t) t.value = S.icsText; }
 };

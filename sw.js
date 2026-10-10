@@ -76,6 +76,7 @@ const SHELL_FILES = /*SHELL_START*/ [
   "./js/surveys/engine.js",
   "./js/ui/chat.js",
   "./js/ui/dom.js",
+  "./js/ui/install.js",
   "./js/ui/onboarding.js",
   "./js/ui/registry.js",
   "./js/ui/room-settings.js",
