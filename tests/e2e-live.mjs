@@ -120,6 +120,15 @@ await admin.screenshot({ path: (process.env.SHOT_DIR || '/tmp') + '/live-members
 await admin.click('#mem-2'); await admin.click('#mem-grant'); await admin.click('#dlg-btn-1'); await admin.waitForSelector('#snackbar:not([hidden])');
 await fam.evaluate(() => window.__go('settings')); await fam.waitForSelector('#admin-chip');
 must(true, '동생에게 "관리자" 표시가 나타나요');
+// 훈련하는 분 바꾸기: 두 기기 모두 다시 열지 않고 새 역할을 따라가요 (관리자가 정한 화면 설정, 가족 홈)
+const [famMid, dadMid] = await Promise.all([fam.evaluate(() => window.__S.myId), learner.evaluate(() => window.__S.myId)]);
+await Promise.all([learner.evaluate(() => window.__go('home')), fam.evaluate(() => window.__go('home'))]);
+await admin.evaluate(async ([a, b]) => { const m = await import('./js/store/membership.js'); await m.assignTrainee(a, '아버지', b); }, [famMid, dadMid]);
+must(await until(fam, () => !!document.getElementById('btn-main') && document.documentElement.dataset.size === 'max' && document.documentElement.dataset.font === 'noto'), '훈련하는 분이 된 기기: 큰 버튼 홈 + 관리자가 정한 화면 설정이 바로 적용');
+must(await until(learner, () => !!document.getElementById('dash') && document.documentElement.dataset.size !== 'max'), '가족이 된 기기: 가족 홈 + 자기 화면 설정으로 돌아가요');
+await admin.evaluate(async ([a, b]) => { const m = await import('./js/store/membership.js'); await m.assignTrainee(a, '아버지', b); }, [dadMid, famMid]);
+must(await until(learner, () => !!document.getElementById('btn-main') && document.documentElement.dataset.size === 'max'), '되돌리면 아버지 기기도 바로 훈련 화면');
+await admin.evaluate(() => window.__go('members')); await admin.waitForSelector('#mem-list');
 // 모르는 사람 내보내기
 await admin.click('#mem-2'); await admin.click('#mem-remove'); await admin.click('#dlg-btn-1');
 must(await until(admin, () => document.querySelectorAll('#mem-list li').length === 2), '내보내면 목록에서 사라져요');

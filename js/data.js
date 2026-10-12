@@ -196,7 +196,9 @@ export async function connectData() {
       subscribeMessages();
       try { const d = await Store.getDoc('reminders/' + S.myId); if (d) { S.myReminder = d; LS.set('bw.reminder', d); } } catch (e) {}
     }
-    connectFamilyOnly();
+    connectFamilyOnly(); wasTrainee = isTrainee();
+    // 내 역할(members.role)은 state/trainee 보다 늦게 올 수 있어요: 바뀌었을 때만 다시 맞춰요
+    try { if (Store.adapter && Store.adapter.onMembers) dbUnsubs.push(Store.adapter.onMembers(() => { if (roleChanged()) onData(); })); } catch (e) {}
     updateSyncNote(); applyDisplay({ noRender: true }); onData();
   } catch (e) { S.dbState = 'none'; try { console.warn('저장소 초기화 실패', e); } catch (x) {} }
   resolveReady();
@@ -210,16 +212,18 @@ let famUnsubs = [];
 /* 체험 모드는 한 기기에서 두 역할을 다 써 보는 곳이라 항상 읽어요. 가족방에서는 내 member 문서의 role 이 family 일 때만요. */
 export function myMemberRole() { return Store.mode === 'firebase' ? ((FirebaseAdapter.members()[FirebaseAdapter.mid] || {}).role || null) : null; }
 export function canReadFamilyOnly() { return Store.mode === 'local' || myMemberRole() === 'family'; }
+let famReadable = null;     // connectFamilyOnly 를 마지막으로 맞춘 때의 canReadFamilyOnly() (역할이 바뀌면 다시 맞춰요)
 export function connectFamilyOnly() {
   famUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} });
-  if (!canReadFamilyOnly()) { FAMILY_ONLY.forEach(f => { S[f[1]] = []; }); return; }
+  famReadable = canReadFamilyOnly();
+  if (!famReadable) { FAMILY_ONLY.forEach(f => { S[f[1]] = []; }); return; }
   FAMILY_ONLY.forEach(([coll, key, ord, lim]) => {
     try { famUnsubs.push(Store.subscribe(coll, { orderBy: [ord, 'desc'], limit: lim, onError: () => {} }, list => { S[key] = list; onData(); })); } catch (e) {}
   });
 }
 /* 가족을 나가거나 삭제한 뒤: 구독 해제 */
 export function disconnectData() {
-  famUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} });
+  famUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} }); famReadable = null; wasTrainee = null;
   dbUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} });
   if (S.msgUnsub) { try { S.msgUnsub(); } catch (e) {} S.msgUnsub = null; }
   if (presUnsub) { try { presUnsub(); } catch (e) {} presUnsub = null; } presId = null; stopHeartbeat();
@@ -236,8 +240,18 @@ function syncPresence() {
 function syncHeartbeat() { if (Store.adapter && isTrainee() && (S.myId || Store.mode === 'local')) startHeartbeat(); else stopHeartbeat(); }
 /* 역할이 바뀌었을 때(체험 모드의 미리보기 전환, 훈련하는 분 지정): 화면 설정·구독을 다시 맞춰요 */
 export function refreshRole() { applyDisplay({ noRender: true }); syncHeartbeat(); syncPresence(); }
+/* 관리자가 훈련하는 분을 바꾸거나 역할을 고치면(state/trainee, members.role) 이 기기도 다시 열지 않고 따라가요:
+ * 훈련하는 분이 된 기기는 관리자가 정한 화면 설정을, 가족이 된 기기는 자기 설정과 가족 전용 자료 구독을. */
+let wasTrainee = null;
+function roleChanged() { return (wasTrainee !== null && wasTrainee !== isTrainee()) || (famReadable !== null && famReadable !== canReadFamilyOnly()); }
+function syncRole() {
+  const tr = isTrainee();
+  if (wasTrainee !== null && wasTrainee !== tr) applyDisplay({ noRender: true });
+  wasTrainee = tr;
+  if (famReadable !== null && famReadable !== canReadFamilyOnly()) connectFamilyOnly();
+}
 function onData() {
-  syncHeartbeat(); syncPresence();
+  syncRole(); syncHeartbeat(); syncPresence();
   alarmTick(true);
   if (['home', 'pick', 'family', 'assess', 'settings', 'members'].includes(S.screen)) { const keep = document.activeElement; if (!(keep && /^(INPUT|TEXTAREA)$/.test(keep.tagName))) render(true); }
   else if (S.screen === 'chat') refreshChat();
