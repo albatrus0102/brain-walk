@@ -8,7 +8,6 @@ import { say } from '../../sound.js';
 import { S } from '../../state.js';
 import { ACTS } from '../acts.js';
 import { btnEl, dialog, h, svgIcon, toast } from '../dom.js';
-import { cistBannerHtml } from './clinical.js';
 import { dashboardHtml, startDashboardTicker } from '../dashboard.js';
 import { installSlot } from '../install.js';
 import { pushPromptCard } from '../room-settings.js';
@@ -78,7 +77,6 @@ SCREENS.home = {
     const bn = $('#home-banner', el);
     bn.append(installSlot('home'));
     const pc = pushPromptCard(); if (pc) bn.append(pc);
-    bn.insertAdjacentHTML('beforeend', cistBannerHtml());
     if (S.remDue) {
       bn.append(h('div', { class: 'banner', role: 'status', id: 'reminder-banner' }, h('div', { class: 't-title' }, svgIcon('alarm'), traineeLabel() + iga(traineeLabel()) + ' 아직 훈련 전이에요'),
         h('div', { class: 'row' }, btnEl('알림 보내기', 'filled', () => { go('family'); setTimeout(() => { const n = $('#nudge-slot'); if (n) n.scrollIntoView({ block: 'center' }); }, 50); }, 'rem-send'), btnEl('닫기', 'text', () => { LS.set('bw.remDismiss', todayS()); alarmTick(); render(true); }, 'rem-close'))));

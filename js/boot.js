@@ -19,7 +19,7 @@ SCREENS['ob-loading'] = {
   html() { return '<div class="stack"><h1 class="t-headline" id="load-h">불러오는 중이에요…</h1></div>'; }
 };
 
-const DISCLAIMER_LONG = '이 앱은 두뇌 활동을 돕는 훈련용이며 의료기기나 진단 도구가 아니에요. 점수가 계속 낮아지면 가까운 치매안심센터(국번 없이 1899-9988)나 병원에서 상담받으세요.';
+const DISCLAIMER_LONG = '이 앱은 두뇌 활동을 돕는 훈련용이며 의료기기나 치료를 대신하지 않아요. 걱정되는 점이 있으면 병원에서 상담하세요.';
 function askDialog(title, text, actions) { return new Promise(res => dialog(title, text, actions, res)); }
 
 export async function startFlow() {

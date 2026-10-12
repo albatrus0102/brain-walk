@@ -25,7 +25,7 @@ SCREENS.family = {
     const last = all[0], lastTxt = !last ? '기록 없음' : last.date === today ? '오늘' : daysBetween(last.date, today) + '일 전';
     const avgDur = all.length ? fmtDur(Math.round(mean(all.map(s => Number(s.durationSec) || 0)))) : '-';
     let o = '<div class="stack"><h1 class="t-headline" id="fam-h">가족이 보는 기록</h1><div id="fam-status"></div>';
-    if (fl.consult.flag) o += '<section class="card tertiary" id="flag-consult" role="status"><p class="t-title-m">최근 점수가 낮아지고 있어요. 치매안심센터(<span class="nw">1899-9988</span>)나 병원 상담을 권해요.</p><p class="t-small mt">이 안내는 진단이 아니라, 점수 변화를 보고 드리는 참고용이에요. 너무 걱정하지 말고 편하게 상담받아 보세요.</p></section>';
+    if (fl.consult.flag) o += '<section class="card tertiary" id="flag-consult" role="status"><p class="t-title-m">최근 점수가 낮아지고 있어요. 병원 상담을 권해요.</p><p class="t-small mt">이 안내는 진단이 아니라, 점수 변화를 보고 드리는 참고용이에요. 너무 걱정하지 말고 편하게 상담받아 보세요.</p></section>';
     if (fl.mood) o += '<section class="card tertiary" id="flag-mood" role="status"><p class="t-title-m">최근 일주일 중 5일 이상 기분이 좋지 않다고 하셨어요.</p><p class="t-small mt">마음 상태에 조금 더 관심을 가져 주세요. 필요하면 가까운 정신건강복지센터나 병원에서 우울 상담을 받아 보시길 권해요. 진단이 아니에요.</p></section>';
     // PHQ-9 9번(죽음·자해 생각)에 0보다 큰 답이 가장 최근 기록에 있으면, 답한 사람만이 아니라 가족에게도 바로 알려요.
     const phq = isTrainee() ? null : recordsOf('phq9')[0];
@@ -61,7 +61,7 @@ SCREENS.family = {
     o += sleepReportHtml();
     if (!isTrainee()) o += taskReportHtml() + surveyReportHtml() + clinicalReportHtml(false);
     o += '<section class="card outlined" aria-labelledby="lv-h"><h2 class="t-title" id="lv-h">훈련별 현재 단계</h2><div class="mt">' + GAME_ORDER.filter(id => !GAMES[id].defOff || getPlan().games[id].on).map(id => '<div class="lvrow"><span>' + esc(GAMES[id].name) + '</span><span class="t-body">' + getLevel(id) + '단계 ' + levelDots(getLevel(id)) + '</span></div>').join('') + '</div></section>';
-    o += '<section class="card tertiary" id="report-disclaimer"><p class="t-body">이 리포트는 <b>진단이 아니에요.</b> 의료기기가 아니며 훈련 기록을 보기 쉽게 정리한 것뿐이에요. 점수가 계속 낮아지면 치매안심센터(국번 없이 <span class="nw">1899-9988</span>)나 병원에서 상담받으세요.</p></section>';
+    o += '<section class="card tertiary" id="report-disclaimer"><p class="t-body">이 리포트는 <b>진단이 아니에요.</b> 훈련 기록을 보기 쉽게 정리한 것뿐이에요. 이 앱은 두뇌 활동을 돕는 훈련용이며 의료기기나 치료를 대신하지 않아요. 걱정되는 점이 있으면 병원에서 상담하세요.</p></section>';
     o += '<p class="t-small muted" id="family-note-static">' + (Store.shared && !S.dbError ? '이 기록은 같은 가족방에 들어온 가족만 볼 수 있어요.' : '지금은 이 기기에 저장된 기록만 보여요. (체험 모드)') + '</p><p class="sync-note" id="sync-note"></p></div>';
     return o;
   },

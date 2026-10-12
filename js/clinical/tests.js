@@ -1,6 +1,6 @@
 import { S } from '../state.js';
 
-/* 병원·센터 검사 기록: 가족이 결과지에서 옮겨 적는 "점수"만 저장해요. 검사 문항이나 내용은 앱에 없어요. */
+/* 병원 검사 기록: 가족이 결과지에서 옮겨 적는 "점수"만 저장해요. 검사 문항이나 내용은 앱에 없어요. */
 export const CLINICAL_TESTS = [
   { id: 'cist', name: 'CIST (인지선별검사)', max: 30 },
   { id: 'mmse_ds', name: 'MMSE-DS', max: 30 },
@@ -22,13 +22,3 @@ export const records = () => (S.clinical || []).filter(r => r && r.date && r.tes
 export const byTest = () => {
   const m = {}; records().forEach(r => { const k = r.test === 'other' ? 'other:' + (r.testLabel || '') : r.test; (m[k] ||= []).push(r); }); return m;
 };
-
-/* CIST 는 2년마다: 마지막 CIST 날짜 + 2년. 결과가 정상이 아니면 재검 알림 대신 상담 안내. */
-export function cistReminder(today) {
-  const l = records().find(r => r.test === 'cist'); if (!l) return { state: 'none' };
-  if (l.result && l.result !== '정상') return { state: 'followup', last: l };
-  const d = new Date(l.date + 'T00:00:00'); d.setFullYear(d.getFullYear() + 2);
-  const due = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  const days = Math.round((new Date(due + 'T00:00:00') - new Date((today || new Date().toISOString().slice(0, 10)) + 'T00:00:00')) / 864e5);
-  return { state: days < 0 ? 'overdue' : days <= 60 ? 'soon' : 'later', due, days, last: l };
-}

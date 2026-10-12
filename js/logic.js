@@ -70,7 +70,7 @@ export function weeklySummary(sessions, checkinMap, flag, today) {
     const sl = cis.map(c => Number(c.sleepHours)).filter(x => x > 0), ex = cis.filter(c => c.exercise).length, so = cis.filter(c => c.social).length, mo = cis.map(c => Number(c.mood)).filter(x => x > 0);
     lines.push('- 생활 체크 ' + cis.length + '일: ' + (sl.length ? '평균 수면 ' + (Math.round(mean(sl) * 10) / 10) + '시간, ' : '') + '걷기·운동 ' + ex + '일, 사람 만남 ' + so + '일' + (mo.length ? ', 기분 평균 ' + (Math.round(mean(mo) * 10) / 10) + '/5' : ''));
   }
-  if (flag && flag.flag) lines.push('- 최근 점수가 낮아지고 있어요. 치매안심센터(1899-9988)나 병원 상담을 권해요. (진단이 아니에요)');
+  if (flag && flag.flag) lines.push('- 최근 점수가 낮아지고 있어요. 병원 상담을 권해요. (진단이 아니에요)');
   return { text: lines.join('\n'), days, avg: avgA == null ? null : Math.round(avgA), delta };
 }
 /* ---- 알림(넛지) 제한: 보낸 사람당 2시간에 1번 ---- */

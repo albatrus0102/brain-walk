@@ -97,7 +97,7 @@ SCREENS.surveyDone = {
     const sm = summaryOf(v.kind);
     return '<div class="stack"><h1 class="t-headline" id="svd-h">저장했어요</h1><section class="card elevated"><p class="t-label">' + esc(sv.name) + '</p><p class="t-display" id="svd-score">' + rec.score + '<span class="t-title">' + esc(sv.unit.startsWith('점') ? '점' : sv.unit) + '</span></p>' +
       (sm && sm.band.text ? '<p class="mt"><span class="refband" id="svd-band">' + esc(sm.band.text) + '</span></p><p class="t-small mt">' + esc(sm.band.note) + '</p>' : '') +
-      '<p class="t-small muted mt">' + NOT_DIAGNOSIS + ' 걱정되면 치매안심센터(<span class="nw">1899-9988</span>)나 병원과 상담해 보세요.</p></section>' +
+      '<p class="t-small muted mt">' + NOT_DIAGNOSIS + ' 걱정되는 점이 있으면 병원에서 상담하세요.</p></section>' +
       (sm && sm.trend ? '<p class="t-body" id="svd-trend">' + esc(sm.trend.text) + '</p>' : '') +
       '<div class="cta"><button class="btn filled" id="btn-svd-list" type="button" data-act="nav" data-to="surveys">설문 목록으로</button><button class="btn text" id="btn-svd-home" type="button" data-act="home">처음으로</button></div></div>';
   },

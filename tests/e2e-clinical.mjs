@@ -1,4 +1,4 @@
-// 체험 모드(가족 화면): 치매안심센터 카드, 병원·센터 검사 기록 폼, 가족 기록의 검사 구역, 채팅 공유 확인창
+// 체험 모드(가족 화면): 병원 검사 기록 폼, 가족 기록의 검사 구역, 채팅 공유 확인창
 import { createRequire } from 'node:module';
 const require = createRequire(process.env.PW_MODULES || '/opt/node-tools/node_modules/');
 const { chromium } = require('playwright');
@@ -16,23 +16,23 @@ const must = (c, msg) => { if (!c) { errors.push('ASSERT ' + msg); out('FAIL', m
 await page.goto(BASE); await page.waitForSelector('#btn-demo'); await page.click('#btn-demo');
 await page.waitForSelector('.dialog'); await page.click('#dlg-btn-0'); if (await vis('.dialog')) await page.click('#dlg-btn-1');
 await page.evaluate(() => { localStorage.setItem('bw.role', JSON.stringify('family')); }); await page.goto(BASE); await page.waitForSelector('#appbar-title'); if (await vis('.dialog')) await page.click('#dlg-btn-1').catch(() => {});
-await page.click('#nav-assess'); await page.waitForSelector('#center-card');
-must((await page.getAttribute('#btn-center-find', 'href')) === 'https://www.nid.or.kr', '센터 찾기 링크(중앙치매센터)');
-must((await page.innerText('#center-card')).includes('1899-9988') && (await page.innerText('#center-card')).includes('만 60세 이상'), '센터 카드: 60세 이상 무료 CIST, 1899-9988');
-await page.screenshot({ path: SHOTS + '/center-card.png', fullPage: true });
-await page.click('#btn-center-done'); await page.waitForSelector('#clf-h');
+await page.click('#nav-assess'); await page.waitForSelector('#hub-clinical');
+must(!(await page.locator('#center-card').count()) && !(await page.locator('#cist-banner').count()), '센터 카드·재검 배너 없음');
+must(!/센터|nid\.or|\d{4}-\d{4}/.test(await page.innerText('#screen')), '점검 탭에 기관·번호 언급 없음');
+must((await page.innerText('#hub-clinical')).includes('병원 검사 기록'), '허브 항목 이름: 병원 검사 기록');
+await page.screenshot({ path: SHOTS + '/hub.png', fullPage: true });
+await page.click('#hub-clinical'); await page.waitForSelector('#clin-h'); await page.click('#btn-clinical-add'); await page.waitForSelector('#clf-h');
 must((await page.inputValue('#cl-max')) === '30', 'CIST 만점 30 미리 채움');
 await page.selectOption('#cl-test', 'cdr'); must((await page.inputValue('#cl-max')) === '3', 'CDR 만점 3 미리 채움');
 await page.selectOption('#cl-test', 'cist');
 await page.fill('#cl-score', '31'); await page.click('#btn-cl-save'); must(await vis('#clf-h'), '점수가 만점보다 크면 저장 안 됨');
 await page.fill('#cl-score', '25');
 must(!(await page.locator('#cl-place').isVisible()), '기관·결과·메모는 "더 입력하기" 안에 숨김');
-await page.click('#cl-more-sum'); await page.fill('#cl-place', '○○구 치매안심센터'); await page.click('#cl-res-0'); await page.fill('#cl-memo', '2년 뒤 다시 받기');
+await page.click('#cl-more-sum'); await page.fill('#cl-place', '○○구 병원'); await page.click('#cl-res-0'); await page.fill('#cl-memo', '다음 진료 때 보여 드리기');
 await page.click('#btn-cl-save'); await page.waitForSelector('#clin-h');
 const rep = await page.innerText('#clinical-report');
-must(rep.includes('25 / 30점') && rep.includes('정상') && rep.includes('○○구 치매안심센터'), '기록 저장/표시');
-const d2 = new Date(); d2.setFullYear(d2.getFullYear() + 2); const due = d2.toISOString().slice(0, 10);
-must(rep.includes('CIST 다음 검사') && rep.includes(due), '2년 뒤 재검 알림 ' + due);
+must(rep.includes('25 / 30점') && rep.includes('정상') && rep.includes('○○구 병원'), '기록 저장/표시');
+must(!rep.includes('다음 검사') && !(await page.locator('#cist-reminder').count()), '2년 재검 알림 없음');
 // 두 번째 기록 (과거 날짜) → 추세
 await page.click('#btn-clinical-add'); await page.waitForSelector('#clf-h'); await page.fill('#cl-date', '2024-05-01'); await page.fill('#cl-score', '22'); await page.click('#btn-cl-save'); await page.waitForSelector('#clin-h');
 must((await page.innerText('#clinical-report')).includes('높아요'), '지난번과 비교(중립 문구)');

@@ -491,7 +491,7 @@ service cloud.firestore {
         allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isAdmin(fid));
       }
 
-      // ---- 병원·센터 검사 기록: 가족이 직접 적은 '점수'만 저장해요 (검사 문항·내용은 없음). 가족 전용: 훈련하는 분은 읽기·쓰기 모두 불가.
+      // ---- 병원 검사 기록: 가족이 직접 적은 '점수'만 저장해요 (검사 문항·내용은 없음). 가족 전용: 훈련하는 분은 읽기·쓰기 모두 불가.
       function validClinical() {
         return newData().keys().hasOnly(['test', 'testLabel', 'date', 'score', 'max', 'place', 'result', 'memo', 'recordedBy', 'ts'])
           && newData().keys().hasAll(['test', 'date', 'recordedBy', 'ts'])

@@ -312,10 +312,7 @@
   "소견",
   "예후"
  ],
- "report_allow": [
-  "치매안심센터",
-  "치매상담콜센터"
- ],
+ "report_allow": [],
  "report_closings": [
   "수 있어요",
   "관찰",

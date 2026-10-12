@@ -42,4 +42,4 @@ export const NUM_LABELS = {
   today_wrong: '날짜 문항 오답', dateq_wrong: '날짜 문항 오답', check_total: '월간 점검 총점', check_date: '월간 점검 날짜', iiv: '들쭉날쭉한 정도', ies: '속도·정확도 종합'
 };
 export const numLabel = k => NUM_LABELS[k] || k;
-export const DISCLAIMER = '이 리포트는 병을 판단하지 않아요. 기록의 흐름(추세)을 관찰한 것이에요. 걱정되면 의사와 상담하세요. (치매안심센터 1899-9988)';
+export const DISCLAIMER = '이 리포트는 병을 판단하지 않아요. 기록의 흐름(추세)을 관찰한 것이에요. 걱정되면 의사와 상담하세요.';

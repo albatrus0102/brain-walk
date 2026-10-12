@@ -24,7 +24,7 @@ const noRed = async (page, msg) => {
   const t = await page.innerText('#ai-r-r-a-' + (await page.$$eval('.airow-btn', e => e.map(x => x.id)))[0].split('r-a-')[1]);
   must(/\d+\/\d+ \(.\) 아침 리포트/.test(t) && /관찰/.test(t), '행: 날짜·종류·신호등 글자(관찰)·한 줄');
   must((await page.locator('.lpill').count()) >= 4 && (await page.locator('.lpill .lg').count()) >= 4, '신호등: 색 + 모양 + 글자 알약');
-  must((await page.innerText('#ai-disc')).includes('이 리포트는 병을 판단하지 않아요. 기록의 흐름(추세)을 관찰한 것이에요. 걱정되면 의사와 상담하세요. (치매안심센터 1899-9988)'), '목록 맨 아래: 안내 문구');
+  must((await page.innerText('#ai-disc')).includes('이 리포트는 병을 판단하지 않아요. 기록의 흐름(추세)을 관찰한 것이에요. 걱정되면 의사와 상담하세요.'), '목록 맨 아래: 안내 문구');
   must(!FORBID.test(await page.innerText('#screen')), '진단·정상/비정상 같은 말이 없어요');
   await noHScroll(page, '목록'); await noRed(page, '목록');
   await page.click('#ai-tab-weekly'); must((await page.locator('.airow-btn').count()) === 1, '주간 탭: 주간 리포트만');
@@ -40,7 +40,7 @@ const noRed = async (page, msg) => {
   await page.click('#ai-d-speed > summary');
   const det = await page.innerText('#ai-d-speed .ai-detail');
   must(await vis(page, '#ai-d-speed .ai-detail') && det.includes('주당 기울기') && det.includes('+1.8%') && det.includes('메모와 겹치는 기간'), '자세히: 숫자·신호 이유·메모 겹침');
-  must((await page.innerText('#ai-conf-line')) === '신뢰 정도: 약한 신호예요' && (await page.innerText('#ai-disc')).includes('치매안심센터 1899-9988'), '신뢰 정도와 맨 아래 안내 문구');
+  must((await page.innerText('#ai-conf-line')) === '신뢰 정도: 약한 신호예요' && (await page.innerText('#ai-disc')).includes('의사와 상담하세요') && !/센터|\d{4}-\d{4}/.test(await page.innerText('#ai-disc')), '신뢰 정도와 맨 아래 안내 문구');
   await page.screenshot({ path: SHOTS + '/ai-report-max-360.png', fullPage: true });
   await noHScroll(page, '리포트 보기(최대 글자·360px)'); await noRed(page, '보기');
   must(!FORBID.test(await page.innerText('#screen')), '보기: 진단 말투 없음');

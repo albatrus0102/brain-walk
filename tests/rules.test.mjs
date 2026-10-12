@@ -186,9 +186,9 @@ await t('B (not owner) cannot list A devices', getDocs(collection(dB, `families/
   await t('iadl survey kind allowed (family)', setDoc(doc(dB, `families/${F}/surveys/i1`), { kind: 'iadl', version: '1', answers: [0, 1, 0, 2, 0, 0, 1, 0], score: 4, ts: Date.now(), date: today, mode: 'family', answeredBy: 'mB', relation: '아들' }));
   await t('trainee cannot read iadl survey', getDoc(doc(dA, `families/${F}/surveys/i1`)), false);
 }
-// ---- clinicalTests (병원·센터 검사 기록): 가족만 읽기·쓰기
+// ---- clinicalTests (병원 검사 기록): 가족만 읽기·쓰기
 {
-  const ct = (who, extra = {}) => Object.assign({ test: 'cist', date: today, score: 25, max: 30, place: '서울 ○○치매안심센터', result: '정상', memo: '2년 뒤 재검', recordedBy: who, ts: Date.now() }, extra);
+  const ct = (who, extra = {}) => Object.assign({ test: 'cist', date: today, score: 25, max: 30, place: '서울 ○○병원', result: '정상', memo: '다음 진료 때 보여 드리기', recordedBy: who, ts: Date.now() }, extra);
   await t('family records clinical test', setDoc(doc(dB, `families/${F}/clinicalTests/k1`), ct('mB')));
   await t('family reads clinical test', getDoc(doc(dB, `families/${F}/clinicalTests/k1`)));
   await t('trainee cannot read clinical test', getDoc(doc(dA, `families/${F}/clinicalTests/k1`)), false);

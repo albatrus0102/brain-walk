@@ -24,7 +24,7 @@ const big = (label, cls, onclick, id) => h('button', { class: 'btn ' + cls, type
 const errP = () => h('p', { class: 'fb soft', role: 'alert', id: 'ob-err', hidden: true });
 const showErr = (msg) => { const e = document.getElementById('ob-err'); if (e) { e.textContent = msg; e.hidden = !msg; } };
 
-const disclaimerCard = () => card('tertiary', h('p', { class: 't-body', text: '이 앱은 두뇌 활동을 돕는 생활 도구이며 의료기기가 아니에요. 진단·치료를 대신하지 않아요. 걱정되는 변화가 있으면 치매안심센터(1899-9988)나 병원과 상담하세요.' }));
+const disclaimerCard = () => card('tertiary', h('p', { class: 't-body', text: '이 앱은 두뇌 활동을 돕는 훈련용이며 의료기기나 치료를 대신하지 않아요. 걱정되는 점이 있으면 병원에서 상담하세요.' }));
 const privacyCard = () => card('outlined', h('h2', { class: 't-title-m', text: '저장되는 정보' }),
   h('p', { class: 't-small muted mt', text: '이름, 훈련·점검 기록, 생활 체크, 대화가 저장돼요. 같은 가족방에 들어온 가족만 볼 수 있고, 설정에서 언제든 삭제할 수 있어요. 데이터는 Google Firebase(서울 리전)에 저장되며, 알림과 로그인에 쓰이는 Google 서비스는 해외에서 처리될 수 있어요.' }));
 

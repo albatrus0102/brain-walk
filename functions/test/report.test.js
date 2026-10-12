@@ -55,9 +55,10 @@ test('light, confidence and the domain list must match exactly', () => {
   assert.ok(codes(mut((r) => { r.domains.pop(); })).includes('domains'));
   assert.ok(codes(mut((r) => { r.confidence = 'concordant'; })).includes('confidence'));
 });
-test('report_banned words are rejected; 치매안심센터 is allowed', () => {
+test('report_banned words are rejected, including 치매 inside any compound', () => {
   for (const w of ['치매', '진단', '악화', '알츠하이머', '확실히', '틀림없이', '비정상']) assert.ok(codes(mut((r) => { r.doctorPoints[0].text = `${w} 의사와 상담해 보세요.`; })).includes('banned'), w);
-  assert.deepEqual(codes(mut((r) => { r.doctorPoints[0].text = '걱정되면 치매안심센터와 의사와 상담해 보세요.'; })), []);
+  assert.ok(codes(mut((r) => { r.doctorPoints[0].text = '걱정되면 치매 관련 기관과 의사와 상담해 보세요.'; })).includes('banned'));
+  assert.deepEqual(codes(mut((r) => { r.doctorPoints[0].text = '걱정되면 병원에서 의사와 상담해 보세요.'; })), []);
 });
 test('a closing phrase from the approved list is required', () => {
   assert.ok(codes(mut((r) => { r.summary = ['전체 흐름은 평소 범위예요.', '속도는 조금 느려요.']; r.doctorPoints[0].text = '그래프를 함께 보여 드려요.'; })).includes('closing'));

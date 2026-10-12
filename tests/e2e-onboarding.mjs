@@ -29,7 +29,7 @@ await page.evaluate(() => { window.__S.ob = { code: 'ABC234', fromLink: true }; 
 must((await page.inputValue('#join-code')) === 'ABC234', '?join=CODE 로 코드 미리 입력');
 await page.fill('#join-code', 'ab0 c23'); await page.click('#btn-join-next'); must((await page.innerText('#ob-err')).includes('0(영)·O, 1·I는 코드에 쓰지 않아요'), '0/O/1/I 안내');
 await page.evaluate(() => window.__go('ob-start')); must((await page.innerText('#screen')).includes('새 가족 만들기') && (await page.innerText('#screen')).includes('가족 코드로 들어가기'), '처음 화면: 새 가족 만들기 / 가족 코드로 들어가기');
-must((await page.innerText('#screen')).includes('의료기기가 아니에요'), '의료기기 아님 안내');
+must((await page.innerText('#screen')).includes('의료기기나 치료를 대신하지 않아요'), '의료기기 아님 안내(기관·번호 없음)');
 await page.evaluate(() => { window.__S.ob = { flow: 'create' }; window.__go('ob-name'); }); await page.click('#name-chip-0'); must((await page.inputValue('#ob-name-input')) === '아버지', '이름 예시 칩');
 await page.click('#btn-name-next'); await page.waitForSelector('#ob-role-h'); must(await page.locator('#role-trainee').isVisible() && await page.locator('#role-family').isVisible(), '역할: 훈련하는 분 / 가족');
 await page.evaluate(() => { window.__S.ob = { invite: { code: 'ABC234' } }; window.__go('ob-invite'); });
