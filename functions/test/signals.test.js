@@ -111,3 +111,12 @@ test('simulation: no-change data rarely fires orange; an injected decline is cau
   const caught = inj.firstCaught.filter((x) => x != null);
   assert.ok(caught.length / inj.runs >= 0.8, `caught ${caught.length}/${inj.runs}`);
 });
+
+test('aggregate subject is always a pseudonym (a real name configured by mistake never reaches the routine)', () => {
+  const { buildAggregate } = require('../ai/core/aggregate.js');
+  const E = { metrics: {}, lights: {}, indicators: {}, signals: [], confidence: 'insufficient', thresholdsVer: 'v1', monitoring: false };
+  const mk = (pseudonym) => buildAggregate({ id: 'a-1', asOfMs: Date.parse('2027-03-16T06:50:00+09:00'), mode: 'daily', pseudonym, eval: E, plan: null, today: null, notes: [], weeks: [] }).subject;
+  assert.equal(mk('사용자 B'), '사용자 B');
+  assert.equal(mk('김철수'), '사용자 A');
+  assert.equal(mk(undefined), '사용자 A');
+});

@@ -121,7 +121,7 @@ function buildAggregate(o) {
 
   return {
     schema: 'bw.agg.v1', id: o.id, asOf: new Date(o.asOfMs + 9 * 3600e3).toISOString().replace('Z', '+09:00').replace(/\.\d{3}/, ''),
-    mode: o.mode, subject: o.pseudonym || '사용자 A', phase: E.monitoring ? 'monitoring' : (o.phase || E.phase), thresholdsVer: E.thresholdsVer,
+    mode: o.mode, subject: /^사용자 [A-Z]$/.test(o.pseudonym || '') ? o.pseudonym : '사용자 A', phase: E.monitoring ? 'monitoring' : (o.phase || E.phase), thresholdsVer: E.thresholdsVer,
     today: o.today ? { trained: !!o.today.trained, metrics: Object.keys(N).filter((k) => k.startsWith('today_')) } : null,
     domains: domains.sort((a, b) => DOMAIN_ORDER.indexOf(a.domain) - DOMAIN_ORDER.indexOf(b.domain)),
     signals, anchor, confounders,

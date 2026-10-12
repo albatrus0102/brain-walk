@@ -182,9 +182,14 @@ async function buildMeasurePack(fid, wk, anchorSet, levels) {
 }
 
 // --------------------------------------------------------------- bank needs
-/** Counts of usable items per (status, role, cdomain, level, format). One pass over the bank (select only). */
+/**
+ * Counts of usable items per (status, role, cdomain, level, format). One pass over the live part of the bank
+ * (select only). 'used' and 'retired' items are the bulk after a few months and are not counted, so the reads per
+ * call stay near the bank's working size instead of growing with every item ever made. `total` = live items.
+ */
+const LIVE = ['ready', 'pending_review', 'quarantine', 'reserved', 'frozen'];
 async function bankCounts() {
-  const s = await db().collection('aiBank').select('status', 'role', 'cdomain', 'level', 'format', 'validTo', 'refWeek', 'anchorSet').get();
+  const s = await db().collection('aiBank').where('status', 'in', LIVE).select('status', 'role', 'cdomain', 'level', 'format', 'validTo', 'refWeek', 'anchorSet').get();
   const c = { cell: {}, fmt: {}, ref: {}, anchorCand: {}, review: 0, quarantine: 0, total: s.size, frozen: {}, reservedWeeks: new Set() };
   const today = kd.kst().date;
   s.forEach((d) => {

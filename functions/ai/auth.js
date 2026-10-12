@@ -4,7 +4,7 @@
  *
  *  - aiConfig/main.routineKeyHash holds sha256(key) in hex. Storing the hash (not the key) means a
  *    database export, a console screenshot or a rules mistake never reveals a usable key.
- *  - Field missing / shorter than 16 chars / AI disabled → 503 (closed).
+ *  - Field missing / not a 64-char hex sha256 / AI disabled → 503 (closed).
  *  - Header `Authorization: Bearer <key>` (or `X-Routine-Key: <key>` as a fallback for proxies that
  *    reserve Authorization). Keys shorter than 16 chars are rejected without comparing.
  *  - Constant-time compare: sha256 of both sides, then crypto.timingSafeEqual.
@@ -26,7 +26,7 @@ async function checkKey(req) {
   let cfg;
   try { cfg = await getConfig(); } catch { return { status: 503 }; }
   const stored = typeof cfg.routineKeyHash === 'string' ? cfg.routineKeyHash.trim().toLowerCase() : '';
-  if (!stored || stored.length < 16 || cfg.enabled === false || !/^[0-9a-f]+$/.test(stored)) return { status: 503 };
+  if (cfg.enabled === false || !/^[0-9a-f]{64}$/.test(stored)) return { status: 503 };
   const key = presentedKey(req);
   if (!key || key.length < 16 || key.length > 256) return { status: 401 };
   // sha256(stored-hash-hex) vs sha256(sha256(key)-hex): equal-length buffers, constant time

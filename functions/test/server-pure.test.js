@@ -71,6 +71,9 @@ test('routine key: constant-time hash compare, 401 / 503 rules', async () => {
     config._resetConfigCache(); assert.equal((await checkKey(req(''))).status, 401);
     cfg = {}; config._resetConfigCache(); assert.equal((await checkKey(req('Bearer ' + key))).status, 503);
     cfg = { routineKeyHash: 'abc' }; config._resetConfigCache(); assert.equal((await checkKey(req('Bearer ' + key))).status, 503);
+    // a truncated or mistyped hash is a configuration error (503), not a wrong key (401)
+    cfg = { routineKeyHash: hashKey(key).slice(0, 40) }; config._resetConfigCache(); assert.equal((await checkKey(req('Bearer ' + key))).status, 503);
+    cfg = { routineKeyHash: ' ' + hashKey(key).toUpperCase() + '\n' }; config._resetConfigCache(); assert.equal((await checkKey(req('Bearer ' + key))).status, 200);
     cfg = { routineKeyHash: hashKey(key), enabled: false }; config._resetConfigCache(); assert.equal((await checkKey(req('Bearer ' + key))).status, 503);
   } finally { require.cache[require.resolve('../ai/fb.js')].exports.db = orig; config._resetConfigCache(); }
 });
