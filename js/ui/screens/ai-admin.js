@@ -1,8 +1,9 @@
 import { AD, aiAccess, ensureAdminSubs, isExample, msOf, parseItems, weekDoc } from '../../ai/admin-data.js';
+import { noteDoc, noteId, reviewDoc, switchDoc, themesDoc } from '../../ai/admin-docs.js';
 import { mean, movingAvg, sd, trendChart } from '../../ai/charts.js';
 import { CONFIDENCE, DISCLAIMER, DOMAIN_NAMES, KIND_NAMES, NOTE_CODES, NOTE_NAME, PHASE, REJECT_CODES_REPORT, TREND_DOMAINS, BANK_ROWS, FORMAT_NAMES, errLabel, lightOf, numLabel, rejectLabel } from '../../ai/labels.js';
-import { weekKey } from '../../ai/kdate.js';
-import { adminNames, traineeLabel } from '../../data.js';
+import { weekKey, weekStart } from '../../ai/kdate.js';
+import { adminNames, traineeId, traineeLabel } from '../../data.js';
 import { S } from '../../state.js';
 import { Store } from '../../store/store.js';
 import { ACTS } from '../acts.js';
@@ -17,6 +18,9 @@ import { WD, addDays, parseYmd, ymd } from '../../util.js';
 export const AI_BACK = { aiReports: 'assess', aiReport: 'aiReports', aiTrend: 'aiReports', aiAnchor: 'aiReports', aiNotes: 'aiReports', aiBank: 'aiReports', aiOps: 'aiReports', aiSettings: 'aiReports' };
 const by = () => S.myId || 'local';
 const mdw = s => { const d = parseYmd(s); return (d.getMonth() + 1) + '/' + d.getDate() + ' (' + WD[d.getDay()] + ')'; };
+/* 주 번호(2026-W37) 대신 그 주가 시작하는 날짜로: "9/13 주" */
+const wkLabel = wk => { const st = weekStart(wk); if (!st) return String(wk || ''); const d = parseYmd(st); return (d.getMonth() + 1) + '/' + d.getDate() + ' 주'; };
+const md = s => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? Number(s.slice(5, 7)) + '/' + Number(s.slice(8, 10)) : '');
 const when = ms => { if (!ms) return '기록 없음'; const d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 const section = (title, ...kids) => h('section', { class: 'card outlined ai-sec' }, title ? h('h2', { class: 't-title', text: title }) : null, ...kids);
 const note = (text, cls) => h('p', { class: 't-body ' + (cls || 'muted'), text });
@@ -198,10 +202,10 @@ SCREENS.aiAnchor = screen('같은 문제 다시 풀기', root => {
   const cmp = ((AD.stats && AD.stats.anchorCmp) || []).slice().sort((a, b) => (a.wk < b.wk ? 1 : -1));
   if (!cmp.length) { root.append(section(null, note(AD.ready.stats ? '아직 비교할 앵커가 없어요. 첫 비교는 시작하고 약 3개월 반 뒤에 나와요.' : '불러오는 중이에요…')), footer()); return; }
   const c = cmp.find(x => x.wk === S.aiCmp) || cmp[0];
-  if (cmp.length > 1) root.append(h('div', { class: 'chips', role: 'group', 'aria-label': '비교 고르기' }, cmp.map(x => h('button', { type: 'button', class: 'chip', id: 'ai-cmp-' + x.wk, 'aria-pressed': String(x.wk === c.wk), 'data-act': 'ai-cmp', 'data-v': x.wk, text: '세트 ' + x.set + ' · ' + x.wk }))));
+  if (cmp.length > 1) root.append(h('div', { class: 'chips', role: 'group', 'aria-label': '비교 고르기' }, cmp.map(x => h('button', { type: 'button', class: 'chip', id: 'ai-cmp-' + x.wk, 'aria-pressed': String(x.wk === c.wk), 'data-act': 'ai-cmp', 'data-v': x.wk, text: '세트 ' + x.set + ' · ' + wkLabel(x.wk) }))));
   const vd = c.verdict || (c.up > c.down + 2 ? 'yellow' : 'green');
   root.append(h('section', { class: 'card primary', id: 'ai-anchor-sum' }, h('p', { class: 't-title-m' }, '세트 ' + (c.set || '') + ' · ', pill(vd, VERDICT[vd] || '유지')),
-    h('p', { class: 't-body mt', text: '정답: ' + (c.correct1 != null ? c.correct1 : '–') + '개 → ' + (c.correct2 != null ? c.correct2 : '–') + '개 (' + (c.x1 != null ? c.x1 : '') + (c.x2 != null ? '/' + c.x2 : '') + ')' }),
+    h('p', { class: 't-body mt', text: '정답: ' + (c.correct1 != null ? c.correct1 : '–') + '개 → ' + (c.correct2 != null ? c.correct2 : '–') + '개' + (c.x1 != null ? ' (문항 ' + c.x1 + (c.x2 != null && c.x2 !== c.x1 ? '/' + c.x2 : '') + '개 중)' : '') }),
     h('p', { class: 't-body', text: '둘 다 맞음 ' + (c.bothOk != null ? c.bothOk : '–') + ' · 틀림→맞음 ' + (c.up != null ? c.up : '–') + ' · 맞음→틀림 ' + (c.down != null ? c.down : '–') + ' · 둘 다 틀림 ' + (c.bothWrong != null ? c.bothWrong : '–') }),
     c.pSign != null ? h('p', { class: 't-small', text: '바뀐 문항 수가 우연으로 설명되는 정도(부호 검정 p) = ' + c.pSign }) : null,
     c.rci != null ? h('p', { class: 't-small', text: '신뢰 변화 지수(RCI) = ' + c.rci + (Math.abs(c.rci) < 1.65 ? ' → 측정 흔들림 안이라 “유지”' : '') }) : null,
@@ -214,7 +218,7 @@ SCREENS.aiAnchor = screen('같은 문제 다시 풀기', root => {
     if (!ids.length) { box.textContent = ''; box.append(note('문항별 기록을 아직 못 받았어요.')); return; }
     const num = {}, rowLabel = r => { num[r.cd] = (num[r.cd] || 0) + 1; return (DOMAIN_NAMES[r.cd] || r.cd) + '-' + String(num[r.cd]).padStart(2, '0'); };
     const tb = h('table', { class: 'ai-table' }, h('caption', { class: 'sr', text: '앵커 문항별 지난번과 이번 비교' }),
-      h('thead', null, h('tr', null, h('th', { scope: 'col', text: '문항' }), h('th', { scope: 'col', text: '지난번 (' + (A[0] && A[0].date ? A[0].date.slice(5) : c.prevWk) + ')' }), h('th', { scope: 'col', text: '이번 (' + (B[0] && B[0].date ? B[0].date.slice(5) : c.wk) + ')' }))),
+      h('thead', null, h('tr', null, h('th', { scope: 'col', text: '문항' }), h('th', { scope: 'col', text: '지난번 (' + (A[0] && A[0].date ? md(A[0].date) : wkLabel(c.prevWk)) + ')' }), h('th', { scope: 'col', text: '이번 (' + (B[0] && B[0].date ? md(B[0].date) : wkLabel(c.wk)) + ')' }))),
       h('tbody', null, ids.map(id => { const ra = A.find(r => r.id === id), rb = B.find(r => r.id === id); return h('tr', null, h('th', { scope: 'row', text: rowLabel(ra || rb) }), cellOf(ra), cellOf(rb)); })));
     box.textContent = ''; box.append(h('div', { class: 'ai-tablewrap' }, tb));
   });
@@ -251,14 +255,9 @@ document.addEventListener('input', e => {
   else if (t.id === 'ai-n-text') { d.text = t.value.slice(0, 200); const c = document.getElementById('ai-n-count'); if (c) c.textContent = d.text.length + '/200'; }
 });
 ACTS['ai-n-save'] = async () => {
-  const d = draftNote();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.from)) return toast('시작 날짜를 골라 주세요.');
-  if (!d.ongoing && (!/^\d{4}-\d{2}-\d{2}$/.test(d.to) || d.to < d.from)) return toast('끝나는 날짜가 시작 날짜보다 빠를 수 없어요.');
-  if (!d.codes.length) return toast('어떤 일인지 하나 이상 골라 주세요.');
-  const doc = { from: d.from, to: d.ongoing ? null : d.to, codes: d.codes.slice(), by: by(), ts: Date.now() };
-  if (d.text.trim()) doc.text = d.text.trim().slice(0, 200);
-  const id = 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  try { await Store.setDoc('aiNotes/' + id, doc); S.aiNoteDraft = null; toast('메모를 저장했어요.'); render(true); } catch (e) { toast('저장하지 못했어요. 관리자만 쓸 수 있어요.'); }
+  const r = noteDoc(draftNote(), by(), Date.now());
+  if (r.error) return toast(r.error);
+  try { await Store.setDoc('aiNotes/' + noteId(), r.doc); S.aiNoteDraft = null; toast('메모를 저장했어요.'); render(true); } catch (e) { toast('저장하지 못했어요. 관리자만 쓸 수 있어요.'); }
 };
 ACTS['ai-n-del'] = b => dialog('이 메모를 지울까요?', '지우면 리포트가 이 기간을 더 이상 함께 보지 않아요.', [{ label: '남겨 둘게요', kind: 'filled' }, { label: '지우기', kind: 'text', run: async () => { try { await Store.deleteDoc('aiNotes/' + b.dataset.id); toast('지웠어요.'); } catch (e) { toast('지우지 못했어요.'); } } }]);
 
@@ -276,7 +275,7 @@ function reviewCard(it) {
     done ? h('p', { class: 'chip-status done', text: '보냈어요: ' + ({ approve: '내보내기', retire: '은퇴', flag: '이상해요' }[done.decision] || done.decision) }) : h('div', { class: 'row' },
       btn('내보내기', 'filled', 'ai-rv', 'ai-rv-approve-' + it.id, { 'data-id': it.id, 'data-d': 'approve' }), btn('은퇴', 'tonal', 'ai-rv', 'ai-rv-retire-' + it.id, { 'data-id': it.id, 'data-d': 'retire' }), btn('이 문제 이상해요', 'outlined', 'ai-rv', 'ai-rv-flag-' + it.id, { 'data-id': it.id, 'data-d': 'flag' })));
   return h('details', { class: 'airow', id: 'ai-rv-' + it.id, 'data-xp': key, open: S.xpOpen[key] ? '' : null },
-    h('summary', null, h('span', { class: 'ai-sum' }, h('span', { class: 'ai-sum-top' }, h('strong', { text: FORMAT_NAMES[it.format] || it.format }), h('span', { class: 'ai-brief', text: WHY_NAMES[it.why] || '검토' })), h('span', { class: 'ai-line', text: (it.prompt || '').slice(0, 60) })), h('span', { class: 'ai-more' }, '보기', svgIcon('expand'))), body);
+    h('summary', null, h('span', { class: 'ai-sum' }, h('span', { class: 'ai-sum-top' }, h('strong', { text: FORMAT_NAMES[it.format] || it.format }), (WHY_NAMES[it.why] || '검토') === (FORMAT_NAMES[it.format] || it.format) ? null : h('span', { class: 'ai-brief', text: WHY_NAMES[it.why] || '검토' })), h('span', { class: 'ai-line', text: (it.prompt || '').slice(0, 60) })), h('span', { class: 'ai-more' }, '보기', svgIcon('expand'))), body);
 }
 SCREENS.aiBank = screen('문제 은행', root => {
   const bk = AD.bank, hl = AD.health, cells = (bk && bk.cells) || {};
@@ -289,7 +288,7 @@ SCREENS.aiBank = screen('문제 은행', root => {
   root.append(section('아직 안 쓴 훈련 문항 (목표: 칸마다 20개)', h('div', { class: 'ai-tablewrap' }, tb), bk ? null : note(AD.ready.bank ? '아직 문제 은행 기록이 없어요.' : '불러오는 중이에요…')));
   if (bk) {
     const an = bk.anchors || {}, rw = bk.reservedWeeks || [];
-    root.append(section('기준 문항과 앵커', note('기준 세트: ' + (rw.length ? rw.join('·') + ' 준비됨' : '준비된 주가 없어요'), 't-body'), note('앵커: ' + ['A', 'B', 'C'].map(k => k + (an[k] ? ' 얼림 ✓' : ' 아직')).join(' · '), 't-body')));
+    root.append(section('기준 문항과 앵커', note('기준 세트: ' + (rw.length ? rw.map(wkLabel).join(', ') + ' 준비됨' : '준비된 주가 없어요'), 't-body'), note('앵커: ' + ['A', 'B', 'C'].map(k => k + (an[k] ? ' 얼림 ✓' : ' 아직')).join(' · '), 't-body')));
     const ik = bk.intake || [], last7 = ik.slice(-7), rec = last7.reduce((s, x) => s + (x.received || 0), 0), acc = last7.reduce((s, x) => s + (x.accepted || 0), 0), rej = last7.reduce((s, x) => s + (x.rejected || 0), 0);
     const codes = {}; last7.forEach(x => Object.keys(x.codes || {}).forEach(c => { const l = rejectLabel(c); codes[l] = (codes[l] || 0) + x.codes[c]; }));
     const top = Object.keys(codes).sort((a, b) => codes[b] - codes[a]).slice(0, 5);
@@ -309,7 +308,7 @@ ACTS['ai-rv'] = b => {
   const id = b.dataset.id, dec = b.dataset.d, name = { approve: '내보내기', retire: '은퇴', flag: '이 문제 이상해요' }[dec];
   const text = { approve: '이 문제가 아버지에게 나가요. 내용이 사실과 맞는지 확인하셨나요?', retire: '이 문제를 더 이상 쓰지 않아요.', flag: '이 문제를 잠시 빼고 다시 살펴봐요. 이미 같은 문제를 다시 풀었던 앵커 문항이면 비교에서 빠져요.' }[dec];
   dialog(name + '을 보낼까요?', text, [{ label: '취소', kind: 'text' }, { label: name, kind: 'filled', run: async () => {
-    try { await Store.setDoc('aiReview/' + id, { decision: dec, by: by(), ts: Date.now() }); toast('보냈어요. 곧 반영돼요.'); } catch (e) { toast('보내지 못했어요. 관리자만 쓸 수 있어요.'); }
+    try { await Store.setDoc('aiReview/' + id, reviewDoc(dec, by(), Date.now())); toast('보냈어요. 곧 반영돼요.'); } catch (e) { toast('보내지 못했어요. 관리자만 쓸 수 있어요.'); }
   } }]);
 };
 
@@ -321,7 +320,7 @@ SCREENS.aiOps = screen('루틴 상태', root => {
   if (!AD.health) root.append(section(null, note(AD.ready.health ? '아직 루틴 기록이 없어요.' : '불러오는 중이에요…')));
   const ok7 = (g.okDays || []).filter(d => d >= addDays(ymd(new Date()), -6)).length;
   const today = ymd(new Date()), mo = today.slice(0, 7), days = (wk.days || {}), moN = Object.keys(days).filter(d => d.slice(0, 7) === mo).reduce((s, d) => s + days[d], 0);
-  const cons = AD.consents[0];
+  const tid = traineeId() || (isExample() ? 'local' : null), cons = AD.consents.find(c => c.id === tid) || null;   // 지금 훈련하는 분의 안내 기록 (예전 훈련하는 분 것은 보지 않아요)
   root.append(h('ul', { class: 'ai-sts', id: 'ai-ops-list' },
     statusRow('ai-st-gen', '① 문제 만들기', g.lastSubmitTs ? msOf(g.lastSubmitTs) > Date.now() - 36 * 3600e3 : null, '마지막 올림 ' + when(msOf(g.lastSubmitTs)) + ' (' + ago(msOf(g.lastSubmitTs)) + ')', g.lastAccepted != null ? '받은 문항 중 ' + g.lastAccepted + '개 통과, ' + (g.lastRejected || 0) + '개 버림' : null, '최근 7일 성공 ' + ok7 + '/7'),
     statusRow('ai-st-rep', '② 리포트', rp.lastReportTs ? msOf(rp.lastReportTs) > Date.now() - 36 * 3600e3 : null, '마지막 ' + when(msOf(rp.lastReportTs)) + ' (' + ago(msOf(rp.lastReportTs)) + ')', rp.lastGeneratedBy === 'template' ? '간단판 (AI 설명이 빠졌어요)' : rp.lastGeneratedBy ? 'AI 설명 포함' : null),
@@ -329,7 +328,7 @@ SCREENS.aiOps = screen('루틴 상태', root => {
     statusRow('ai-st-server', '서버', sv.lastTick ? msOf(sv.lastTick) > Date.now() - 3 * 3600e3 : null, '마지막 확인 ' + ago(msOf(sv.lastTick || sv.lastRun)), sv.reason ? '상태: ' + sv.reason : null),
     statusRow('ai-st-tg', '텔레그램 알림', tg.lastResult ? tg.lastResult === 'sent' : null, tg.lastResult ? ({ sent: '보냈어요', failed: '보내지 못했어요', queued: '조용한 시간이라 기다리고 있어요' }[tg.lastResult] || tg.lastResult) + ' · ' + ago(msOf(tg.lastTs)) : '기록 없음'),
     statusRow('ai-st-th', '신호 문턱 버전', null, hl.thresholdsVer || (AD.thresholds && AD.thresholds.current && AD.thresholds.current.ver) || 'v1'),
-    statusRow('ai-st-cons', traineeLabel() + ' 안내 확인', cons ? !cons.withdrawnTs : false, cons ? (cons.withdrawnTs ? '살펴보지 말아 달라고 하셨어요' : when(msOf(cons.ackTs)) + '에 확인하셨어요' + (cons.withFamily ? ' (가족과 함께)' : '')) : '아직 안내를 보지 않으셨어요. 확인하기 전에는 숫자를 모으지 않아요.')));
+    statusRow('ai-st-cons', traineeLabel() + ' 안내 확인', cons ? !('withdrawnTs' in cons) : false, cons ? ('withdrawnTs' in cons ? '살펴보지 말아 달라고 하셨어요' : when(msOf(cons.ackTs)) + '에 확인하셨어요' + (cons.withFamily ? ' (가족과 함께)' : '')) : '아직 안내를 보지 않으셨어요. 확인하기 전에는 숫자를 모으지 않아요.')));
   root.append(switchSection(), footer());
 });
 
@@ -341,7 +340,7 @@ function switchSection() {
     h('p', { class: 't-small muted', text: '끄면 집계와 깨우기가 멈추고 가명 집계를 지워요. 다시 켜면 이어서 모아요.' }),
     btn(on ? 'AI 리포트 끄기' : 'AI 리포트 다시 켜기', on ? 'outlined' : 'filled', 'ai-switch', 'btn-ai-switch'));
 }
-const setSwitch = async enabled => { try { await Store.setDoc('aiState/switch', { enabled, updatedBy: by(), updatedTs: Date.now() }); toast(enabled ? 'AI 리포트를 다시 켰어요.' : 'AI 리포트를 껐어요.'); } catch (e) { toast('바꾸지 못했어요. 관리자만 쓸 수 있어요.'); } };
+const setSwitch = async enabled => { try { await Store.setDoc('aiState/switch', switchDoc(enabled, by(), Date.now())); toast(enabled ? 'AI 리포트를 다시 켰어요.' : 'AI 리포트를 껐어요.'); } catch (e) { toast('바꾸지 못했어요. 관리자만 쓸 수 있어요.'); } };
 ACTS['ai-switch'] = () => {
   const on = !AD.sw || AD.sw.enabled !== false;
   if (!on) return setSwitch(true);
@@ -371,6 +370,6 @@ ACTS['ai-theme-add'] = () => {
 ACTS['ai-theme-x'] = b => { const d = draftThemes(); d.words.splice(Number(b.dataset.i), 1); render(true); };
 ACTS['ai-theme-save'] = async () => {
   const d = draftThemes();
-  try { await Store.setDoc('aiState/themes', { words: d.words.slice(0, 8), updatedBy: by(), updatedTs: Date.now() }); S.aiThemeDraft = null; toast('저장했어요. 서버는 한글 낱말만 받아요.'); render(true); } catch (e) { toast('저장하지 못했어요. 관리자만 쓸 수 있어요.'); }
+  try { await Store.setDoc('aiState/themes', themesDoc(d.words, by(), Date.now())); S.aiThemeDraft = null; toast('저장했어요. 서버는 한글 낱말만 받아요.'); render(true); } catch (e) { toast('저장하지 못했어요. 관리자만 쓸 수 있어요.'); }
 };
 void weekKey;

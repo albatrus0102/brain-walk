@@ -1,5 +1,6 @@
 import { alarmTick } from './alarm.js';
-import { startBank } from './ai/bank.js';
+import { resetAdminSubs, aiAccess } from './ai/admin-data.js';
+import { startBank, stopBank } from './ai/bank.js';
 import { seedDemo } from './ai/seed.js';
 import { applyDisplay } from './display.js';
 import { GAMES, catalog } from './games/registry.js';
@@ -229,6 +230,7 @@ export function connectFamilyOnly() {
 export function disconnectData() {
   famUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} }); famReadable = null; wasTrainee = null;
   dbUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} });
+  resetAdminSubs(); stopBank(); aiAcc = null;
   if (S.msgUnsub) { try { S.msgUnsub(); } catch (e) {} S.msgUnsub = null; }
   if (presUnsub) { try { presUnsub(); } catch (e) {} presUnsub = null; } presId = null; stopHeartbeat();
 }
@@ -248,8 +250,11 @@ export function refreshRole() { applyDisplay({ noRender: true }); syncHeartbeat(
  * 훈련하는 분이 된 기기는 관리자가 정한 화면 설정을, 가족이 된 기기는 자기 설정과 가족 전용 자료 구독을. */
 let wasTrainee = null;
 function roleChanged() { return (wasTrainee !== null && wasTrainee !== isTrainee()) || (famReadable !== null && famReadable !== canReadFamilyOnly()); }
+let aiAcc = null;
 function syncRole() {
-  const tr = isTrainee();
+  const tr = isTrainee(), acc = aiAccess();
+  if (aiAcc !== null && aiAcc !== acc) resetAdminSubs();          // 관리자 ↔ 훈련하는 분: AI 리포트 구독을 새로
+  aiAcc = acc;
   if (wasTrainee !== null && wasTrainee !== tr) applyDisplay({ noRender: true });
   wasTrainee = tr;
   if (famReadable !== null && famReadable !== canReadFamilyOnly()) connectFamilyOnly();

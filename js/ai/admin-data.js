@@ -1,4 +1,4 @@
-import { isAdmin, isTrainee, subscribe } from '../data.js';
+import { isAdmin, isTrainee } from '../data.js';
 import { S } from '../state.js';
 import { Store } from '../store/store.js';
 import { render } from '../ui/shell.js';
@@ -6,10 +6,15 @@ import { render } from '../ui/shell.js';
 /* ================= 관리자 AI 리포트 자료 (CLIENT-CONTRACT §3, §4) =================
  * 규칙상 관리자(가족 역할, 훈련하는 분이 아닌 기기)만 읽어요. 화면에 처음 들어올 때 한 번만 구독하고 계속 둬요(해제는 가족방을 나갈 때).
  * 서버가 쓰는 문서이고, 앱은 읽기만 해요. 쓰는 것은 메모(aiNotes), 관심사 낱말(aiState/themes), AI 끄기(aiState/switch), 검토 결정(aiReview) 뿐이에요. */
-export const AD = {
+const fresh = () => ({
   reports: [], stats: null, plan: null, themes: null, sw: null, notes: [], signals: [], health: null, wakes: null, bank: null, review: null, thresholds: null, decisions: [], consents: [],
   denied: false, ready: {}, subscribed: false, weekDocs: {}
-};
+});
+export const AD = fresh();
+let unsubs = [];
+/* 구독을 모두 끊고 처음 상태로: 가족방을 나가거나, 이 기기의 역할이 바뀌었을 때(관리자 ↔ 훈련하는 분) data.js 가 불러요.
+ * (거부된 구독은 Firestore 가 끊어 버리니까, 다시 관리자가 되면 새로 구독해야 해요) */
+export function resetAdminSubs() { unsubs.splice(0).forEach(u => { try { u(); } catch (e) {} }); Object.assign(AD, fresh()); }
 /* 이 기기에서 AI 리포트를 볼 수 있는지: 'ok' | 'notAdmin' (관리자만 볼 수 있어요) | 'trainee' (훈련하는 분 기기) */
 export function aiAccess() {
   if (!isAdmin()) return 'notAdmin';
@@ -22,8 +27,9 @@ export function ensureAdminSubs() {
   if (AD.subscribed || aiAccess() !== 'ok' || !Store.adapter) return;
   AD.subscribed = true;
   const opt = { onError: () => { AD.denied = true; refresh(); } };
-  const doc = (path, key) => subscribe(path, opt, d => { AD[key] = d; AD.ready[key] = true; refresh(); });
-  const list = (path, o, key) => subscribe(path, Object.assign({}, opt, o), l => { AD[key] = l; AD.ready[key] = true; refresh(); });
+  const sub = (path, o, cb) => { try { unsubs.push(Store.subscribe(path, o, cb)); } catch (e) { AD.denied = true; } };
+  const doc = (path, key) => sub(path, opt, d => { AD[key] = d; AD.ready[key] = true; refresh(); });
+  const list = (path, o, key) => sub(path, Object.assign({}, opt, o), l => { AD[key] = l; AD.ready[key] = true; refresh(); });
   list('aiReports', { orderBy: ['ts', 'desc'], limit: 40 }, 'reports');
   doc('aiStats/summary', 'stats'); doc('aiState/plan', 'plan'); doc('aiState/themes', 'themes'); doc('aiState/switch', 'sw');
   list('aiNotes', { orderBy: ['from', 'desc'], limit: 60 }, 'notes');
