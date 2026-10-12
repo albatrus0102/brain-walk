@@ -10,6 +10,7 @@
  *   aiOnReview    families/{fid}/aiReview/{itemId} created (admin) → approve / retire / flag a bank item
  *   aiDaily       06:50 KST → weekly stats, signals, aggregate, measure/training packs, bank needs
  *   aiTick        every 10 min → queued Telegram, 08:30 template fallback, wake timeouts, stall alerts
+ *   aiTgFlush     08:00 KST → queued Telegram (02:00–08:00 hold, early report notices) as ONE digest
  *   aiPurge       04:30 KST → retention backstop (TTL does inbox/aggregates/jobs/rejects)
  *
  * Secrets (Secret Manager, `firebase functions:secrets:set …`): ROUTINE_REPORTER_URL, ROUTINE_REPORTER_TOKEN,
@@ -24,6 +25,7 @@ const { processInbox } = require('./inbox.js');
 const { runFamily } = require('./pipeline.js');
 const { afterCourse } = require('./course.js');
 const { tick } = require('./tick.js');
+const { flushOutbox } = require('./telegram.js');
 const { purge } = require('./purge.js');
 const bank = require('./bank.js');
 const { sanitizeLog } = require('./core/series.js');
@@ -83,6 +85,10 @@ exports.aiDaily = onSchedule({ schedule: '50 6 * * *', timeZone: 'Asia/Seoul', r
 
 exports.aiTick = onSchedule({ schedule: 'every 10 minutes', timeZone: 'Asia/Seoul', region: REGION, retryCount: 0, timeoutSeconds: 300, secrets: TG }, async () => {
   try { await tick(); } catch (e) { log.error('tick_failed', { code: e && e.code ? String(e.code) : 'error' }); }
+});
+
+exports.aiTgFlush = onSchedule({ schedule: '0 8 * * *', timeZone: 'Asia/Seoul', region: REGION, retryCount: 1, secrets: TG }, async () => {
+  await flushOutbox();
 });
 
 exports.aiPurge = onSchedule({ schedule: '30 4 * * *', timeZone: 'Asia/Seoul', region: REGION, retryCount: 1, timeoutSeconds: 540 }, async () => {

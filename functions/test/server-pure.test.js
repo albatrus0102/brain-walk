@@ -91,3 +91,13 @@ test('vendored validator bundle behaves like the server core and is reproducible
   assert.equal(v.SOURCE_SHA, a.sha); assert.equal(v.VERSION, require('../ai/core/index.js').VERSION);
   assert.match(fs.readFileSync(f, 'utf8').split('\n')[0], /^\/\/ bw-validator \d+\.\d+\.\d+ sha256:[0-9a-f]{64}$/);
 });
+
+test('Telegram hold window 02:00–08:00 KST and the combined digest', () => {
+  const { inHold, digestText } = require('../ai/telegram.js');
+  const at = (hhmm) => Date.parse(`2027-04-08T${hhmm}:00+09:00`);
+  assert.equal(inHold(at('01:59')), false); assert.equal(inHold(at('02:00')), true); assert.equal(inHold(at('07:59')), true); assert.equal(inHold(at('08:00')), false);
+  const url = 'https://x.example/';
+  assert.equal(digestText([{ kind: 'morning', n: 0 }], url), '🧠 오늘의 두뇌 산책\n아침 리포트가 올라왔어요\nhttps://x.example/');
+  const d = digestText([{ kind: 'key_offschedule', n: 0 }, { kind: 'morning', n: 1 }, { kind: 'key_offschedule', n: 0 }, { kind: 'morning', n: 2 }, { kind: 'bogus', n: 9 }], url);
+  assert.equal(d, '🧠 오늘의 두뇌 산책\n· 아침 리포트가 올라왔어요 · 주의 신호 2건\n· 루틴 키가 예정에 없던 시각에 쓰였어요. 루틴 상태를 확인해 주세요\nhttps://x.example/');
+});

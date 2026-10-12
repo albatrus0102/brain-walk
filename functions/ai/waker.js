@@ -13,9 +13,11 @@ const { secret, WAKE, RETENTION_DAYS } = require('./config.js');
 const kd = require('./core/kdate.js');
 const log = require('./log.js');
 
-function fireUrlBase(u) {
-  if (process.env.FUNCTIONS_EMULATOR === 'true' && process.env.ROUTINE_FIRE_URL_OVERRIDE) return process.env.ROUTINE_FIRE_URL_OVERRIDE;
-  return u;
+/** The fire URL, or '' when not configured (placeholder secret such as "unset"). Plain http only in the emulator (local mock). */
+function fireUrl(u) {
+  const emu = process.env.FUNCTIONS_EMULATOR === 'true';
+  if (/^https:\/\//.test(u || '') || (emu && /^http:\/\/127\.0\.0\.1[:/]/.test(u || ''))) return u;
+  return '';
 }
 /** Pure decision (exported for tests). */
 function decideWake({ newOrange, nowMs, wakes }) {
@@ -49,8 +51,8 @@ async function maybeWake(fid, { newOrange, aggregateId, nowMs = Date.now(), onFa
   await db().collection('aiJobs').doc(job).set({ schema: 'bw.job.v1', job, rules, why, aggregateId, status: 'firing', createdTs: FieldValue.serverTimestamp(), expireAt: expireIn(RETENTION_DAYS.jobs) });
   const text = JSON.stringify({ v: 1, job, rules, why });
   let ok = false, status = 0;
-  const url = fireUrlBase(secret('ROUTINE_REPORTER_URL')), token = secret('ROUTINE_REPORTER_TOKEN');
-  if (url && token) {
+  const url = fireUrl(secret('ROUTINE_REPORTER_URL')), token = secret('ROUTINE_REPORTER_TOKEN');
+  if (url && token && token !== 'unset') {
     try {
       const r = await fetch(url, {
         method: 'POST', signal: AbortSignal.timeout(WAKE.fireTimeoutMs),

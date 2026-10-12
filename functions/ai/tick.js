@@ -1,7 +1,7 @@
 'use strict';
 /**
  * Every 10 minutes (KST), a few reads:
- *   1. ≥ 08:00 flush Telegram messages queued earlier in the morning (today's only)
+ *   1. ≥ 08:00 send anything still queued in tgOutbox as one digest (backstop for aiTgFlush)
  *   2. ≥ 08:30 no report for today's aggregate → template "간단판" + Telegram (re-runs the aggregate if 06:50 failed)
  *   3. fired wake jobs without a report after 90 min → template alert report + rule-only Telegram
  *   4. ≥ 09:00 generator accepted nothing for 2 days → one Telegram until it recovers
@@ -10,7 +10,7 @@
 const { db, fam, FieldValue } = require('./fb.js');
 const { getConfig, WAKE, MORNING } = require('./config.js');
 const kd = require('./core/kdate.js');
-const { sendTelegram } = require('./telegram.js');
+const { sendTelegram, flushOutbox } = require('./telegram.js');
 const { storeTemplate, announce, tgKind, reportId } = require('./reports.js');
 const { runFamily } = require('./pipeline.js');
 const log = require('./log.js');
@@ -25,11 +25,8 @@ async function tick(nowMs = Date.now()) {
   const hs = await h.get(); const H = hs.exists ? hs.data() : {};
   const done = [];
 
-  // 1. queued Telegram
-  if (now.hour >= MORNING.telegramAfterHour && Array.isArray(H.pendingTg) && H.pendingTg.length) {
-    for (const e of H.pendingTg) { const [date, kind, n] = e.split('|'); if (date === now.date) { await sendTelegram(kind, Number(n) || 0); done.push('tg'); } }
-    await h.set({ pendingTg: [] }, { merge: true });
-  }
+  // 1. backstop for the 08:00 digest (aiTgFlush): anything still queued is sent once the hold window is over
+  if (now.hour >= MORNING.telegramAfterHour) { const f = await flushOutbox(nowMs); if (f.sent) done.push('tg_digest'); }
 
   // 2. morning fallback
   if (mins >= MORNING.fallbackAfter.h * 60 + MORNING.fallbackAfter.m && H.morningDone !== now.date) {
@@ -66,7 +63,7 @@ async function tick(nowMs = Date.now()) {
     const lastOk = gen.lastOkDate || null;
     const stalled = !lastOk || lastOk < kd.addDays(now.date, -1);
     if (stalled && H.stallNotifiedFor !== (lastOk || 'never') && H.server && H.server.state === 'ok') {
-      await sendTelegram('gen_stalled', 0);
+      await sendTelegram('gen_stalled', 0, nowMs);
       await h.set({ stallNotifiedFor: lastOk || 'never' }, { merge: true });
       done.push('gen_stalled');
     }
@@ -76,7 +73,7 @@ async function tick(nowMs = Date.now()) {
   const ku = await db().collection('aiRate').doc('keyuse').get();
   const off = ku.exists ? ku.get('offSchedule') : null;
   if (off && off.date === now.date && off.n > 0 && ku.get('notified') !== now.date) {
-    await sendTelegram('key_offschedule', 0);
+    await sendTelegram('key_offschedule', 0, nowMs);
     await ku.ref.set({ notified: now.date }, { merge: true });
     done.push('key_offschedule');
   }

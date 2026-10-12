@@ -657,6 +657,8 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('F4: nobody reads rate counters', getDoc(doc(dO, 'aiRate/keyuse')), false);
   await t('F4: nobody reads the push heartbeat', getDoc(doc(dO, 'ops/pushTick')), false);
   await t('F4: nobody lists the bank index', getDocs(collection(dAd, 'aiBankIndex')), false);
+  await t('F4: nobody reads the Telegram outbox', getDocs(collection(dO, 'tgOutbox')), false);
+  await t('F4: nobody writes the Telegram outbox', setDoc(doc(dAd, 'tgOutbox/x'), { kind: 'test', n: 0 }), false);
   await t('F4: unauthenticated cannot read aiConfig', getDoc(doc(anon, 'aiConfig/main')), false);
 }
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -7,8 +7,7 @@ const { db, fam, FieldValue, expireIn } = require('./fb.js');
 const { checkReport, fillReport } = require('./core/report.js');
 const { templateReport } = require('./core/template.js');
 const { sendTelegram } = require('./telegram.js');
-const { RETENTION_DAYS, MORNING } = require('./config.js');
-const kd = require('./core/kdate.js');
+const { RETENTION_DAYS } = require('./config.js');
 const log = require('./log.js');
 
 const reportId = (agg) => 'r-' + agg.id;
@@ -38,16 +37,12 @@ async function storeTemplate(fid, agg, { jobId = 'scheduled', rejectCodes = null
   return storeReport(fid, agg, rep, { generatedBy: 'template', jobId, rejectCodes });
 }
 
-/** Telegram now, or queue it until 08:00 KST (morning/weekly). */
+/** Announce a report. Morning/weekly announcements wait until 08:00 KST (queued in tgOutbox); every send
+ *  also obeys the 02:00–08:00 no-Telegram gate inside sendTelegram. */
 async function announce(fid, kind, agg, nowMs = Date.now()) {
-  const n = orangeCount(agg);
-  const now = kd.kst(nowMs);
-  const early = now.hour < MORNING.telegramAfterHour && !['alert', 'rule_only'].includes(kind);
-  const h = fam(fid).collection('aiOps').doc('health');
-  if (early) { await h.set({ pendingTg: FieldValue.arrayUnion(`${now.date}|${kind}|${n}`) }, { merge: true }); return 'queued'; }
-  const ok = await sendTelegram(kind, n);
-  await h.set({ tg: { lastKind: kind, lastOk: ok, lastTs: FieldValue.serverTimestamp() } }, { merge: true });
-  return ok ? 'sent' : 'failed';
+  const r = await sendTelegram(kind, orangeCount(agg), nowMs, { holdUntil8: !['alert', 'rule_only'].includes(kind) });
+  await fam(fid).collection('aiOps').doc('health').set({ tg: { lastKind: kind, lastResult: r, lastTs: FieldValue.serverTimestamp() } }, { merge: true });
+  return r;
 }
 const tgKind = (mode, template) => (mode === 'alert' ? (template ? 'rule_only' : 'alert') : mode === 'weekly' ? (template ? 'weekly_template' : 'weekly') : (template ? 'morning_template' : 'morning'));
 

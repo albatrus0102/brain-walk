@@ -27,7 +27,7 @@ async function purge(nowMs = Date.now()) {
   const nowTs = Timestamp.fromMillis(nowMs);
   const today = kd.kst(nowMs).date;
   const out = {};
-  for (const col of ['aiInbox', 'aiAggregates', 'aiJobs', 'aiRejects', 'aiRate']) out[col] = await delQuery(db().collection(col).where('expireAt', '<', nowTs));
+  for (const col of ['aiInbox', 'aiAggregates', 'aiJobs', 'aiRejects', 'aiRate', 'tgOutbox']) out[col] = await delQuery(db().collection(col).where('expireAt', '<', nowTs));
   const retiredCut = Timestamp.fromMillis(nowMs - RETENTION_DAYS.retiredBank * 864e5);
   out.bankRetired = await delQuery(db().collection('aiBank').where('status', '==', 'retired').where('retiredTs', '<', retiredCut));
   const fid = cfg.familyId;

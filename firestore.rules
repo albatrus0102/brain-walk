@@ -774,7 +774,7 @@ service cloud.firestore {
 
     // =========================================== AI: 서버 전용 (Cloud Functions 의 Admin SDK 만)
     // aiConfig(설정·루틴 키 해시), aiInbox(루틴 결과 대기실), aiBank·aiBankIndex·aiRejects(문제 은행),
-    // aiAggregates·aiJobs(가명 집계·깨우기 작업, 루틴은 aiRead 함수로만 읽어요), aiRate(한도 계수기), ops(서버 하트비트).
+    // aiAggregates·aiJobs(가명 집계·깨우기 작업, 루틴은 aiRead 함수로만 읽어요), aiRate(한도 계수기), ops(서버 하트비트), tgOutbox(텔레그램 대기열).
     // 구성원·익명·이메일 계정 누구에게도 열지 않아요. (아래 catch-all 과 같지만, 뜻을 분명히 하려고 따로 적어요.)
     match /aiConfig/{d} { allow read, write: if false; }
     match /aiInbox/{d} { allow read, write: if false; }
@@ -785,6 +785,7 @@ service cloud.firestore {
     match /aiJobs/{d} { allow read, write: if false; }
     match /aiRate/{d} { allow read, write: if false; }
     match /ops/{d} { allow read, write: if false; }
+    match /tgOutbox/{d} { allow read, write: if false; }   // 텔레그램 대기열 (02:00–08:00 에는 보내지 않고 08:00 에 한 번에)
 
     // Everything else is closed.
     match /{document=**} {

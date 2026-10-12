@@ -210,6 +210,12 @@ await t('B6 report via aiSubmit → validated, filled and stored for admins → 
   assert(!JSON.stringify(stored.report).includes('{{'), 'placeholders filled');
   assert(stored.lights.composite === agg.domains.find((d) => d.domain === 'composite').light, 'lights copied from the server');
   await waitFor(async () => (await db.doc(`aiJobs/${job.job.job}`).get()).get('status') === 'reported', 20000);
+  const h = kd.kst().hour;
+  if (h >= 2 && h < 8) {   // the real clock is in the 02:00–08:00 hold window: the function queued it instead
+    const q = await waitFor(async () => { const s = await db.collection('tgOutbox').where('kind', '==', 'alert').get(); return s.empty ? null : s.docs[0]; }, 20000);
+    assert(q.get('n') >= 1 && tgs.length === tg0, 'queued, not sent');
+    await require('./ai/telegram.js').flushOutbox(Date.parse(`${today}T08:00:00+09:00`));
+  }
   await waitFor(() => tgs.length > tg0, 20000);
   const m = tgs[tgs.length - 1];
   assert(m.tokenOk && m.body.chat_id === '4242', 'bot token + chat id from secrets');
@@ -264,21 +270,36 @@ await t('B11 retention purge keeps fresh data and removes expired inbox docs', a
   assert(r.aiInbox >= 1 && !(await db.doc('aiInbox/old').get()).exists);
   assert((await db.collection(`families/${FID}/itemLogs`).limit(1).get()).size === 1);
 });
-await t('B12 tick: queued morning Telegram is sent after 08:00; no report by 08:30 → template + "간단판" Telegram', async () => {
-  const { tick } = require('./ai/tick.js');
-  const h = db.doc(`families/${FID}/aiOps/health`);
-  await h.set({ pendingTg: [`${today}|morning|0`], morningDone: null }, { merge: true });
+await t('B12 Telegram gate: nothing sent 02:00–08:00 KST; queued messages go out as ONE de-duplicated digest at 08:00', async () => {
+  const { sendTelegram, flushOutbox } = require('./ai/telegram.js');
+  const { announce } = require('./ai/reports.js');
+  const at = (hhmm) => Date.parse(`${today}T${hhmm}:00+09:00`);
+  for (const d of (await db.collection('tgOutbox').get()).docs) await d.ref.delete();
   const tg0 = tgs.length;
-  await tick(Date.parse(`${today}T08:05:00+09:00`));
-  // (when the suite runs outside 03–06 / 07–10 KST the tick may also send the one-per-day "key used off schedule" alert)
-  assert(tgs.slice(tg0).some((m) => m.body.text.includes('아침 리포트가 올라왔어요')), 'queued sent');
-  assert(((await h.get()).get('pendingTg') || []).length === 0);
+  assert(await sendTelegram('key_offschedule', 0, at('03:10')) === 'queued');
+  assert(await sendTelegram('key_offschedule', 0, at('04:00')) === 'queued');
+  assert(await sendTelegram('rule_only', 1, at('05:00')) === 'queued', 'even alerts wait');
+  const cur = (await db.doc('aiAggregates/current').get()).data();
+  assert(await announce(FID, 'morning', cur, at('07:41')) === 'queued', 'morning report notice waits for 08:00');
+  assert(tgs.length === tg0, 'nothing sent in the hold window');
+  assert((await flushOutbox(at('07:59'))).held, 'flush does nothing before 08:00');
+  const f = await flushOutbox(at('08:00'));
+  assert(f.sent === 1 && f.merged === 4 && tgs.length === tg0 + 1, JSON.stringify(f));
+  const text = tgs[tgs.length - 1].body.text;
+  assert(text.split('루틴 키가').length === 2 && text.includes('· 아침 리포트가 올라왔어요') && text.includes('· 주의 신호가 있어요'), 'one line per kind');
+  assert((await db.collection('tgOutbox').get()).empty, 'outbox emptied');
+  assert(await sendTelegram('rule_only', 1, at('08:30')) === 'sent', 'after 08:00 alerts go straight out');
+});
+await t('B12b tick: no report by 08:30 → template + "간단판" Telegram; tick also flushes a leftover outbox', async () => {
+  const { tick } = require('./ai/tick.js');
+  await db.doc(`families/${FID}/aiOps/health`).set({ morningDone: null }, { merge: true });
   const cur = (await db.doc('aiAggregates/current').get()).data();
   await db.doc(`families/${FID}/aiReports/r-${cur.id}`).delete();
+  const tg0 = tgs.length;
   await tick(Date.parse(`${today}T08:40:00+09:00`));
   const rep = await db.doc(`families/${FID}/aiReports/r-${cur.id}`).get();
   assert(rep.exists && rep.get('generatedBy') === 'template', 'template report');
-  assert(tgs[tgs.length - 1].body.text.includes('간단판'), 'template Telegram');
+  assert(tgs.slice(tg0).some((m) => m.body.text.includes('간단판')), 'template Telegram');
 });
 await t('B13 deleting the family: the purge removes every leftover AI doc under it and its aggregates', async () => {
   await db.doc(`families/${FID}`).delete();
