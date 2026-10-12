@@ -1,8 +1,11 @@
+import { flushItemLog, canLog, pushEntry } from '../../ai/itemlog.js';
+import { markSeen, measureFirstPos, measureNext, bumpMeasureDay, draw as bankDraw } from '../../ai/bank.js';
+import { tryBank, hostable } from '../../games/items.js';
 import { DOM } from '../../games/registry.js';
 import { ic } from '../../icons.js';
 import { courseLen, praise } from '../../session.js';
 import { getPlan, isTrainee } from '../../data.js';
-import { beep, say, synth } from '../../sound.js';
+import { beep, canSpeakKo, say, synth } from '../../sound.js';
 import { S } from '../../state.js';
 import { h } from '../dom.js';
 import { SCREENS } from '../registry.js';
@@ -39,31 +42,59 @@ SCREENS.game = {
   },
   bind(el) {
     const s = S.sess, g = s.g, box = $('#box', el), rt0 = Date.now();
-    let spoken = '';
+    let spoken = '', ptok = 0, t0 = null, tstart = 'display', fbT = null;
+    s.cur = null; s.intr = false;
     const ctx = {
-      level: s.level, round: s.idx, box, mem: s.mem, finished: false,
-      prompt(text, speech) { $('#prompt', el).textContent = text; spoken = speech || text; say(spoken); },
+      level: s.level, round: s.idx, box, mem: s.mem, finished: false, logged: false, sess: s, game: g,
+      /* 안내 글을 보이고 읽어 줘요. 걸린 시간(rt)은 읽기가 끝난 때부터 재요 (소리가 꺼져 있거나 목소리가 없으면 글이 보인 때부터). */
+      prompt(text, speech) {
+        $('#prompt', el).textContent = text; spoken = speech || text;
+        const tok = ++ptok; t0 = null; clearTimeout(fbT);
+        const begin = how => { if (tok !== ptok || t0 != null) return; t0 = Date.now(); tstart = how; };
+        if (canSpeakKo() && say(spoken, false, null, () => begin('speech_end'))) fbT = setTimeout(() => begin('speech_end'), 25000);
+        else { say(spoken); begin('display'); }
+      },
       replay() { say(spoken, true); },
+      rt() { return { ms: t0 == null ? 0 : Date.now() - t0, start: tstart }; },
+      /* 은행 문항 꺼내기 (점검 중에는 쓰지 않아요). 없으면 null → 게임은 코드 문항으로 가요 */
+      draw(cd, formats) {
+        if (s.assess) return null;
+        const it = bankDraw(cd, s.level, formats, s.mem.usedIds);
+        if (!it) return null;
+        (s.mem.usedIds = s.mem.usedIds || []).push(it.id); markSeen(it.id);
+        return it;
+      },
+      bankItem(it) { s.cur = { id: it.id, role: it.role === 'reference' || it.role === 'anchor' ? it.role : 'training', fmt: it.format, cd: it.cdomain, lv: it.level }; },
+      /* 문항 기록 한 줄 (item 이 null 이면 코드가 만든 문항 'proc') */
+      logItem(item, o) {
+        const r = ctx.rt(), base = item ? { id: item.id, role: item.role === 'reference' || item.role === 'anchor' ? item.role : 'training', fmt: item.format, cd: item.cdomain, lv: item.level }
+          : { id: 'proc:' + g.id + ':L' + s.level + ':' + s.idx, role: 'proc', fmt: g.id, cd: g.cd || '', lv: s.level };
+        pushEntry(s, Object.assign(base, { rt: r.ms, rtStart: r.start, intr: s.intr, pos: s.idx }, o));
+        s.intr = false; ctx.logged = true;
+      },
       finish(r) {
         if (ctx.finished) return; ctx.finished = true;
-        s.correct += r.correct; s.total += r.total; if (r.metrics) s.taskMetrics = r.metrics; s.roundSec.push(Math.round((Date.now() - rt0) / 100) / 10);
-        beep(r.ok ? 'ok' : 'soft');
-        const msg = (r.ok ? praise() + ' ' : '') + r.msg;
-        $('#fb', el).innerHTML = '<div class="fb ' + (r.ok ? 'good' : 'soft') + '" id="fb-card">' + esc(msg) + '</div>';
+        if (!r.neutral) { s.correct += r.correct; s.total += r.total; }
+        if (r.metrics) s.taskMetrics = r.metrics; s.roundSec.push(Math.round((Date.now() - rt0) / 100) / 10);
+        if (!ctx.logged && !s.assess) ctx.logItem(null, { score: r.total ? r.correct / r.total : (r.ok ? 1 : 0), ok: !!r.ok, err: [], pick: ctx.pickIdx || [] });
+        beep(r.ok || r.neutral ? 'ok' : 'soft');
+        const msg = (r.ok && !r.neutral ? praise() + ' ' : '') + r.msg;
+        $('#fb', el).innerHTML = '<div class="fb ' + (r.ok || r.neutral ? 'good' : 'soft') + '" id="fb-card">' + esc(msg) + '</div>';
         say(msg);
         const nb = $('#btn-next', el); nb.hidden = false; $('#game-cta', el).classList.remove('quiet');
-        nb.textContent = s.idx + 1 < s.rounds ? '다음 문제' : (s.assess ? '이 영역 마치기' : '결과 보기');
+        nb.textContent = s.idx + 1 < s.rounds ? '다음 문제' : (s.assess ? '이 영역 마치기' : s.delayed ? '마치기' : '결과 보기');
         // 안내 글이 먼저 보이게 하고(버튼은 아래에 고정되어 있어요), 초점은 다음 버튼으로
         setTimeout(() => { try { revealFeedback(el); nb.focus({ preventScroll: true }); } catch (e) {} }, 60);
       },
       mc(o) {
         const wrap = h('div', { class: 'stack' });
-        wrap.insertAdjacentHTML('beforeend', (o.pre || '') + '<div class="choices" role="group" aria-label="보기">' + o.choices.map((c, i) => '<button type="button" class="choice" id="choice-' + i + '" data-v="' + esc(c) + '">' + esc(c) + '</button>').join('') + '</div>');
+        wrap.insertAdjacentHTML('beforeend', (o.pre || '') + '<div class="choices" role="group" aria-label="보기">' + o.choices.map((c, i) => '<button type="button" class="choice" id="choice-' + i + '" data-i="' + i + '" data-v="' + esc(c) + '">' + esc(c) + '</button>').join('') + '</div>');
         box.appendChild(wrap);
         if (o.speakChoices) { spoken = spoken + ' 보기는 ' + o.choices.join(', ') + ' 입니다.'; say(spoken); }
         wrap.addEventListener('click', e => {
           const b = e.target.closest('.choice'); if (!b || ctx.finished) return;
           const ok = b.dataset.v === o.answer;
+          ctx.pickIdx = [Number(b.dataset.i)];
           wrap.querySelectorAll('.choice').forEach(x => {
             x.disabled = true;
             if (x.dataset.v === o.answer) { x.classList.add('right'); x.dataset.tag = ok ? '정답입니다' : '정답'; }
@@ -75,6 +106,22 @@ SCREENS.game = {
       }
     };
     S.ctx = ctx;
-    g.play(ctx);
+    // 게임 밖으로 나가면(그만하기 등) 하던 판을 "중간에 그만둠"으로 기록해요. 다음 문제로 넘어갈 때(같은 게임 화면)는 해당 없어요.
+    S.onLeave = () => { if (S.screen === 'game' && S.sess === s) return; if (!s.logged) flushItemLog(s, true); };
+    if (!hostMeasure(ctx, s, g)) g.play(ctx);
   }
 };
+
+/* 이번 주 기준·앵커 문항을 게임 앞쪽(첫 문제 다음)에 끼워 넣어요. 같은 영역 게임만, 훈련하는 분 기기에서만, 하루 분량까지만. */
+function hostMeasure(ctx, s, g) {
+  if (s.assess || s.delayed || !canLog()) return false;
+  const cds = g.hostCds || [], first = measureFirstPos();
+  if (!cds.length || s.rounds < 3) return false;
+  const slots = s.rounds >= 5 ? [first, first + 1] : [first];
+  if (!slots.includes(s.idx)) return false;
+  const it = measureNext(cds, s.mem.usedIds);
+  if (!it || !hostable(it)) return false;
+  (s.mem.usedIds = s.mem.usedIds || []).push(it.id); markSeen(it.id); bumpMeasureDay();
+  if (tryBank(ctx, it)) return true;
+  return false;
+}

@@ -1,4 +1,6 @@
 import { alarmTick } from './alarm.js';
+import { startBank } from './ai/bank.js';
+import { seedDemo } from './ai/seed.js';
 import { applyDisplay } from './display.js';
 import { GAMES, catalog } from './games/registry.js';
 import { checkNudgeDialog } from './nudge.js';
@@ -196,6 +198,8 @@ export async function connectData() {
       subscribeMessages();
       try { const d = await Store.getDoc('reminders/' + S.myId); if (d) { S.myReminder = d; LS.set('bw.reminder', d); } } catch (e) {}
     }
+    if (Store.mode === 'local') { try { await seedDemo(); } catch (e) {} }   // 체험 모드: 예시 문제 은행·리포트를 넣어 둬요 (예시라고 표시돼요)
+    syncBank();
     connectFamilyOnly(); wasTrainee = isTrainee();
     // 내 역할(members.role)은 state/trainee 보다 늦게 올 수 있어요: 바뀌었을 때만 다시 맞춰요
     try { if (Store.adapter && Store.adapter.onMembers) dbUnsubs.push(Store.adapter.onMembers(() => { if (roleChanged()) onData(); })); } catch (e) {}
@@ -250,8 +254,10 @@ function syncRole() {
   wasTrainee = tr;
   if (famReadable !== null && famReadable !== canReadFamilyOnly()) connectFamilyOnly();
 }
+/* 훈련하는 분 기기는 AI 문제 묶음(aiPacks)을 한 번 구독해요 (기기에 저장해 오프라인에서도 써요) */
+function syncBank() { if (Store.adapter && isTrainee()) startBank(subscribe); }
 function onData() {
-  syncRole(); syncHeartbeat(); syncPresence();
+  syncRole(); syncHeartbeat(); syncPresence(); syncBank();
   alarmTick(true);
   if (['home', 'pick', 'family', 'assess', 'settings', 'members'].includes(S.screen)) { const keep = document.activeElement; if (!(keep && /^(INPUT|TEXTAREA)$/.test(keep.tagName))) render(true); }
   else if (S.screen === 'chat') refreshChat();

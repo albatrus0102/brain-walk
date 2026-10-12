@@ -1,4 +1,5 @@
 import { reg } from './registry.js';
+import { tryBank } from './items.js';
 import { dedupe, esc, pick, rnd, shuffle, won } from '../util.js';
 
 /* ---------- 5. 장보기 계산 ---------- */
@@ -10,8 +11,11 @@ const SHOP_ITEMS = [
 ];
 const PAYS = [[5000, '오천 원'], [10000, '만 원'], [20000, '이만 원'], [50000, '오만 원']];
 reg({
-  id: 'shop', name: '장보기 계산', domain: 'executive', desc: '시장에서 물건값을 계산해요', rounds: 5,
+  id: 'shop', name: '장보기 계산', domain: 'executive', desc: '시장에서 물건값을 계산해요', rounds: 5, cd: 'executive', hostCds: ['executive'],
   play(ctx) {
+    // 은행의 시장 장면(여러 가게·덤·거스름돈)이 있으면 그것을, 없으면 아래 코드가 만든 문제를
+    const bi = ctx.draw('executive', ['shop_calc']);
+    if (bi && tryBank(ctx, bi)) return;
     const lv = ctx.level, nItems = [2, 2, 3, 3, 4][lv - 1], easyOnly = lv <= 2, useQty = lv >= 3, maxQty = lv >= 4 ? 3 : 2;
     let lines, total, noQty, kind, pay;
     for (let tries = 0; tries < 50; tries++) {

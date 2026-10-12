@@ -1,6 +1,7 @@
 import { reg } from './registry.js';
 import { beep } from '../sound.js';
 import { toast } from '../ui/dom.js';
+import { tryBank } from './items.js';
 import { $, esc, pick, shuffle } from '../util.js';
 
 /* ---------- 6. 순서 맞추기 ---------- */
@@ -19,8 +20,11 @@ const TASKS = [
   ['잠자리 준비', ['세수와 양치를 한다', '잠옷으로 갈아입는다', '이부자리를 편다', '불을 끈다', '이불을 덮고 눕는다', '편안히 잠든다']]
 ];
 reg({
-  id: 'order', name: '순서 맞추기', domain: 'executive', desc: '일상 속 일의 순서를 생각해요', rounds: 3,
+  id: 'order', name: '순서 맞추기', domain: 'executive', desc: '일상 속 일의 순서를 생각해요', rounds: 3, cd: 'executive', hostCds: ['executive'],
   play(ctx) {
+    // 은행의 순서 문제(일상 절차, 끼어든 단계 찾기)가 있으면 그것을, 없으면 아래 코드가 만든 문제를
+    const bi = ctx.draw('executive', ['sequence']);
+    if (bi && tryBank(ctx, bi)) return;
     const k = [3, 4, 5, 6, 6][ctx.level - 1];
     ctx.mem.used = ctx.mem.used || [];
     const avail = TASKS.filter(t => !ctx.mem.used.includes(t[0]));

@@ -1,10 +1,13 @@
 import { reg } from './registry.js';
+import { tryBank } from './items.js';
 import { SEASONS, WD, dedupe, seasonOf, shuffle } from '../util.js';
 
 /* ---------- 7. 오늘은 며칠? ---------- */
 reg({
-  id: 'today', name: '오늘은 며칠?', domain: 'orientation', desc: '오늘의 날짜와 요일을 떠올려요', rounds: 5,
+  id: 'today', name: '오늘은 며칠?', domain: 'orientation', desc: '오늘의 날짜와 요일을 떠올려요', rounds: 5, cd: 'orientation', hostCds: [],
   play(ctx) {
+    // 둘째·넷째 문제는 은행의 날짜 문제(명절·다음 주 요일 등, 정답은 서버가 계산해 둔 것)가 있으면 그것으로
+    if (ctx.round % 2 === 1) { const bi = ctx.draw('orientation', ['date_q']); if (bi && tryBank(ctx, bi)) return; }
     const now = new Date(), y = now.getFullYear(), m = now.getMonth() + 1, d = now.getDate(), w = now.getDay();
     const tm = new Date(y, m - 1, d + 1), ym = new Date(y, m - 1, d - 1);
     const dim = (yy, mm) => new Date(yy, mm, 0).getDate();

@@ -4,16 +4,20 @@ import { rnd } from '../util.js';
 
 /* ---------- 9. 번쩍 찾기 (빠른 반응, 더블 디시전 방식) ---------- */
 reg({
-  id: 'flash', name: '번쩍 찾기', domain: 'speed', desc: '잠깐 보이는 그림과 별을 찾아요', rounds: 5,
+  id: 'flash', name: '번쩍 찾기', domain: 'speed', desc: '잠깐 보이는 그림과 별을 찾아요', rounds: 5, cd: 'attention', hostCds: [],
   play(ctx) {
     const ms = [500, 420, 330, 240, 150][ctx.level - 1];
-    const objs = [['🚗', '자동차'], ['🚚', '트럭']], ci = rnd(0, 1), POS = [0, 1, 2, 3, 5, 6, 7, 8], star = POS[rnd(0, 7)];
+    // 은행의 이모지 짝(emoji_set)이 있으면 가운데 그림 짝으로 써요 (이름 대신 그림만 보여요)
+    let bi = ctx.draw('attention', ['emoji_set']), bp = null;
+    if (bi && bi.body && Array.isArray(bi.body.pairs)) bp = bi.body.pairs.find(p => Array.isArray(p) && typeof p[0] === 'string' && typeof p[1] === 'string' && p[0] !== p[1]);
+    if (bp) ctx.bankItem(bi); else bi = null;
+    const objs = bp ? [[bp[0], bp[0]], [bp[1], bp[1]]] : [['🚗', '자동차'], ['🚚', '트럭']], ci = rnd(0, 1), POS = [0, 1, 2, 3, 5, 6, 7, 8], star = POS[rnd(0, 7)];
     ctx.prompt('가운데 그림과 별이 아주 잠깐 나타나요. 준비되면 버튼을 눌러 주세요. 천천히 하셔도 괜찮아요.');
     const grid = h('div', { class: 'grid flashgrid', style: '--cols:3', id: 'fgrid', 'aria-hidden': 'true' });
     const cells = Array.from({ length: 9 }, (_, i) => { const c = h('div', { class: 'cell', id: 'fcell-' + i }); grid.append(c); return c; });
     const step = h('div', { id: 'fstep', class: 'stack' });
     ctx.box.append(h('div', { class: 'stack' }, grid, step));
-    let centerOk = false;
+    let centerOk = false, centerPick = -1;
     step.append(btnEl('준비됐어요', 'filled', () => {
       if (ctx.finished) return; step.textContent = '';
       cells[4].textContent = '＋';
@@ -24,7 +28,7 @@ reg({
     }, 'btn-ready'));
     function askCenter() {
       ctx.prompt('가운데에 나온 그림은 무엇이었나요?');
-      objs.forEach((o, i) => step.append(h('button', { type: 'button', class: 'choice', id: 'fc-' + i, onclick: () => { centerOk = i === ci; askPos(); } }, o[0] + ' ' + o[1])));
+      objs.forEach((o, i) => step.append(h('button', { type: 'button', class: 'choice', id: 'fc-' + i, onclick: () => { centerOk = i === ci; centerPick = i; askPos(); } }, o[0] === o[1] ? o[0] : o[0] + ' ' + o[1])));
     }
     function askPos() {
       step.textContent = ''; ctx.prompt('별은 어디에 있었나요? 그 자리를 눌러 주세요.');
@@ -36,6 +40,7 @@ reg({
           const posOk = i === star;
           grid.querySelectorAll('.cell').forEach(x => { x.disabled = true; });
           grid.children[star].textContent = '⭐'; grid.children[star].classList.add('right'); if (!posOk) b.classList.add('picked');
+          if (bi) ctx.logItem(bi, { score: ((centerOk ? 1 : 0) + (posOk ? 1 : 0)) / 2, ok: centerOk && posOk, err: [], pick: [centerPick, i] });
           const parts = [centerOk ? '가운데 그림은 맞췄어요.' : '가운데 그림은 ' + objs[ci][1] + '였어요.', posOk ? '별 위치도 맞췄어요.' : '별은 초록색 칸에 있었어요.'];
           ctx.finish({ correct: (centerOk ? 1 : 0) + (posOk ? 1 : 0), total: 2, ok: centerOk && posOk, msg: parts.join(' ') + (centerOk && posOk ? '' : ' 아주 빨리 지나가서 누구나 어려워요. 괜찮아요.') });
         });

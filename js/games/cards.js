@@ -6,10 +6,13 @@ import { $, pick, shuffle } from '../util.js';
 const CARD_ITEMS = [['🍎','사과'],['🍌','바나나'],['🍇','포도'],['🍓','딸기'],['🍊','귤'],['🍉','수박'],['🍑','복숭아'],['🍐','배'],
   ['🐶','강아지'],['🐱','고양이'],['🐰','토끼'],['🐻','곰'],['🐼','판다'],['🐸','개구리'],['🐥','병아리'],['🐢','거북이'],['🌸','벚꽃'],['🌻','해바라기'],['🚗','자동차'],['⭐','별']];
 reg({
-  id: 'cards', name: '카드 짝 맞추기', domain: 'memory', desc: '같은 그림 카드 두 장을 찾아요', rounds: 2,
+  id: 'cards', name: '카드 짝 맞추기', domain: 'memory', desc: '같은 그림 카드 두 장을 찾아요', rounds: 2, cd: 'memory', hostCds: [],
   play(ctx) {
-    const pairs = [3, 4, 6, 8, 10][ctx.level - 1], cols = pairs <= 3 ? 3 : 4;
-    const items = pick(CARD_ITEMS, pairs);
+    // 은행의 주제별 카드(card_theme)가 있으면 그 그림으로, 없으면 코드가 고른 그림으로
+    let bi = ctx.draw('memory', ['card_theme']), bank = null;
+    if (bi && bi.body && Array.isArray(bi.body.cards) && bi.body.cards.length >= 3 && bi.body.cards.every(c => Array.isArray(c) && typeof c[0] === 'string' && typeof c[1] === 'string')) { bank = bi.body.cards.slice(0, 10).map(c => [c[0], c[1]]); ctx.bankItem(bi); } else bi = null;
+    const pairs = bank ? bank.length : [3, 4, 6, 8, 10][ctx.level - 1], cols = pairs <= 3 ? 3 : 4;
+    const items = bank || pick(CARD_ITEMS, pairs);
     const cards = shuffle(items.concat(items).map((it, i) => ({ e: it[0], n: it[1], k: i })));
     let open = [], matched = 0, misses = 0, lock = false, done = false;
     ctx.prompt('같은 그림 카드 두 장을 찾아 눌러 주세요. 천천히 하셔도 괜찮아요.');
@@ -28,6 +31,7 @@ reg({
           faceUp(a, 'ok'); faceUp(c, 'ok'); matched++; open = []; beep('ok'); st.textContent = '짝이 맞았어요! 잘하셨어요.';
           if (matched === pairs) {
             done = true;
+            if (bi) ctx.logItem(bi, { score: pairs / (pairs + misses), ok: misses === 0, err: [], pick: [] });
             ctx.finish({ correct: pairs, total: pairs + misses, ok: true, msg: '모두 찾으셨어요! ' + (misses ? '다시 고른 횟수는 ' + misses + '번이에요. 괜찮아요.' : '한 번도 틀리지 않으셨어요.') });
           }
         } else {

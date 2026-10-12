@@ -1,4 +1,6 @@
 import { reg } from './registry.js';
+import { available } from '../ai/bank.js';
+import { tryBank } from './items.js';
 import { dedupe, esc, pick, shuffle } from '../util.js';
 
 /* ---------- 8. 속담·단어 잇기 ---------- */
@@ -46,6 +48,7 @@ const CATS = [
 ];
 const CATMAP = Object.fromEntries(CATS.map(c => [c[0], c]));
 const NEAR = { '과일': ['채소'], '채소': ['과일', '곡식'], '곡식': ['채소'], '나라': ['도시'], '도시': ['나라'], '가구': ['가전제품'], '가전제품': ['가구', '주방도구'], '주방도구': ['가전제품'] };
+const LANG_FORMATS = ['lang_complete', 'lang_relation', 'lang_category', 'word_find', 'analogy'];
 function catQuestion(level) {
   const nC = level === 1 ? 3 : 4;
   const cat = pick(CATS, 1)[0];
@@ -65,10 +68,16 @@ function catQuestion(level) {
   return { q: '다음 중 ‘' + cat[0] + '’에 해당하는 것을 골라 주세요.', ans, choices: shuffle(outs.concat([ans])), info: ans + '은(는) ' + cat[0] + '이에요.' };
 }
 reg({
-  id: 'proverb', name: '속담·단어 잇기', domain: 'orientation', desc: '속담을 완성하고 낱말을 떠올려요', rounds: 5,
+  id: 'proverb', name: '말 놀이', domain: 'orientation', desc: '속담을 완성하고 낱말을 떠올려요', rounds: 5, cd: 'language', hostCds: ['language'],
   play(ctx) {
-    if (!ctx.mem.plan) { ctx.mem.plan = shuffle(['p', 'p', 'p', 'c', 'c']); ctx.mem.pv = shuffle(PROVERBS.map((_, i) => i)); }
-    const typ = ctx.mem.plan[ctx.round];
+    // 은행의 말 문제(문장 완성·비슷한 말·범주·설명 듣고 낱말 찾기·낱말 관계)가 있으면 세 번은 그것으로, 속담은 그대로 두 번
+    if (!ctx.mem.plan) { ctx.mem.plan = (!ctx.sess.assess && available('language', ctx.level, LANG_FORMATS)) ? shuffle(['p', 'p', 'b', 'b', 'b']) : shuffle(['p', 'p', 'p', 'c', 'c']); ctx.mem.pv = shuffle(PROVERBS.map((_, i) => i)); }
+    let typ = ctx.mem.plan[ctx.round];
+    if (typ === 'b') {
+      const bi = ctx.draw('language', LANG_FORMATS);
+      if (bi && tryBank(ctx, bi)) return;
+      typ = 'c';
+    }
     const lv = ctx.level, nC = lv === 1 ? 3 : 4;
     if (typ === 'p') {
       const p = PROVERBS[ctx.mem.pv.pop()], rev = lv >= 3 && (lv >= 4 || Math.random() < 0.5), ix = rev ? 1 : 0;

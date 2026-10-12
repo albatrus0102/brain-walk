@@ -1,3 +1,6 @@
+import { hasAny } from './ai/bank.js';
+import { flushItemLog } from './ai/itemlog.js';
+import { pmMidReminder, pmStart } from './ai/pm.js';
 import { allAssessments, allCheckins, chatAvail, courseStatus, getLevel, getPlan, isTrainee, remoteSet, saveSession, todayProgressDoc, todayS } from './data.js';
 import { DOMAINS, GAMES, catalog } from './games/registry.js';
 import { assessTotal } from './logic.js';
@@ -8,22 +11,31 @@ import { S } from './state.js';
 import { go } from './ui/shell.js';
 import { LS, mean, rnd, ymd } from './util.js';
 
+/* 오늘 코스: 계획대로 만들되, 문제 은행이 비어 있는 새 AI 게임은 빼요 (은행이 비면 앱은 예전처럼 돌아가요) */
+export function buildToday(plan, date, cat) {
+  const base = buildCourse(plan, date, cat), ok = base.filter(id => !GAMES[id].bank || hasAny(GAMES[id].cd, GAMES[id].formats));
+  if (ok.length === base.length) return base;
+  return ok.length ? ok : buildCourse(plan, date, cat.filter(g => !GAMES[g.id].bank));
+}
+
 /* ================= 세션 진행 ================= */
 export { catalog };
 /* 오늘 코스의 게임 수: 시작한 코스가 있으면 그 길이(진행 중에는 계획이 바뀌어도 그대로), 아니면 계획대로 */
-export const courseLen = () => (S.course && S.course.date === todayS() && S.course.games ? S.course.games.length : buildCourse(getPlan(), todayS(), catalog()).length);
+export const courseLen = () => (S.course && S.course.date === todayS() && S.course.games ? S.course.games.length : buildToday(getPlan(), todayS(), catalog()).length);
 /* opts: inCourse(오늘의 코스로 기록), flow(코스 흐름 안: 끝나면 쉬는 화면), assess, level, rounds, key */
 export function startSession(id, opts) {
   opts = opts || {};
   const g = GAMES[id], plan = getPlan();
   S.sess = { g, level: opts.level || effectiveLevel(id, plan, getLevel(id)), idx: 0, correct: 0, total: 0, t0: Date.now(), inCourse: !!opts.inCourse, flow: !!(opts.flow || opts.inCourse), assess: !!opts.assess, key: opts.key || null,
-    rounds: opts.rounds || roundsFor(g, plan), mem: {}, roundSec: [] };
+    rounds: opts.rounds || roundsFor(g, plan), mem: {}, roundSec: [], items: [], date: todayS(), hour: new Date().getHours(), logged: false };
   if (S.sess.inCourse) progressGameStart(id, 'course'); else if (S.sess.assess) progressGameStart(id, 'check');
   go('game');
 }
 export function finishSession() {
   const s = S.sess, now = new Date();
-  const total = Math.max(1, s.total), acc = s.correct / total, dur = Math.max(1, Math.round((Date.now() - s.t0) / 1000));
+  // 코스 끝의 "늦게 묻는 이야기 질문"이 끝났어요: 기록만 남기고 코스를 마무리해요
+  if (s.delayed) { s.sid = s.sid || Date.now() + '-d'; s.logGameId = 'story'; s.logInCourse = true; flushItemLog(s, false, s.sid); S.course.delayed = []; S.course.delayedDone = true; return finishCourse(); }
+  const total = Math.max(1, s.total), acc = s.total ? s.correct / total : 0.7, dur = Math.max(1, Math.round((Date.now() - s.t0) / 1000));
   if (s.assess) {
     progressGameFinish(s.g.id, { acc, correct: s.correct, total: s.total, sec: dur, level: s.level });
     if (s.g.task) S.assess.tasks[s.g.id] = { domain: s.g.domain, score: Math.round(acc * 100), m: s.taskMetrics || {} };
@@ -41,6 +53,7 @@ export function finishSession() {
   const rec = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 8), date: ymd(now), ts: Date.now(), gameId: s.g.id, gameName: s.g.name, domain: s.g.domain,
     level: s.level, correct: s.correct, total: s.total, accuracy: Math.round(acc * 1000) / 1000, durationSec: dur, inCourse: s.inCourse, roundSec: s.roundSec, userId: S.myId || null };
   saveSession(rec, nl.level, nl.store);
+  s.sid = rec.id; flushItemLog(s, false, rec.id);       // 문항별 기록 (AI 리포트용, 훈련하는 분 기기만)
   S.last = { rec, old: s.level, nl: nl.level, kind: nl.kind, score: Math.round(acc * 100) };
   if (s.flow && S.course) {
     S.course.results.push({ gameId: s.g.id, correct: s.correct, total: s.total, acc, dur, kind: nl.kind });
@@ -48,7 +61,7 @@ export function finishSession() {
       LS.set('bw.course', { date: S.course.date, games: S.course.games, results: S.course.results });
       progressGameFinish(s.g.id, { acc, correct: s.correct, total: s.total, sec: dur, level: s.level });
     }
-    if (isTrainee()) return S.course.results.length >= S.course.games.length ? finishCourse() : go('courseBreak');
+    if (isTrainee()) { if (S.course.results.length < S.course.games.length) pmMidReminder(); return S.course.results.length >= S.course.games.length ? finishCourse() : go('courseBreak'); }
   }
   go('result');
 }
@@ -63,14 +76,14 @@ function resumeSource(today) {
   const saved = LS.get('bw.course', null);
   if (saved && saved.date === today && Array.isArray(saved.results)) {
     if (Array.isArray(saved.games) && saved.games.length) { if (saved.results.length < saved.games.length) return { games: saved.games.slice(), results: saved.results }; }
-    else { const games = buildCourse(getPlan(), today, catalog()); if (saved.results.length < games.length) return { games, results: saved.results }; }
+    else { const games = buildToday(getPlan(), today, catalog()); if (saved.results.length < games.length) return { games, results: saved.results }; }
   }
   return null;
 }
 /* 홈 화면용 오늘 코스 요약: 끝났는지, 몇 개 중 몇 개 했는지, 예상 시간 */
 export function courseInfo() {
   const today = todayS(), plan = getPlan(), cat = catalog(), r = resumeSource(today), cs = courseStatus(), p = todayProgressDoc();
-  const N = r ? r.games.length : (p && p.kind === 'course' && Array.isArray(p.planned) && p.planned.length ? p.planned.length : buildCourse(plan, today, cat).length);
+  const N = r ? r.games.length : (p && p.kind === 'course' && Array.isArray(p.planned) && p.planned.length ? p.planned.length : buildToday(plan, today, cat).length);
   const n = r ? r.results.length : 0;
   return { done: cs.done, n, N, started: n > 0, minutes: estimateMinutes(plan, today, cat) };
 }
@@ -80,9 +93,10 @@ export function startCourse(opts) {
   const replay = !!((opts && opts.replay) || done);
   let games, results = [];
   // 점검 날(진행 문서가 'check')의 "한 번 더"는 점검 과제가 아니라 오늘의 코스를 해요
-  if (replay) games = (p && p.kind === 'course' && Array.isArray(p.planned) && p.planned.length ? p.planned.slice() : buildCourse(getPlan(), today, catalog()));
-  else { const r = resumeSource(today); games = r ? r.games : buildCourse(getPlan(), today, catalog()); results = r ? r.results : []; }
-  S.course = { date: today, games, results, replay };
+  if (replay) games = (p && p.kind === 'course' && Array.isArray(p.planned) && p.planned.length ? p.planned.slice() : buildToday(getPlan(), today, catalog()));
+  else { const r = resumeSource(today); games = r ? r.games : buildToday(getPlan(), today, catalog()); results = r ? r.results : []; }
+  S.course = { date: today, games, results, replay, delayed: [] };
+  pmStart(!replay && !results.length);
   nextCourseStep();
 }
 export function nextCourseStep() {
@@ -93,9 +107,16 @@ export function nextCourseStep() {
 /* 코스의 마지막 게임 뒤: (켜져 있고 오늘 아직이면) 생활 체크를 흐름 안에서 묻고, 그다음 축하 화면 */
 export function finishCourse() {
   const c = S.course;
+  // 이야기 듣기에서 모아 둔 "늦게 묻는 질문"을 마지막 게임 뒤에 물어요 (약 10분 뒤 회상)
+  if (!c.replay && !c.delayedDone && c.delayed && c.delayed.length && isTrainee()) return startDelayed();
   if (!c.replay) S.notifyPending = true;
   if (!c.replay && isTrainee() && getPlan().checkin && !allCheckins()[todayS()]) { S.ciFlow = true; S.ci = {}; return go('checkin'); }
   S.ciFlow = false; go('courseDone');
+}
+function startDelayed() {
+  const c = S.course;
+  S.sess = { g: GAMES.delayedq, level: 1, idx: 0, correct: 0, total: 0, t0: Date.now(), inCourse: false, flow: false, assess: false, key: null, delayed: true, rounds: c.delayed.length, mem: {}, roundSec: [], items: [], date: todayS(), hour: new Date().getHours(), logged: false };
+  go('game');
 }
 export function maybeNotify() {
   if (!S.notifyPending) return; S.notifyPending = false;

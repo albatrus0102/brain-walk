@@ -68,7 +68,7 @@ SCREENS.adminPlan = {
     const c3 = '<div class="pick-list" role="radiogroup" aria-label="게임 순서 방식">' + opt('rotate', '날마다 바꾸기 (추천)', '다섯 영역을 골고루, 날마다 다른 게임으로 해요.') + opt('fixed', '정한 순서대로', '매일 같은 순서로 해요.') + '</div>' +
       '<ul class="grows" id="plan-games">' + order.map((id, i) => {
         const g = GAMES[id], on = d.games[id].on;
-        return '<li class="grow" data-g="' + id + '"><span class="gnm"><strong>' + esc(g.name) + '</strong><span class="pill">' + esc(DOM[g.domain].name) + '</span></span><span class="gctl">' +
+        return '<li class="grow" data-g="' + id + '"><span class="gnm"><strong>' + esc(g.name) + '</strong><span class="pill">' + esc(DOM[g.domain].name) + '</span>' + (g.bank ? '<span class="pill aipill">AI 문제</span>' : '') + '</span><span class="gctl">' +
           (d.order === 'fixed' ? '<button type="button" class="step sm" id="plan-up-' + id + '" data-act="pl-move" data-id="' + id + '" data-d="-1" aria-label="' + esc(g.name) + ' 위로"' + (ro || i === 0 ? ' disabled' : '') + '>▲</button><button type="button" class="step sm" id="plan-down-' + id + '" data-act="pl-move" data-id="' + id + '" data-d="1" aria-label="' + esc(g.name) + ' 아래로"' + (ro || i === order.length - 1 ? ' disabled' : '') + '>▼</button>' : '') +
           '<button class="switch" id="plan-on-' + id + '" type="button" role="switch" aria-checked="' + on + '" aria-label="' + esc(g.name) + ' 켜기" data-act="pl-gon" data-id="' + id + '"' + dis + '></button></span></li>';
       }).join('') + '</ul><p class="t-body" id="plan-today2">오늘: ' + esc(list.join(' → ')) + '</p><p class="t-body muted" id="plan-tmr">내일: ' + esc(tmr.join(' → ')) + '</p>';

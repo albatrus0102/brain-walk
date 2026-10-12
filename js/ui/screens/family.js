@@ -1,4 +1,4 @@
-import { allAssessments, allCheckins, allSessions, chatAvail, dateSet, getLevel, isTrainee, streakOf } from '../../data.js';
+import { allAssessments, allCheckins, allSessions, chatAvail, dateSet, getLevel, getPlan, isTrainee, streakOf } from '../../data.js';
 import { DOMAINS, GAMES, GAME_ORDER } from '../../games/registry.js';
 import { P, ic } from '../../icons.js';
 import { programInfo, weeklyTrend } from '../../logic.js';
@@ -60,7 +60,7 @@ SCREENS.family = {
       (cis[today] ? '<div class="mt"><button class="btn text fit" id="talk-check" type="button" data-act="talkcheck"' + (chatAvail() ? '' : ' hidden') + '>오늘 생활 체크에 대해 이야기하기</button></div>' : '') + '</section>';
     o += sleepReportHtml();
     if (!isTrainee()) o += taskReportHtml() + surveyReportHtml() + clinicalReportHtml(false);
-    o += '<section class="card outlined" aria-labelledby="lv-h"><h2 class="t-title" id="lv-h">훈련별 현재 단계</h2><div class="mt">' + GAME_ORDER.map(id => '<div class="lvrow"><span>' + esc(GAMES[id].name) + '</span><span class="t-body">' + getLevel(id) + '단계 ' + levelDots(getLevel(id)) + '</span></div>').join('') + '</div></section>';
+    o += '<section class="card outlined" aria-labelledby="lv-h"><h2 class="t-title" id="lv-h">훈련별 현재 단계</h2><div class="mt">' + GAME_ORDER.filter(id => !GAMES[id].defOff || getPlan().games[id].on).map(id => '<div class="lvrow"><span>' + esc(GAMES[id].name) + '</span><span class="t-body">' + getLevel(id) + '단계 ' + levelDots(getLevel(id)) + '</span></div>').join('') + '</div></section>';
     o += '<section class="card tertiary" id="report-disclaimer"><p class="t-body">이 리포트는 <b>진단이 아니에요.</b> 의료기기가 아니며 훈련 기록을 보기 쉽게 정리한 것뿐이에요. 점수가 계속 낮아지면 치매안심센터(국번 없이 <span class="nw">1899-9988</span>)나 병원에서 상담받으세요.</p></section>';
     o += '<p class="t-small muted" id="family-note-static">' + (Store.shared && !S.dbError ? '이 기록은 같은 가족방에 들어온 가족만 볼 수 있어요.' : '지금은 이 기기에 저장된 기록만 보여요. (체험 모드)') + '</p><p class="sync-note" id="sync-note"></p></div>';
     return o;

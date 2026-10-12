@@ -5,7 +5,7 @@ import { $, pick } from '../util.js';
 /* ---------- 4. 숫자 순서대로 누르기 ---------- */
 const KO_LET = ['가','나','다','라','마','바','사'];
 reg({
-  id: 'trail', name: '숫자 순서대로 누르기', domain: 'attention', desc: '1부터 차례대로 눌러요', rounds: 3,
+  id: 'trail', name: '숫자 순서대로 누르기', domain: 'attention', desc: '1부터 차례대로 눌러요', rounds: 3, cd: 'attention', hostCds: [],
   play(ctx) {
     const lv = ctx.level, N = [5, 7, 10, 12, 14][lv - 1];
     let seq = [];

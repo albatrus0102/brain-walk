@@ -1,12 +1,21 @@
 import { reg } from './registry.js';
 import { toast } from '../ui/dom.js';
+import { tryBank } from './items.js';
 import { $, esc, pick, shuffle } from '../util.js';
 
 /* ---------- 2. 단어 기억하기 ---------- */
 const WORDS = ['사과','의자','우산','시계','거울','모자','신발','가방','안경','열쇠','전화기','책','연필','컵','숟가락','접시','냄비','이불','베개','수건','비누','칫솔','달력','꽃병','나무','구름','강아지','고양이','바나나','포도','수박','감자','당근','두부','계란','우유','버스','자전거','기차','비행기','학교','병원','시장','공원','바다','산','별','달','해','라디오'];
 reg({
-  id: 'words', name: '단어 기억하기', domain: 'memory', desc: '보여 드린 단어를 기억해요', rounds: 3,
+  id: 'words', name: '단어 기억하기', domain: 'memory', desc: '보여 드린 단어를 기억해요', rounds: 3, cd: 'memory', hostCds: ['memory'],
+  /* 은행에 주제별 낱말 문항(word_recog)이 있으면 그것을, 없으면 아래 코드가 만든 문항을 써요 */
   play(ctx) {
+    const bi = ctx.draw('memory', ['word_recog']);
+    if (bi && tryBank(ctx, bi)) return;
+    playCode(ctx);
+  }
+});
+function playCode(ctx) {
+  {
     const N = [3, 4, 5, 6, 7][ctx.level - 1];
     const shown = pick(WORDS, N);
     const rest = shuffle(WORDS.filter(w => !shown.includes(w)));
@@ -47,5 +56,4 @@ reg({
       upd();
     };
   }
-});
-
+}

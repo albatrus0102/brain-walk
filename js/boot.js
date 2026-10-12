@@ -1,4 +1,5 @@
 import { alarmTick } from './alarm.js';
+import { needConsent } from './ai/consent.js';
 import { allAssessments, connectData, ensureProgram, isTrainee, setPlanRaw } from './data.js';
 import { checkNudgeDialog } from './nudge.js';
 import { startAssessment } from './session.js';
@@ -25,6 +26,8 @@ export async function startFlow() {
   S.firstRunBusy = true;
   try {
     if (!LS.get('bw.seenDisc', false)) await askDialog('처음 오셨네요', DISCLAIMER_LONG, [{ label: '확인', kind: 'filled', run: () => LS.set('bw.seenDisc', true) }]);
+    // AI 리포트 안내: 처음 한 번 (알겠어요를 누르면 이어서 startFlow 를 다시 불러요)
+    if (isTrainee() && await needConsent()) { S.firstRunBusy = false; go('aiConsent'); return; }
     if (isTrainee() && S.plan && S.plan.checkEveryWeeks && !allAssessments().length && !LS.get('bw.offered', false)) {
       LS.set('bw.offered', true);
       await askDialog('두뇌 건강 점검을 먼저 해 볼까요?', '지금 상태를 한 번 기록해 두면 나중에 변화를 비교할 수 있어요. 약 15분 걸려요 (두 번에 나눠 해도 돼요). 건너뛰어도 괜찮아요.', [
