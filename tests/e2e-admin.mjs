@@ -133,6 +133,10 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   await page.click('#btn-main'); await page.waitForSelector('#g-title'); await noHScroll(page, '최대: 게임');
   await finishGame(page); await page.waitForSelector('#brk-h'); await noHScroll(page, '최대: 쉬는 화면');
   await page.screenshot({ path: SHOTS + '/learner-between-games-max.png' });
+  // 작은 휴대폰(360×740)·최대 글자: 화면 아래에 붙은 버튼이 다음 게임 소개를 가리지 않아요
+  await page.setViewportSize({ width: 360, height: 740 }); await page.evaluate(() => window.scrollTo(0, 0)); await page.waitForTimeout(150);
+  const cov = await page.evaluate(() => { const cta = document.querySelector('#screen .cta').getBoundingClientRect().top; return Math.round(document.querySelector('#brk-next .t-title').getBoundingClientRect().bottom - cta); });
+  must(cov <= 4, '360×740 최대: "다음은 ‘…’"가 고정 버튼에 가려지지 않아요 (' + cov + 'px)');
   await page.close();
 }
 
