@@ -51,12 +51,18 @@ await t('list families denied', getDocs(collection(db('uidA'), 'families')), fal
 }
 // expired code
 {
-  const d = db('uidB');
-  await t('member creates expired code', setDoc(doc(d, 'joinCodes', 'EXP234'), { familyId: F, createdBy: 'mB', createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 1500) }));
+  // 코드 만들기·바꾸기는 관리자만 (DESIGN.md §3). 예전에는 아무 구성원(B)이나 했어요: 이제 방 주인 A 가 하고, B 는 거부돼요.
+  const d = db('uidA');
+  await t('non-admin creates join code denied', setDoc(doc(db('uidB'), 'joinCodes', 'BBB234'), { familyId: F, createdBy: 'mB', createdTs: serverTimestamp(), expiresTs: in7d() }), false);
+  await t('non-admin rotates joinCode denied', (async () => { const dd = db('uidB'), b = writeBatch(dd); b.set(doc(dd, 'joinCodes', 'BBC234'), { familyId: F, createdBy: 'mB', createdTs: serverTimestamp(), expiresTs: in7d() }); b.update(doc(dd, 'families', F), { joinCode: 'BBC234' }); await b.commit(); })(), false);
+  await t('non-admin deletes join code denied', deleteDoc(doc(db('uidB'), 'joinCodes', CODE)), false);
+  await t('non-admin renames family denied', updateDoc(doc(db('uidB'), 'families', F), { name: '해킹' }), false);
+  await t('admin (owner) renames family', updateDoc(doc(d, 'families', F), { name: '우리 집' }));
+  await t('member creates expired code', setDoc(doc(d, 'joinCodes', 'EXP234'), { familyId: F, createdBy: 'mA', createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 1500) }));
   await new Promise(r => setTimeout(r, 2000));
   await t('get expired code denied', getDoc(doc(db('y'), 'joinCodes', 'EXP234')), false);
   await t('code for other family denied', setDoc(doc(db('uidB'), 'joinCodes', 'OTH234'), { familyId: 'famX', createdBy: 'mB', createdTs: serverTimestamp(), expiresTs: in7d() }), false);
-  await t('rotate family joinCode', (async () => { const b = writeBatch(d); b.set(doc(d, 'joinCodes', 'NEW234'), { familyId: F, createdBy: 'mB', createdTs: serverTimestamp(), expiresTs: in7d() }); b.update(doc(d, 'families', F), { joinCode: 'NEW234' }); await b.commit(); })());
+  await t('rotate family joinCode', (async () => { const b = writeBatch(d); b.set(doc(d, 'joinCodes', 'NEW234'), { familyId: F, createdBy: 'mA', createdTs: serverTimestamp(), expiresTs: in7d() }); b.update(doc(d, 'families', F), { joinCode: 'NEW234' }); await b.commit(); })());
 }
 // ---- messages
 const dA = db('uidA'), dB = db('uidB');
@@ -103,8 +109,10 @@ await t('B edits A session denied', updateDoc(doc(dB, `families/${F}/sessions/s1
 await t('assessment', setDoc(doc(dA, `families/${F}/assessments/1`), { date: today, ts: Date.now(), scores: { memory: 80 }, total: 80, userId: 'mA' }));
 await t('checkin own id', setDoc(doc(dA, `families/${F}/checkins/${today}-mA`), { date: today, ts: Date.now(), mood: 4, sleepHours: 7, exercise: true, social: false, meals: true, userId: 'mA' }));
 await t('checkin wrong id denied', setDoc(doc(dA, `families/${F}/checkins/${today}-mB`), { date: today, ts: Date.now(), userId: 'mA' }), false);
-await t('alarm', setDoc(doc(dB, `families/${F}/state/alarm`), { time: '10:00', days: [0, 1, 2, 3, 4, 5, 6], updatedBy: 'mB', updatedTs: Date.now() }));
-await t('alarm bad day denied', setDoc(doc(dB, `families/${F}/state/alarm`), { time: '10:00', days: [7], updatedBy: 'mB', updatedTs: Date.now() }), false);
+// 알람은 관리자만 (예전에는 가족 누구나). A = 방 주인 = 관리자, B = 관리자 아님.
+await t('alarm by non-admin denied', setDoc(doc(dB, `families/${F}/state/alarm`), { time: '10:00', days: [0, 1, 2, 3, 4, 5, 6], updatedBy: 'mB', updatedTs: Date.now() }), false);
+await t('alarm', setDoc(doc(dA, `families/${F}/state/alarm`), { time: '10:00', days: [0, 1, 2, 3, 4, 5, 6], updatedBy: 'mA', updatedTs: Date.now() }));
+await t('alarm bad day denied', setDoc(doc(dA, `families/${F}/state/alarm`), { time: '10:00', days: [7], updatedBy: 'mA', updatedTs: Date.now() }), false);
 await t('levels', setDoc(doc(dA, `families/${F}/state/levels`), { levels: { flash: 2 }, updatedTs: Date.now() }));
 await t('program', setDoc(doc(dA, `families/${F}/state/program`), { startDate: today }));
 await t('unknown state doc denied', setDoc(doc(dA, `families/${F}/state/evil`), { x: 1 }), false);
@@ -215,6 +223,9 @@ await t('B (not owner) cannot list A devices', getDocs(collection(dB, `families/
   }
   // 하루 전에 들어온 가족(mB)은 아버지의 복구 코드를 만들 수 있어요 (joinedTs 를 하루 전으로).
   await env.withSecurityRulesDisabled(async c => { await updateDoc(doc(c.firestore(), `families/${F}/members/mB`), { joinedTs: Timestamp.fromMillis(Date.now() - 2 * 864e5) }); });
+  // 다른 사람의 복구 코드는 이제 관리자만: 하루 지난 가족이라도 관리자가 아니면 거부, 방 주인이 관리자로 지정하면 허용.
+  await t('non-admin family (24h+) cannot issue recovery code for other', setDoc(doc(dB, 'transferCodes', 'TRF666'), { familyId: F, memberId: 'mA', createdBy: 'mB', createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 15 * 60e3) }), false);
+  await t('owner grants admin to B', updateDoc(doc(dA, 'families', F), { admins: ['mB'] }));
   await t('issue transfer code', setDoc(doc(dB, 'transferCodes', T), { familyId: F, memberId: 'mA', createdBy: 'mB', createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 15 * 60e3) }));
   await t('transfer code TTL > 30m denied', setDoc(doc(dB, 'transferCodes', 'TRF999'), { familyId: F, memberId: 'mA', createdBy: 'mB', createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 60 * 60e3) }), false);
   const d = db('uidA2');
@@ -230,8 +241,184 @@ await t('B (not owner) cannot list A devices', getDocs(collection(dB, `families/
 }
 // ---- leave / remove
 await t('B cannot remove A', updateDoc(doc(dB, `families/${F}/members/mA`), { leftTs: serverTimestamp() }), false);
+// ---- 방 주인이었던 훈련하는 분은 관리자라서, '모두 삭제' 중에 자기 role 을 잠깐 family 로 바꿀 수 있어요 (membership.deleteFamily)
+await t('trainee-owner (admin) may flip own role for delete-all', updateDoc(doc(db('uidA2'), `families/${F}/members/mA`), { role: 'family' }));
+await t('admin (non-owner) cannot transfer ownership', updateDoc(doc(dB, 'families', F), { ownerMemberId: 'mB' }), false);
 await t('owner transfers ownership', updateDoc(doc(db('uidA2'), 'families', F), { ownerMemberId: 'mB' }));
 await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F)));
+
+// =============================================================================
+// 관리자·역할·훈련 계획·화면 설정·진행 상황·하트비트 (DESIGN.md §1–§3)
+// 새 가족 F2: m1 아들(방 주인, 가족 역할) / m2 아버지(훈련하는 분) / m3 딸(가족) / m4 사위(훈련하는 분으로 들어왔다가 가족으로) / m5 손자(가족)
+// =============================================================================
+{
+  const { planDoc, displayDoc, progressStart, progressFinish } = await import('../js/program.js');
+  const CAT = [['cards', 'memory', 2], ['words', 'memory', 3], ['odd', 'attention', 5], ['trail', 'attention', 3], ['shop', 'executive', 5], ['order', 'executive', 3], ['today', 'orientation', 5], ['proverb', 'orientation', 5], ['flash', 'speed', 5]].map(([id, domain, rounds]) => ({ id, domain, rounds }));
+  const F2 = 'fam2', C2 = 'FAM234', P = `families/${F2}`;
+  const d1 = db('u1'), d2 = db('u2'), d3 = db('u3'), d4 = db('u4'), d5 = db('u5');
+  const join = (dd, u, m, role, name) => { const b = writeBatch(dd); b.set(doc(dd, `${P}/uids/${u}`), { memberId: m, via: 'join', code: C2, addedTs: serverTimestamp() }); b.set(doc(dd, `${P}/members/${m}`), { name, role, joinedTs: serverTimestamp() }); return b.commit(); };
+  const ageMember = (m, ms) => env.withSecurityRulesDisabled(async c => { await updateDoc(doc(c.firestore(), `${P}/members/${m}`), { joinedTs: Timestamp.fromMillis(Date.now() - ms) }); });
+  {
+    const b = writeBatch(d1);
+    b.set(doc(d1, 'families', F2), { createdBy: 'u1', createdTs: serverTimestamp(), ownerMemberId: 'm1', joinCode: C2, name: '둘째네', schemaVersion: 1 });
+    b.set(doc(d1, 'joinCodes', C2), { familyId: F2, createdBy: 'm1', createdTs: serverTimestamp(), expiresTs: in7d() });
+    b.set(doc(d1, `${P}/uids/u1`), { memberId: 'm1', via: 'create', addedTs: serverTimestamp() });
+    b.set(doc(d1, `${P}/members/m1`), { name: '아들', role: 'family', joinedTs: serverTimestamp() });
+    await t('F2: helper founds family as family role (no admins field = legacy shape)', b.commit());
+  }
+  await t('F2: father joins as trainee', join(d2, 'u2', 'm2', 'trainee', '아버지'));
+  await t('F2: new trainee claims the empty trainee slot (initial join)', setDoc(doc(d2, `${P}/state/trainee`), { userId: 'm2', displayLabel: '아버지' }));
+  await t('F2: daughter joins as family', join(d3, 'u3', 'm3', 'family', '딸'));
+  await t('F2: son-in-law joins as trainee', join(d4, 'u4', 'm4', 'trainee', '사위'));
+  await t('F2: second trainee joiner cannot take over the trainee slot', setDoc(doc(d4, `${P}/state/trainee`), { userId: 'm4', displayLabel: '사위' }), false);
+  await t('F2: joiner switches own role trainee→family within 30 min (onboarding "가족으로 쓸게요")', updateDoc(doc(d4, `${P}/members/m4`), { role: 'family' }));
+  await t('F2: grandson joins as family', join(d5, 'u5', 'm5', 'family', '손자'));
+
+  // ---- migration: no admins field → owner is the only admin
+  const plan = (by, o = {}) => Object.assign(planDoc({ gamesPerDay: 3, weekdays: [1, 3, 5], games: { odd: { mode: 'fixed', level: 3 } } }, CAT, by, Date.now()), o);
+  const disp = (by, o = {}) => Object.assign(displayDoc({ font: 'noto', size: 'max', contrast: true, voice: true, rate: 0.75 }, by, Date.now()), o);
+  await t('F2: owner (legacy family, no admins) writes plan', setDoc(doc(d1, `${P}/state/plan`), plan('m1')));
+  await t('F2: owner writes learner display', setDoc(doc(d1, `${P}/state/display`), disp('m1')));
+  await t('F2: owner writes alarm', setDoc(doc(d1, `${P}/state/alarm`), { time: '09:30', days: [1, 3, 5], updatedBy: 'm1', updatedTs: Date.now() }));
+  await t('F2: non-admin family cannot write plan', setDoc(doc(d3, `${P}/state/plan`), plan('m3')), false);
+  await t('F2: non-admin family cannot write display', setDoc(doc(d3, `${P}/state/display`), disp('m3')), false);
+  await t('F2: non-admin family cannot write alarm', setDoc(doc(d3, `${P}/state/alarm`), { time: '09:30', days: [1], updatedBy: 'm3', updatedTs: Date.now() }), false);
+  await t('F2: trainee cannot write plan', setDoc(doc(d2, `${P}/state/plan`), plan('m2')), false);
+  await t('F2: trainee cannot write display', setDoc(doc(d2, `${P}/state/display`), disp('m2', { size: 'normal' })), false);
+  await t('F2: everyone reads plan and display', Promise.all([getDoc(doc(d2, `${P}/state/plan`)), getDoc(doc(d3, `${P}/state/display`))]));
+  await t('F2: non-member cannot read plan', getDoc(doc(db('stranger'), `${P}/state/plan`)), false);
+  await t('F2: non-admin cannot delete state docs', deleteDoc(doc(d3, `${P}/state/plan`)), false);
+
+  // ---- plan / display validation (admin m1)
+  const badPlan = [['gamesPerDay 10', { gamesPerDay: 10 }], ['gamesPerDay 0', { gamesPerDay: 0 }], ['gamesPerDay 2.5', { gamesPerDay: 2.5 }], ['roundsPerGame 2', { roundsPerGame: 2 }], ['roundsPerGame 11', { roundsPerGame: 11 }],
+    ['targetMin 61', { targetMin: 61 }], ['weekdays empty', { weekdays: [] }], ['weekday 7', { weekdays: [7] }], ['checkEveryWeeks 3', { checkEveryWeeks: 3 }], ['order bad', { order: 'random' }],
+    ['showScore string', { showScore: 'yes' }], ['games list', { games: [] }], ['forged updatedBy', { updatedBy: 'm3' }], ['future updatedTs', { updatedTs: Date.now() + 3600e3 }], ['extra key', { secret: 1 }], ['v 2', { v: 2 }]];
+  for (const [name, o] of badPlan) await t('F2: plan ' + name + ' denied', setDoc(doc(d1, `${P}/state/plan`), plan('m1', o)), false);
+  await t('F2: plan missing key denied', (async () => { const x = plan('m1'); delete x.checkin; await setDoc(doc(d1, `${P}/state/plan`), x); })(), false);
+  await t('F2: plan roundsPerGame null ok', setDoc(doc(d1, `${P}/state/plan`), plan('m1', { roundsPerGame: null })));
+  await t('F2: plan roundsPerGame 10 + 9 games + off check ok', setDoc(doc(d1, `${P}/state/plan`), plan('m1', { roundsPerGame: 10, gamesPerDay: 9, checkEveryWeeks: 0, order: 'fixed' })));
+  const badDisp = [['font', { font: 'comic' }], ['size', { size: 'huge' }], ['rate high', { rate: 3 }], ['rate low', { rate: 0.1 }], ['contrast str', { contrast: 'on' }], ['forged by', { updatedBy: 'm3' }], ['extra', { theme: 'dark' }]];
+  for (const [name, o] of badDisp) await t('F2: display ' + name + ' denied', setDoc(doc(d1, `${P}/state/display`), disp('m1', o)), false);
+  await t('F2: display missing voice denied', (async () => { const x = disp('m1'); delete x.voice; await setDoc(doc(d1, `${P}/state/display`), x); })(), false);
+
+  // ---- admins list: owner only, one grant at a time, family role only
+  await t('F2: non-owner cannot grant admin', updateDoc(doc(d3, 'families', F2), { admins: ['m3'] }), false);
+  await t('F2: cannot grant admin to the trainee-role member', updateDoc(doc(d1, 'families', F2), { admins: ['m2'] }), false);
+  await t('F2: cannot grant admin to a non-member', updateDoc(doc(d1, 'families', F2), { admins: ['ghost'] }), false);
+  await t('F2: cannot grant two at once', updateDoc(doc(d1, 'families', F2), { admins: ['m3', 'm5'] }), false);
+  await t('F2: owner grants admin to daughter', updateDoc(doc(d1, 'families', F2), { admins: ['m3'] }));
+  await t('F2: duplicate grant denied', updateDoc(doc(d1, 'families', F2), { admins: ['m3', 'm3'] }), false);
+  await t('F2: grant must append, not reorder', updateDoc(doc(d1, 'families', F2), { admins: ['m5', 'm3'] }), false);
+  await t('F2: granted admin writes plan', setDoc(doc(d3, `${P}/state/plan`), plan('m3')));
+  await t('F2: granted admin writes display', setDoc(doc(d3, `${P}/state/display`), disp('m3', { size: 'xlarge' })));
+  await t('F2: granted admin cannot change the admins list', updateDoc(doc(d3, 'families', F2), { admins: ['m3', 'm5'] }), false);
+  await t('F2: granted admin cannot take ownership', updateDoc(doc(d3, 'families', F2), { ownerMemberId: 'm3' }), false);
+  await t('F2: owner grants a second admin (append)', updateDoc(doc(d1, 'families', F2), { admins: ['m3', 'm5'] }));
+  await t('F2: owner revokes one admin', updateDoc(doc(d1, 'families', F2), { admins: ['m3'] }));
+  await t('F2: revoked admin cannot write plan', setDoc(doc(d5, `${P}/state/plan`), plan('m5')), false);
+
+  // ---- role changes: admin-only after the initial join (closes "trainee switches to 가족 to read family-only data")
+  await t('F2: assigned trainee cannot switch own role to family (even right after joining)', updateDoc(doc(d2, `${P}/members/m2`), { role: 'family' }), false);
+  await t('F2: so the trainee still cannot read surveys', getDocs(collection(d2, `${P}/surveys`)), false);
+  await t('F2: name + role in one self-update denied', updateDoc(doc(d5, `${P}/members/m5`), { name: '손자2', role: 'trainee' }), false);
+  await t('F2: self rename still ok', updateDoc(doc(d5, `${P}/members/m5`), { name: '손주' }));
+  await ageMember('m5', 2 * 3600e3);
+  await t('F2: family member cannot change own role after the join window', updateDoc(doc(d5, `${P}/members/m5`), { role: 'trainee' }), false);
+  await t('F2: non-admin cannot change someone else\'s role', updateDoc(doc(d5, `${P}/members/m2`), { role: 'family' }), false);
+  await t('F2: admin changes trainee role to family', updateDoc(doc(d3, `${P}/members/m2`), { role: 'family' }));
+  await t('F2: admin changes it back', updateDoc(doc(d3, `${P}/members/m2`), { role: 'trainee' }));
+  await t('F2: admin role value must be valid', updateDoc(doc(d3, `${P}/members/m5`), { role: 'admin' }), false);
+  // 관리자로 지정된 사람이 훈련하는 분 역할이 되면 관리자 권한이 꺼져요
+  await t('F2: owner grants grandson admin again', updateDoc(doc(d1, 'families', F2), { admins: ['m3', 'm5'] }));
+  await t('F2: admin makes grandson a trainee-role member', updateDoc(doc(d1, `${P}/members/m5`), { role: 'trainee' }));
+  await t('F2: listed admin with trainee role is not an admin', setDoc(doc(d5, `${P}/state/plan`), plan('m5')), false);
+  await t('F2: ...and cannot give themselves family role back', updateDoc(doc(d5, `${P}/members/m5`), { role: 'family' }), false);
+  await t('F2: admin restores grandson to family', updateDoc(doc(d1, `${P}/members/m5`), { role: 'family' }));
+  await t('F2: owner revokes grandson admin', updateDoc(doc(d1, 'families', F2), { admins: ['m3'] }));
+
+  // ---- trainee assignment: admin-only (closes "any member can reassign the trainee")
+  await t('F2: non-admin cannot reassign trainee to self', setDoc(doc(d5, `${P}/state/trainee`), { userId: 'm5', displayLabel: '손자' }), false);
+  await t('F2: non-admin cannot delete trainee', deleteDoc(doc(d5, `${P}/state/trainee`)), false);
+  await t('F2: trainee cannot reassign trainee', setDoc(doc(d2, `${P}/state/trainee`), { userId: 'm4', displayLabel: '사위' }), false);
+  await t('F2: admin reassigns trainee', setDoc(doc(d3, `${P}/state/trainee`), { userId: 'm4', displayLabel: '사위' }));
+  await t('F2: admin reassigns trainee back', setDoc(doc(d3, `${P}/state/trainee`), { userId: 'm2', displayLabel: '아버지' }));
+  await t('F2: admin cannot assign a non-member', setDoc(doc(d3, `${P}/state/trainee`), { userId: 'ghost', displayLabel: '유령' }), false);
+  await t('F2: admin clears the trainee slot', deleteDoc(doc(d3, `${P}/state/trainee`)));
+  await t('F2: family-role newcomer cannot claim an empty slot', setDoc(doc(d4, `${P}/state/trainee`), { userId: 'm4', displayLabel: '사위' }), false);
+  await ageMember('m2', 2 * 3600e3);
+  await t('F2: trainee-role member who joined >1h ago cannot claim an empty slot', setDoc(doc(d2, `${P}/state/trainee`), { userId: 'm2', displayLabel: '아버지' }), false);
+  await t('F2: admin assigns trainee again', setDoc(doc(d1, `${P}/state/trainee`), { userId: 'm2', displayLabel: '아버지' }));
+
+  // ---- levels / program
+  await t('F2: assigned trainee writes levels', setDoc(doc(d2, `${P}/state/levels`), { levels: { odd: 2 }, updatedTs: Date.now() }));
+  await t('F2: family member playing cannot overwrite levels', setDoc(doc(d5, `${P}/state/levels`), { levels: { odd: 5 }, updatedTs: Date.now() }), false);
+  await t('F2: admin may reset levels', setDoc(doc(d3, `${P}/state/levels`), { levels: { odd: 1 }, updatedTs: Date.now() }));
+  await t('F2: any member creates program start date once', setDoc(doc(d5, `${P}/state/program`), { startDate: today }));
+  await t('F2: non-admin cannot change program start date', setDoc(doc(d5, `${P}/state/program`), { startDate: '2020-01-01' }), false);
+
+  // ---- progress (live dashboard)
+  const pid = `${today}-m2`, planned = ['odd', 'shop', 'flash'];
+  let pr = progressStart(null, { userId: 'm2', date: today, planned, gameId: 'odd', now: Date.now() });
+  const withSts = (x, o = {}) => Object.assign({}, x, { sts: serverTimestamp() }, o);
+  await t('F2: trainee writes progress at game start', setDoc(doc(d2, `${P}/progress/${pid}`), withSts(pr)));
+  pr = progressFinish(pr, { gameId: 'odd', result: { acc: 0.8, correct: 4, total: 5, sec: 55, level: 2 }, now: Date.now() });
+  await t('F2: trainee updates progress at game end', setDoc(doc(d2, `${P}/progress/${pid}`), withSts(pr)));
+  await t('F2: family reads progress', getDoc(doc(d5, `${P}/progress/${pid}`)));
+  await t('F2: family lists progress', getDocs(collection(d3, `${P}/progress`)));
+  await t('F2: non-member cannot read progress', getDoc(doc(db('stranger'), `${P}/progress/${pid}`)), false);
+  await t('F2: progress wrong doc id denied', setDoc(doc(d2, `${P}/progress/2020-01-01-m2`), withSts(pr)), false);
+  await t('F2: progress for someone else denied', setDoc(doc(d5, `${P}/progress/${pid}`), withSts(pr)), false);
+  await t('F2: non-trainee cannot write own progress', setDoc(doc(d5, `${P}/progress/${today}-m5`), withSts(Object.assign({}, pr, { userId: 'm5' }))), false);
+  await t('F2: progress client sts denied', setDoc(doc(d2, `${P}/progress/${pid}`), Object.assign({}, pr, { sts: Timestamp.fromMillis(Date.now()) })), false);
+  await t('F2: progress too many results denied', setDoc(doc(d2, `${P}/progress/${pid}`), withSts(pr, { results: Array(14).fill({ g: 'x' }) })), false);
+  await t('F2: progress bad status denied', setDoc(doc(d2, `${P}/progress/${pid}`), withSts(pr, { status: 'cheated' })), false);
+  await t('F2: progress extra key denied', setDoc(doc(d2, `${P}/progress/${pid}`), withSts(pr, { note: 'x' })), false);
+  await t('F2: progress idx not int denied', setDoc(doc(d2, `${P}/progress/${pid}`), withSts(pr, { idx: 1.5 })), false);
+  await t('F2: non-admin cannot delete progress', deleteDoc(doc(d5, `${P}/progress/${pid}`)), false);
+
+  // ---- presence (heartbeat)
+  const beat = (x = {}) => Object.assign({ lastSeen: serverTimestamp(), ts: Date.now(), screen: 'home', device: 'Android' }, x);
+  await t('F2: trainee writes heartbeat', setDoc(doc(d2, `${P}/presence/m2`), beat()));
+  await t('F2: heartbeat faster than 20 s denied', setDoc(doc(d2, `${P}/presence/m2`), beat()), false);
+  await env.withSecurityRulesDisabled(async c => { await updateDoc(doc(c.firestore(), `${P}/presence/m2`), { lastSeen: Timestamp.fromMillis(Date.now() - 61e3) }); });
+  await t('F2: heartbeat after 60 s ok', setDoc(doc(d2, `${P}/presence/m2`), beat()));
+  await t('F2: heartbeat for someone else denied', setDoc(doc(d5, `${P}/presence/m2`), beat()), false);
+  await t('F2: heartbeat client lastSeen denied', setDoc(doc(d5, `${P}/presence/m5`), beat({ lastSeen: Timestamp.fromMillis(Date.now()) })), false);
+  await t('F2: heartbeat extra key denied', setDoc(doc(d5, `${P}/presence/m5`), beat({ battery: 50 })), false);
+  await t('F2: family reads trainee presence', getDoc(doc(d3, `${P}/presence/m2`)));
+
+  // ---- recovery codes, removal, deletions
+  const tc = (by, m, x = {}) => Object.assign({ familyId: F2, memberId: m, createdBy: by, createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 15 * 60e3) }, x);
+  await ageMember('m4', 3 * 864e5);
+  await t('F2: non-admin (joined days ago) cannot issue recovery code for the trainee', setDoc(doc(d4, 'transferCodes', 'RCA234'), tc('m4', 'm2')), false);
+  await t('F2: trainee cannot issue recovery code for others', setDoc(doc(d2, 'transferCodes', 'RCB234'), tc('m2', 'm1')), false);
+  await t('F2: anyone issues own transfer code', setDoc(doc(d4, 'transferCodes', 'RCC234'), tc('m4', 'm4')));
+  await t('F2: admin issues recovery code for the trainee', setDoc(doc(d3, 'transferCodes', 'RCD234'), tc('m3', 'm2')));
+  await t('F2: non-admin cannot delete someone else\'s code', deleteDoc(doc(d4, 'transferCodes', 'RCD234')), false);
+  await t('F2: creator deletes own code', deleteDoc(doc(d4, 'transferCodes', 'RCC234')));
+  await t('F2: admin rotates join code', (async () => { const b = writeBatch(d3); b.set(doc(d3, 'joinCodes', 'FAN234'), { familyId: F2, createdBy: 'm3', createdTs: serverTimestamp(), expiresTs: in7d() }); b.update(doc(d3, 'families', F2), { joinCode: 'FAN234' }); await b.commit(); })());
+  await t('F2: admin deletes the old join code', deleteDoc(doc(d3, 'joinCodes', C2)));
+  await t('F2: non-admin cannot remove a member', deleteDoc(doc(d5, `${P}/uids/u4`)), false);
+  await t('F2: admin cannot remove the owner (uid link)', deleteDoc(doc(d3, `${P}/uids/u1`)), false);
+  await t('F2: admin cannot mark the owner as left', updateDoc(doc(d3, `${P}/members/m1`), { leftTs: serverTimestamp() }), false);
+  await t('F2: admin removes a member (uid link)', deleteDoc(doc(d3, `${P}/uids/u4`)));
+  await t('F2: admin marks the removed member as left', updateDoc(doc(d3, `${P}/members/m4`), { leftTs: serverTimestamp() }));
+  await t('F2: removed member is locked out', getDoc(doc(d4, `${P}/state/plan`)), false);
+  await t('F2: trainee session', setDoc(doc(d2, `${P}/sessions/s1`), { date: today, ts: Date.now(), gameId: 'odd', userId: 'm2', inCourse: true }));
+  await t('F2: non-admin cannot delete trainee session', deleteDoc(doc(d5, `${P}/sessions/s1`)), false);
+  await t('F2: admin deletes trainee session', deleteDoc(doc(d3, `${P}/sessions/s1`)));
+  await t('F2: trainee message', setDoc(doc(d2, `${P}/messages/x1`), { authorId: 'm2', text: '고마워', ts: Date.now(), sts: serverTimestamp(), kind: 'text', push: 'pending' }));
+  await t('F2: non-admin cannot delete others\' message', deleteDoc(doc(d5, `${P}/messages/x1`)), false);
+  await t('F2: admin deletes a message (moderation)', deleteDoc(doc(d3, `${P}/messages/x1`)));
+  await t('F2: admin deletes progress', deleteDoc(doc(d3, `${P}/progress/${pid}`)));
+  await t('F2: non-owner admin cannot delete the whole family', deleteDoc(doc(d3, 'families', F2)), false);
+  await t('F2: chat still works for a plain family member', setDoc(doc(d5, `${P}/messages/x2`), { authorId: 'm5', text: '할아버지 화이팅', ts: Date.now(), sts: serverTimestamp(), kind: 'text', push: 'pending' }));
+  // 방 주인 넘기기 + 나를 관리자로 남기기를 한 번에
+  await t('F2: owner hands over ownership and stays admin in one write', updateDoc(doc(d1, 'families', F2), { ownerMemberId: 'm3', admins: ['m3', 'm1'] }));
+  await t('F2: previous owner is still admin', setDoc(doc(d1, `${P}/state/display`), disp('m1')));
+  await t('F2: new owner can revoke the previous owner', updateDoc(doc(d3, 'families', F2), { admins: ['m3'] }));
+  await t('F2: previous owner is no longer admin', setDoc(doc(d1, `${P}/state/display`), disp('m1')), false);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 await env.cleanup();
 process.exit(fail ? 1 : 0);

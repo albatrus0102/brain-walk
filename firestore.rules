@@ -15,8 +15,15 @@ rules_version = '2';
 //  (existing schema). Anything security-relevant (rate limits, code expiry,
 //  ordering for push) uses server timestamps (== request.time).
 //
+//  Roles (DESIGN.md §1, §3): owner (families.ownerMemberId) ⊂ admin
+//  (owner, or listed in families.admins AND role 'family'). Admin-only: learner
+//  plan/display, alarm, trainee assignment, role changes after the initial join,
+//  join-code rotation, recovery codes for others, removing members, deleting
+//  others' records. Owner-only: admins list, ownership, delete-all.
+//
 //  Access-call budget: ≤10 get/exists per single op, ≤20 per batch; the
-//  heaviest op here (nudge message create) uses 4 distinct documents.
+//  heaviest ops here (nudge message create, admin role change, admin grant)
+//  use at most 5 distinct documents.
 // =============================================================================
 
 service cloud.firestore {
@@ -32,14 +39,31 @@ service cloud.firestore {
     function joinCodePath(code) { return /databases/$(database)/documents/joinCodes/$(code); }
     function transferPath(code) { return /databases/$(database)/documents/transferCodes/$(code); }
 
+    function traineePath(fid) { return /databases/$(database)/documents/families/$(fid)/state/trainee; }
+
     function isMember(fid) { return signedIn() && exists(linkPath(fid)); }
     function myId(fid) { return get(linkPath(fid)).data.memberId; }
-    function isOwner(fid) { return get(famPath(fid)).data.ownerMemberId == myId(fid); }
+    function myMember(fid) { return get(memberPath(fid, myId(fid))).data; }
+    function ownerId(fid) { return get(famPath(fid)).data.ownerMemberId; }
+    function isOwner(fid) { return ownerId(fid) == myId(fid); }
 
     // 가족 전용 자료(설문·일상생활 체크·시계 그림·병원 검사)용: 내 member 문서의 role 이 'family' 인 사람만 읽어요.
     // 훈련하는 분(role 'trainee')은 (설문처럼) 만들 수는 있어도 읽을 수 없어요.
-    // 주의: role 은 본인이 설정에서 바꿀 수 있는 '자기 신고' 값이라, 이 규칙은 실수와 화면 노출을 막는 장치예요.
-    function isFamilyRole(fid) { return get(memberPath(fid, myId(fid))).data.role == 'family'; }
+    // role 은 처음 가입할 때(가입 후 30분 안)를 빼면 관리자만 바꿀 수 있어요 (members 규칙). DESIGN.md §3.
+    function isFamilyRole(fid) { return myMember(fid).role == 'family'; }
+
+    // ---- 관리자 (DESIGN.md §1)
+    // families/{fid}.admins : [memberId] (없으면 [] = 방 주인만 관리자. 예전 가족방은 그대로 방 주인만 관리자예요.)
+    // 방 주인은 역할과 상관없이 늘 관리자. 그 밖의 사람은 admins 목록에 있고 role 이 'family' 일 때만 관리자예요
+    // (관리자였던 사람을 훈련하는 분으로 지정하면 그 순간 관리자 권한이 꺼져요).
+    function adminsOf(fid) { return get(famPath(fid)).data.get('admins', []); }
+    function isAdmin(fid) {
+      return isMember(fid) && (isOwner(fid) || (myId(fid) in adminsOf(fid) && isFamilyRole(fid)));
+    }
+    // 지금 state/trainee 로 지정된 사람이 나인가
+    function isAssignedTrainee(fid) {
+      return exists(traineePath(fid)) && get(traineePath(fid)).data.userId == myId(fid);
+    }
 
     function newData() { return request.resource.data; }
     function oldData() { return resource.data; }
@@ -78,9 +102,11 @@ service cloud.firestore {
         && newData().expiresTs <= request.time + duration.value(15, 'd')
         // creator is (or, in the founding batch, becomes) a member of that family
         && existsAfter(/databases/$(database)/documents/families/$(newData().familyId)/uids/$(uid()))
-        && newData().createdBy == getAfter(/databases/$(database)/documents/families/$(newData().familyId)/uids/$(uid())).data.memberId;
+        && newData().createdBy == getAfter(/databases/$(database)/documents/families/$(newData().familyId)/uids/$(uid())).data.memberId
+        // 가족방을 만드는 배치(가족 문서가 아직 없음)이거나, 관리자만 새 코드를 만들어요.
+        && (!exists(famPath(newData().familyId)) || isAdmin(newData().familyId));
       allow update: if false;
-      allow delete: if signedIn() && isMember(resource.data.familyId);
+      allow delete: if signedIn() && isAdmin(resource.data.familyId);
     }
 
     // ======================================================= transfer codes
@@ -97,12 +123,9 @@ service cloud.firestore {
         && isMember(newData().familyId)
         && newData().createdBy == myId(newData().familyId)
         && exists(memberPath(newData().familyId, newData().memberId))
-        // 다른 사람의 복구 코드: 방 주인이거나, 가입한 지 24시간이 지난 '가족' 역할만.
+        // 다른 사람의 복구 코드: 관리자만 (방 주인 포함). 내 코드(다른 기기로 옮기기)는 누구나.
         // (방금 가족 코드로 들어온 사람이 곧바로 아버지·방 주인으로 옮겨 타는 것을 막아요)
-        && (newData().memberId == myId(newData().familyId)
-            || isOwner(newData().familyId)
-            || (isFamilyRole(newData().familyId)
-                && get(memberPath(newData().familyId, myId(newData().familyId))).data.joinedTs < request.time - duration.value(24, 'h')))
+        && (newData().memberId == myId(newData().familyId) || isAdmin(newData().familyId))
         && newData().createdTs == request.time
         && newData().expiresTs is timestamp
         && newData().expiresTs > request.time
@@ -116,7 +139,8 @@ service cloud.firestore {
         && newData().usedBy == uid()
         && newData().usedTs == request.time
         && getAfter(/databases/$(database)/documents/families/$(resource.data.familyId)/uids/$(uid())).data.memberId == resource.data.memberId;
-      allow delete: if signedIn() && isMember(resource.data.familyId);
+      allow delete: if signedIn() && isMember(resource.data.familyId)
+        && (resource.data.createdBy == myId(resource.data.familyId) || isAdmin(resource.data.familyId));
     }
 
     // ================================================================ users
@@ -163,7 +187,24 @@ service cloud.firestore {
       }
 
       // ---- family root doc
-      // { createdBy(uid), createdTs, ownerMemberId, joinCode, name?, schemaVersion? }
+      // { createdBy(uid), createdTs, ownerMemberId, joinCode, name?, schemaVersion?, admins?[memberId] }
+      // admins 바꾸기(방 주인만): 한 번에 한 명을 끝에 더하거나(그 사람은 '가족' 역할이고 떠나지 않은 사람), 아무나 빼기.
+      // (목록 자르기 after[0:n] 은 n=0 일 때 에뮬레이터에서 오류가 나서, 집합으로 확인해요: 중복 없음 + 예전 사람 모두 포함 + 마지막이 새 사람)
+      function validAdminsChange() {
+        let before = oldData().get('admins', []);
+        let after = newData().admins;
+        return after is list && after.size() <= 10 && after.toSet().size() == after.size()
+          && ((after.size() < before.size() && before.hasAll(after))
+              || (after.size() == before.size() + 1
+                  && after.hasAll(before)
+                  && !(after[after.size() - 1] in before)
+                  && grantable(after[after.size() - 1])));
+      }
+      function grantable(m) {
+        return m is string && exists(memberPath(fid, m))
+          && get(memberPath(fid, m)).data.role == 'family'
+          && !('leftTs' in get(memberPath(fid, m)).data);
+      }
       allow get: if isMember(fid);
       allow list: if false;
       allow create: if signedIn()
@@ -177,11 +218,13 @@ service cloud.firestore {
         && getAfter(linkPath(fid)).data.memberId == newData().ownerMemberId
         && getAfter(joinCodePath(newData().joinCode)).data.familyId == fid;
       allow update: if isMember(fid) && (
-           (changed().hasOnly(['name']) && str(newData().name, 30))
-        || (changed().hasOnly(['joinCode']) && okCode(newData().joinCode)
+           (changed().hasOnly(['name']) && str(newData().name, 30) && isAdmin(fid))
+        || (changed().hasOnly(['joinCode']) && okCode(newData().joinCode) && isAdmin(fid)
               && getAfter(joinCodePath(newData().joinCode)).data.familyId == fid)
-        || (changed().hasOnly(['ownerMemberId']) && isOwner(fid)
-              && exists(memberPath(fid, newData().ownerMemberId)))
+        // 방 주인만: 방 주인 넘기기, 관리자 지정/해제 (함께 바꿔도 돼요: 넘기면서 나를 관리자로 남기기)
+        || (isOwner(fid) && changed().hasOnly(['ownerMemberId', 'admins'])
+              && (!('ownerMemberId' in changed()) || exists(memberPath(fid, newData().ownerMemberId)))
+              && (!('admins' in changed()) || validAdminsChange()))
       );
       allow delete: if isMember(fid) && isOwner(fid);
 
@@ -196,10 +239,11 @@ service cloud.firestore {
           && optStr('device', 40)
           && (founding() || joining() || transferring());
         allow update: if false;
-        // sign out this device / revoke one of my devices / owner removes anyone
+        // sign out this device / revoke one of my devices / admin removes someone (never the owner)
         allow delete: if signedIn() && (
              u == uid()
-          || (isMember(fid) && (resource.data.memberId == myId(fid) || isOwner(fid)))
+          || (isMember(fid) && (resource.data.memberId == myId(fid)
+                                || (isAdmin(fid) && resource.data.memberId != ownerId(fid))))
         );
       }
 
@@ -217,19 +261,29 @@ service cloud.firestore {
           && newData().role in ['trainee', 'family']
           && newData().joinedTs == request.time;
         allow update: if isMember(fid) && (
-            // myself
+            // myself: name, nudge stamp, leaving. (role is NOT here: see below)
             (mid == myId(fid)
-              && changed().hasOnly(['name', 'role', 'lastNudgeAt', 'leftTs'])
+              && changed().hasOnly(['name', 'lastNudgeAt', 'leftTs'])
               && nonEmpty(newData().name, 20)
-              && newData().role in ['trainee', 'family']
               // nudge rate limit: lastNudgeAt can only move to "now", and only if
               // the previous nudge is ≥115 min old (app enforces 2 h on its side)
               && (!('lastNudgeAt' in changed()) || (
                     newData().lastNudgeAt == request.time
                     && oldData().get('lastNudgeAt', timestamp.value(0)) < request.time - duration.value(115, 'm')))
               && (!('leftTs' in changed()) || newData().leftTs == request.time))
-            // owner removes someone else
-         || (mid != myId(fid) && isOwner(fid)
+            // myself, role, only during the initial join (≤30 min after joining) and only if I am not
+            // the assigned trainee. ("이미 훈련하는 분이 있어요 → 가족으로 쓸게요" in onboarding.)
+         || (mid == myId(fid)
+              && changed().hasOnly(['role'])
+              && newData().role in ['trainee', 'family']
+              && oldData().joinedTs > request.time - duration.value(30, 'm')
+              && !isAssignedTrainee(fid))
+            // admin changes anyone's role (including their own)
+         || (isAdmin(fid)
+              && changed().hasOnly(['role'])
+              && newData().role in ['trainee', 'family'])
+            // admin removes someone else (never the owner)
+         || (mid != myId(fid) && isAdmin(fid) && mid != ownerId(fid)
               && changed().hasOnly(['leftTs'])
               && newData().leftTs == request.time)
         );
@@ -307,7 +361,7 @@ service cloud.firestore {
         allow read: if isMember(fid);
         allow create: if isMember(fid) && okId(msgId) && validNewMessage();
         allow update: if isMember(fid) && validMessageUpdate();
-        allow delete: if isMember(fid) && (resource.data.authorId == myId(fid) || isOwner(fid));
+        allow delete: if isMember(fid) && (resource.data.authorId == myId(fid) || isAdmin(fid));
       }
 
       // ---- training records (authored by the person who trained)
@@ -326,7 +380,7 @@ service cloud.firestore {
         allow read: if isMember(fid);
         allow create: if isMember(fid) && okId(sid) && validSession();
         allow update: if isMember(fid) && oldData().userId == myId(fid) && validSession();
-        allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));
+        allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isAdmin(fid));
       }
 
       function validAssessment() {
@@ -341,7 +395,7 @@ service cloud.firestore {
         allow read: if isMember(fid);
         allow create: if isMember(fid) && okId(aid) && validAssessment();
         allow update: if isMember(fid) && oldData().userId == myId(fid) && validAssessment();
-        allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));
+        allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isAdmin(fid));
       }
 
       // checkins/{YYYY-MM-DD}-{memberId}: one per person per day
@@ -358,7 +412,7 @@ service cloud.firestore {
         allow read: if isMember(fid);
         allow create: if isMember(fid) && validCheckin(cid);
         allow update: if isMember(fid) && oldData().userId == myId(fid) && validCheckin(cid);
-        allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));
+        allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isAdmin(fid));
       }
 
       // ---- 점검 과제 상세 (낱말·점 잇기·숫자 기억 등): 한 번의 월간 점검의 과제별 점수와 세부 수치. 가족만 읽기(훈련하는 분은 쓰기만).
@@ -370,7 +424,7 @@ service cloud.firestore {
           && okDate(newData().date) && okMs(newData().ts)
           && newData().tasks is map && newData().tasks.size() <= 12;
         allow update: if false;
-        allow delete: if isMember(fid) && (resource.data.userId == myId(fid) || isOwner(fid));
+        allow delete: if isMember(fid) && (resource.data.userId == myId(fid) || isAdmin(fid));
       }
 
       // ---- 설문 결과 (Short IQCODE, KDSQ-C, SMCQ, GDS-15, PHQ-9, 자체 일상생활 체크 'iadl') : 가족만 읽기
@@ -392,7 +446,7 @@ service cloud.firestore {
         allow read: if isMember(fid) && isFamilyRole(fid);
         allow create: if isMember(fid) && okId(sid) && validSurvey();
         allow update: if false;
-        allow delete: if isMember(fid) && isFamilyRole(fid) && (resource.data.answeredBy == myId(fid) || isOwner(fid));
+        allow delete: if isMember(fid) && isFamilyRole(fid) && (resource.data.answeredBy == myId(fid) || isAdmin(fid));
       }
 
       // ---- 시계 그림: 훈련하는 분이 그리면 저장(create)되고, 가족만 볼 수 있어요. 자동 채점 없음.
@@ -428,7 +482,7 @@ service cloud.firestore {
         allow read: if isMember(fid) && isFamilyRole(fid);
         allow create: if isMember(fid) && validSleep();
         allow update: if isMember(fid) && oldData().userId == myId(fid) && validSleep();
-        allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isOwner(fid));
+        allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isAdmin(fid));
       }
 
       // ---- 병원·센터 검사 기록: 가족이 직접 적은 '점수'만 저장해요 (검사 문항·내용은 없음). 가족 전용: 훈련하는 분은 읽기·쓰기 모두 불가.
@@ -449,7 +503,7 @@ service cloud.firestore {
         allow read: if isMember(fid) && isFamilyRole(fid);
         allow create: if isMember(fid) && isFamilyRole(fid) && okId(tid) && validClinical();
         allow update: if isMember(fid) && isFamilyRole(fid) && oldData().recordedBy == myId(fid) && validClinical();
-        allow delete: if isMember(fid) && isFamilyRole(fid) && (resource.data.recordedBy == myId(fid) || isOwner(fid));
+        allow delete: if isMember(fid) && isFamilyRole(fid) && (resource.data.recordedBy == myId(fid) || isAdmin(fid));
       }
 
       // ---- per-person small docs
@@ -477,6 +531,19 @@ service cloud.firestore {
       }
 
       // ---- shared family state
+      // levels  : 적응 난이도 기록. 지정된 훈련하는 분의 기기가 판마다 써요 (관리자도 가능).
+      // program : 프로그램 시작일. 처음 한 번 아무 구성원이나 만들 수 있고, 바꾸는 건 관리자.
+      // trainee : 훈련하는 분 지정. 관리자만. 단, 아직 아무도 지정되지 않았으면 '훈련하는 분' 역할로 막 들어온 사람(1시간 안)이 자기를 지정할 수 있어요 (처음 가입).
+      // alarm / plan / display : 관리자만 (DESIGN.md §2)
+      function canWriteState(key, isCreate) {
+        return isAdmin(fid)
+          || (key == 'levels' && isAssignedTrainee(fid))
+          || (key == 'program' && isCreate)
+          || (key == 'trainee' && isCreate
+              && newData().userId == myId(fid)
+              && myMember(fid).role == 'trainee'
+              && myMember(fid).joinedTs > request.time - duration.value(1, 'h'));
+      }
       function validState(key) {
         return (key == 'levels'
                   && newData().keys().hasOnly(['levels', 'updatedTs'])
@@ -496,12 +563,89 @@ service cloud.firestore {
                   && newData().days is list && newData().days.size() <= 7
                   && newData().days.hasOnly([0, 1, 2, 3, 4, 5, 6])
                   && newData().updatedBy == myId(fid)
-                  && okMs(newData().updatedTs));
+                  && okMs(newData().updatedTs))
+          || (key == 'plan' && validPlan())
+          || (key == 'display' && validDisplay());
+      }
+      // 훈련 계획 (js/program.js normalizePlan/planDoc 와 같은 모양). 게임별 설정(games)은 지도 크기만 확인해요.
+      function validPlan() {
+        let d = newData();
+        let keys = ['v', 'gamesPerDay', 'roundsPerGame', 'targetMin', 'games', 'order', 'fixedOrder', 'weekdays',
+                    'checkEveryWeeks', 'checkin', 'showScore', 'updatedBy', 'updatedTs'];
+        return d.keys().hasOnly(keys) && d.keys().hasAll(keys)
+          && d.v == 1
+          && d.gamesPerDay is int && d.gamesPerDay >= 1 && d.gamesPerDay <= 9
+          && (d.roundsPerGame == null || (d.roundsPerGame is int && d.roundsPerGame >= 3 && d.roundsPerGame <= 10))
+          && d.targetMin is int && d.targetMin >= 5 && d.targetMin <= 60
+          && d.games is map && d.games.size() <= 20
+          && d.order in ['rotate', 'fixed']
+          && d.fixedOrder is list && d.fixedOrder.size() <= 20
+          && d.weekdays is list && d.weekdays.size() >= 1 && d.weekdays.size() <= 7 && d.weekdays.hasOnly([0, 1, 2, 3, 4, 5, 6])
+          && d.checkEveryWeeks in [0, 2, 4, 8]
+          && d.checkin is bool && d.showScore is bool
+          && d.updatedBy == myId(fid)
+          && okMs(d.updatedTs);
+      }
+      // 훈련하는 분 기기의 화면 설정 (관리자가 정하고, 그 기기는 실시간으로 적용)
+      function validDisplay() {
+        let d = newData();
+        let keys = ['v', 'font', 'size', 'contrast', 'voice', 'rate', 'updatedBy', 'updatedTs'];
+        return d.keys().hasOnly(keys) && d.keys().hasAll(keys)
+          && d.v == 1
+          && d.font in ['pretendard', 'noto', 'system']
+          && d.size in ['normal', 'large', 'xlarge', 'max']
+          && d.contrast is bool && d.voice is bool
+          && d.rate is number && d.rate >= 0.5 && d.rate <= 1.5
+          && d.updatedBy == myId(fid)
+          && okMs(d.updatedTs);
       }
       match /state/{key} {
         allow read: if isMember(fid);
-        allow create, update: if isMember(fid) && validState(key);
-        allow delete: if isMember(fid) && isOwner(fid);
+        allow create: if isMember(fid) && validState(key) && canWriteState(key, true);
+        allow update: if isMember(fid) && validState(key) && canWriteState(key, false);
+        allow delete: if isMember(fid) && isAdmin(fid);
+      }
+
+      // ---- 오늘 진행 상황 (가족 화면 실시간): progress/{YYYY-MM-DD}-{memberId}
+      // 지정된 훈련하는 분의 기기가 게임을 시작할 때와 끝낼 때 써요. js/program.js progressStart/progressFinish 모양.
+      match /progress/{pid} {
+        function validProgress() {
+          let d = newData();
+          return d.keys().hasOnly(['userId', 'date', 'v', 'kind', 'planned', 'idx', 'current', 'currentTs',
+                                   'results', 'status', 'startTs', 'updatedTs', 'doneTs', 'sts'])
+            && d.keys().hasAll(['userId', 'date', 'v', 'kind', 'planned', 'idx', 'results', 'status', 'startTs', 'updatedTs', 'sts'])
+            && d.userId == myId(fid)
+            && okDate(d.date) && pid == d.date + '-' + myId(fid)
+            && d.v == 1
+            && d.kind in ['course', 'check']
+            && d.planned is list && d.planned.size() <= 13
+            && d.idx is int && d.idx >= 0 && d.idx <= 13
+            && d.results is list && d.results.size() <= 13
+            && d.status in ['started', 'done']
+            && (!('current' in d) || d.current == null || str(d.current, 40))
+            && (!('currentTs' in d) || d.currentTs == null || okMs(d.currentTs))
+            && (!('doneTs' in d) || d.doneTs == null || okMs(d.doneTs))
+            && okMs(d.startTs) && okMs(d.updatedTs)
+            && d.sts == request.time
+            && isAssignedTrainee(fid);
+        }
+        allow read: if isMember(fid);
+        allow create, update: if isMember(fid) && validProgress();
+        allow delete: if isMember(fid) && (resource.data.userId == myId(fid) || isAdmin(fid));
+      }
+
+      // ---- 마지막으로 본 시간 (하트비트): presence/{memberId}
+      // 앱이 열려 있는 동안 60초마다 (규칙은 20초보다 잦은 쓰기를 막아요). lastSeen 은 서버 시간.
+      match /presence/{mid} {
+        allow read: if isMember(fid);
+        allow create, update: if isMember(fid) && mid == myId(fid)
+          && newData().keys().hasOnly(['lastSeen', 'ts', 'screen', 'device'])
+          && newData().keys().hasAll(['lastSeen', 'ts'])
+          && newData().lastSeen == request.time
+          && okMs(newData().ts)
+          && optStr('screen', 20) && optStr('device', 40)
+          && (resource == null || resource.data.lastSeen < request.time - duration.value(20, 's'));
+        allow delete: if isMember(fid) && (mid == myId(fid) || isAdmin(fid));
       }
     }
 
