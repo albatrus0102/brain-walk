@@ -3,7 +3,7 @@ import { doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp,
 import fs from 'node:fs';
 const env = await initializeTestEnvironment({ projectId: 'demo-bw', firestore: { rules: fs.readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 } });
 let pass = 0, fail = 0;
-async function t(name, p, ok = true) { try { await (ok ? assertSucceeds(p) : assertFails(p)); pass++; console.log('ok  ', name); } catch (e) { fail++; console.log('FAIL', name, e.message.split('\n')[0]); } }
+async function t(name, p, ok = true) { try { await (ok ? assertSucceeds(p) : assertFails(p)); pass++; console.log('ok  ', name); } catch (e) { fail++; console.log('FAIL', name, process.env.RULES_DEBUG ? e.message.replace(/\s+/g, ' ').slice(0, 500) : e.message.split('\n')[0]); } }
 const db = u => env.authenticatedContext(u).firestore();
 const anon = env.unauthenticatedContext().firestore();
 const F = 'fam1', CODE = 'ABC234', in7d = () => Timestamp.fromMillis(Date.now() + 7 * 864e5);
@@ -501,6 +501,163 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('F3: old owner cannot take the room back', updateDoc(doc(dO, 'families', F3), { ownerMemberId: 'o' }), false);
   await t('F3: new owner clears the admins list (owner-only edit)', updateDoc(doc(dAd, 'families', F3), { admins: [] }));
   await t('F3: new owner is still admin with empty admins list', setDoc(doc(dAd, `${P}/state/plan`), planDoc({}, [], 'a', Date.now())));
+}
+
+// =============================================================================
+// AI 문제 은행·리포트 (DESIGN-AI 부록 C): 문항 기록, 묶음, 상태, 관리자 전용 숫자·리포트, 메모, 검토, 안내 동의, 서버 전용 컬렉션
+// F4: o 방 주인(가족) / a 관리자(가족) / f 가족(관리자 아님) / t 훈련하는 분(지정됨)
+// =============================================================================
+{
+  const F4 = 'fam4', C4 = 'FAJ234', P = `families/${F4}`;
+  const dO = db('u4o'), dAd = db('u4a'), dF = db('u4f'), dT = db('u4t'), dX = db('u4stranger');
+  const join = (dd, u, m, role, name) => { const b = writeBatch(dd); b.set(doc(dd, `${P}/uids/${u}`), { memberId: m, via: 'join', code: C4, addedTs: serverTimestamp() }); b.set(doc(dd, `${P}/members/${m}`), { name, role, joinedTs: serverTimestamp() }); return b.commit(); };
+  {
+    const b = writeBatch(dO);
+    b.set(doc(dO, 'families', F4), { createdBy: 'u4o', createdTs: serverTimestamp(), ownerMemberId: 'o', joinCode: C4 });
+    b.set(doc(dO, 'joinCodes', C4), { familyId: F4, createdBy: 'o', createdTs: serverTimestamp(), expiresTs: in7d() });
+    b.set(doc(dO, `${P}/uids/u4o`), { memberId: 'o', via: 'create', addedTs: serverTimestamp() });
+    b.set(doc(dO, `${P}/members/o`), { name: '아들', role: 'family', joinedTs: serverTimestamp() });
+    await t('F4: found', b.commit());
+  }
+  await t('F4: admin-to-be joins', join(dAd, 'u4a', 'a', 'family', '딸'));
+  await t('F4: plain family joins', join(dF, 'u4f', 'f', 'family', '사위'));
+  await t('F4: trainee joins', join(dT, 'u4t', 't', 'trainee', '아버지'));
+  await t('F4: trainee claims slot', setDoc(doc(dT, `${P}/state/trainee`), { userId: 't', displayLabel: '아버지' }));
+  await t('F4: owner grants a', updateDoc(doc(dO, 'families', F4), { admins: ['a'] }));
+  const d4 = new Date().toISOString().slice(0, 10);
+
+  // ---- itemLogs
+  const il = (who, o = {}) => Object.assign({ v: 1, userId: who, date: d4, ts: Date.now(), sts: serverTimestamp(), gameId: 'words', inCourse: true, level: 3, speechOn: true, size: 'xlarge', device: 'android', hour: 10, abandoned: false,
+    items: [{ id: 'bk_0123456789abcdef0123', role: 'reference', fmt: 'word_recog', cd: 'memory', lv: 3, score: 0.8, ok: false, rt: 6120, rtStart: 'speech_end', err: ['MISS'], pick: [0, 2], intr: false, pos: 1 }] }, o);
+  await t('F4: trainee writes an item log', setDoc(doc(dT, `${P}/itemLogs/s1`), il('t')));
+  await t('F4: item log forged userId denied', setDoc(doc(dT, `${P}/itemLogs/s2`), il('f')), false);
+  await t('F4: family member cannot write item logs', setDoc(doc(dF, `${P}/itemLogs/s3`), il('f')), false);
+  await t('F4: admin cannot write item logs', setDoc(doc(dAd, `${P}/itemLogs/s4`), il('a')), false);
+  await t('F4: item log > 20 items denied', setDoc(doc(dT, `${P}/itemLogs/s5`), il('t', { items: Array(21).fill({ role: 'training' }) })), false);
+  await t('F4: item log with no items denied', setDoc(doc(dT, `${P}/itemLogs/s5b`), il('t', { items: [] })), false);
+  await t('F4: item log extra key denied', setDoc(doc(dT, `${P}/itemLogs/s6`), il('t', { note: 'x' })), false);
+  await t('F4: item log client sts denied', setDoc(doc(dT, `${P}/itemLogs/s7`), il('t', { sts: Timestamp.fromMillis(Date.now()) })), false);
+  await t('F4: item log bad date denied', setDoc(doc(dT, `${P}/itemLogs/s8`), il('t', { date: '2026-13-01' })), false);
+  await t('F4: item log v2 denied', setDoc(doc(dT, `${P}/itemLogs/s9`), il('t', { v: 2 })), false);
+  await t('F4: item log update denied', updateDoc(doc(dT, `${P}/itemLogs/s1`), { abandoned: true }), false);
+  await t('F4: family-role member reads item logs', getDocs(collection(dF, `${P}/itemLogs`)));
+  await t('F4: trainee cannot read item logs (family-only)', getDoc(doc(dT, `${P}/itemLogs/s1`)), false);
+  await t('F4: non-member cannot read item logs', getDoc(doc(dX, `${P}/itemLogs/s1`)), false);
+  await t('F4: non-admin family cannot delete item logs', deleteDoc(doc(dF, `${P}/itemLogs/s1`)), false);
+  await t('F4: trainee deletes own item log', (async () => { await setDoc(doc(dT, `${P}/itemLogs/s10`), il('t')); await deleteDoc(doc(dT, `${P}/itemLogs/s10`)); })());
+  await t('F4: admin deletes an item log', deleteDoc(doc(dAd, `${P}/itemLogs/s1`)));
+
+  // ---- server-written docs (seeded with rules disabled)
+  await env.withSecurityRulesDisabled(async c => {
+    const x = c.firestore();
+    await setDoc(doc(x, `${P}/aiPacks/memory-L3`), { v: 1, items: [] });
+    await setDoc(doc(x, `${P}/aiState/plan`), { v: 1, startDate: d4 });
+    await setDoc(doc(x, `${P}/aiStats/summary`), { v: 1, weeks: [] });
+    await setDoc(doc(x, `${P}/aiSignals/S3-speed-${d4}`), { key: 'S3:speed', on: true });
+    await setDoc(doc(x, `${P}/aiReports/r-a-1`), { v: 1, kind: 'daily' });
+    await setDoc(doc(x, `${P}/aiOps/health`), { server: {} });
+    await setDoc(doc(x, `${P}/aiOps/wakes`), { days: {} });
+    await setDoc(doc(x, 'aiConfig/main'), { familyId: F4, routineKeyHash: 'f'.repeat(64) });
+    await setDoc(doc(x, 'aiAggregates/current'), { schema: 'bw.agg.v1' });
+    await setDoc(doc(x, 'aiJobs/w-20270408-1410-a1'), { schema: 'bw.job.v1' });
+    await setDoc(doc(x, 'aiBank/bk_0123456789abcdef0123'), { status: 'ready' });
+  });
+
+  // ---- aiPacks
+  await t('F4: trainee reads a pack', getDoc(doc(dT, `${P}/aiPacks/memory-L3`)));
+  await t('F4: family lists packs', getDocs(collection(dF, `${P}/aiPacks`)));
+  await t('F4: non-member cannot read packs', getDoc(doc(dX, `${P}/aiPacks/memory-L3`)), false);
+  await t('F4: admin cannot write packs', setDoc(doc(dAd, `${P}/aiPacks/memory-L3`), { v: 1, items: [] }), false);
+  await t('F4: trainee cannot write packs', setDoc(doc(dT, `${P}/aiPacks/memory-L4`), { v: 1, items: [] }), false);
+
+  // ---- aiState
+  const th = (by, o = {}) => Object.assign({ words: ['낚시', '등산', '트로트'], updatedBy: by, updatedTs: Date.now() }, o);
+  await t('F4: admin writes theme words', setDoc(doc(dAd, `${P}/aiState/themes`), th('a')));
+  await t('F4: owner writes theme words', setDoc(doc(dO, `${P}/aiState/themes`), th('o')));
+  await t('F4: 9 theme words denied', setDoc(doc(dAd, `${P}/aiState/themes`), th('a', { words: Array(9).fill('낚시') })), false);
+  await t('F4: theme word > 10 chars denied', setDoc(doc(dAd, `${P}/aiState/themes`), th('a', { words: ['가'.repeat(11)] })), false);
+  await t('F4: 8th theme word too long denied', setDoc(doc(dAd, `${P}/aiState/themes`), th('a', { words: ['가', '나', '다', '라', '마', '바', '사', '아'.repeat(11)] })), false);
+  await t('F4: theme word not a string denied', setDoc(doc(dAd, `${P}/aiState/themes`), th('a', { words: ['낚시', 3] })), false);
+  await t('F4: theme forged updatedBy denied', setDoc(doc(dAd, `${P}/aiState/themes`), th('o')), false);
+  await t('F4: non-admin cannot write themes', setDoc(doc(dF, `${P}/aiState/themes`), th('f')), false);
+  await t('F4: trainee cannot write themes', setDoc(doc(dT, `${P}/aiState/themes`), th('t')), false);
+  await t('F4: admin cannot write the server plan', setDoc(doc(dAd, `${P}/aiState/plan`), { v: 1, startDate: '2020-01-05' }), false);
+  await t('F4: admin turns AI reports off', setDoc(doc(dAd, `${P}/aiState/switch`), { enabled: false, updatedBy: 'a', updatedTs: Date.now() }));
+  await t('F4: switch must be bool', setDoc(doc(dAd, `${P}/aiState/switch`), { enabled: 'no', updatedBy: 'a', updatedTs: Date.now() }), false);
+  await t('F4: non-admin cannot flip the switch', setDoc(doc(dF, `${P}/aiState/switch`), { enabled: true, updatedBy: 'f', updatedTs: Date.now() }), false);
+  await t('F4: unknown aiState doc denied', setDoc(doc(dAd, `${P}/aiState/other`), { enabled: true, updatedBy: 'a', updatedTs: Date.now() }), false);
+  await t('F4: admin cannot delete aiState docs', deleteDoc(doc(dAd, `${P}/aiState/themes`)), false);
+  await t('F4: trainee reads aiState', getDoc(doc(dT, `${P}/aiState/plan`)));
+
+  // ---- admin-only server docs: aiStats, aiSignals, aiReports (all admins), aiOps
+  for (const [name, path] of [['aiStats', `${P}/aiStats/summary`], ['aiSignals', `${P}/aiSignals/S3-speed-${d4}`], ['aiReports', `${P}/aiReports/r-a-1`], ['aiOps', `${P}/aiOps/health`]]) {
+    await t(`F4: non-owner admin reads ${name}`, getDoc(doc(dAd, path)));
+    await t(`F4: owner reads ${name}`, getDoc(doc(dO, path)));
+    await t(`F4: plain family cannot read ${name}`, getDoc(doc(dF, path)), false);
+    await t(`F4: trainee cannot read ${name}`, getDoc(doc(dT, path)), false);
+    await t(`F4: non-member cannot read ${name}`, getDoc(doc(dX, path)), false);
+    await t(`F4: admin cannot write ${name}`, setDoc(doc(dAd, path), { v: 9 }), false);
+  }
+  await t('F4: admin lists reports', getDocs(collection(dAd, `${P}/aiReports`)));
+  await t('F4: plain family cannot list reports', getDocs(collection(dF, `${P}/aiReports`)), false);
+  await t('F4: admin reads nested aiOps doc path', getDoc(doc(dAd, `${P}/aiOps/wakes`)));
+
+  // ---- aiNotes
+  const note = (by, o = {}) => Object.assign({ from: '2027-02-28', to: '2027-03-06', codes: ['illness', 'sleep'], text: '기침약 3일', by, ts: Date.now() }, o);
+  await t('F4: admin writes a note', setDoc(doc(dAd, `${P}/aiNotes/n1`), note('a')));
+  await t('F4: open-ended note (to null) ok', setDoc(doc(dAd, `${P}/aiNotes/n2`), note('a', { to: null })));
+  await t('F4: note unknown code denied', setDoc(doc(dAd, `${P}/aiNotes/n3`), note('a', { codes: ['cancer'] })), false);
+  await t('F4: note without codes denied', setDoc(doc(dAd, `${P}/aiNotes/n4`), note('a', { codes: [] })), false);
+  await t('F4: note text > 200 denied', setDoc(doc(dAd, `${P}/aiNotes/n5`), note('a', { text: 'x'.repeat(201) })), false);
+  await t('F4: note ends before it starts denied', setDoc(doc(dAd, `${P}/aiNotes/n6`), note('a', { to: '2027-02-01' })), false);
+  await t('F4: note forged author denied', setDoc(doc(dAd, `${P}/aiNotes/n7`), note('o')), false);
+  await t('F4: non-admin cannot write notes', setDoc(doc(dF, `${P}/aiNotes/n8`), note('f')), false);
+  await t('F4: plain family cannot read notes', getDoc(doc(dF, `${P}/aiNotes/n1`)), false);
+  await t('F4: trainee cannot read notes', getDocs(collection(dT, `${P}/aiNotes`)), false);
+  await t('F4: admin updates a note', setDoc(doc(dAd, `${P}/aiNotes/n1`), note('a', { to: '2027-03-07' })));
+  await t('F4: admin deletes a note', deleteDoc(doc(dAd, `${P}/aiNotes/n2`)));
+
+  // ---- aiReview
+  const rv = (by, o = {}) => Object.assign({ decision: 'approve', by, ts: Date.now() }, o);
+  await t('F4: admin approves a bank item', setDoc(doc(dAd, `${P}/aiReview/bk_0123456789abcdef0123`), rv('a')));
+  await t('F4: review bad item id denied', setDoc(doc(dAd, `${P}/aiReview/evil`), rv('a')), false);
+  await t('F4: review bad decision denied', setDoc(doc(dAd, `${P}/aiReview/bk_0123456789abcdef0124`), rv('a', { decision: 'delete' })), false);
+  await t('F4: non-admin cannot review', setDoc(doc(dF, `${P}/aiReview/bk_0123456789abcdef0125`), rv('f')), false);
+  await t('F4: review cannot be edited', updateDoc(doc(dAd, `${P}/aiReview/bk_0123456789abcdef0123`), { decision: 'retire' }), false);
+
+  // ---- consents
+  const cs = (o = {}) => Object.assign({ kind: 'ai-report-notice', version: '2026-11-v1', ackTs: serverTimestamp(), withFamily: true }, o);
+  await t('F4: trainee acknowledges the notice', setDoc(doc(dT, `${P}/consents/t`), cs()));
+  await t('F4: consent with client time denied', setDoc(doc(dF, `${P}/consents/f`), cs({ ackTs: Timestamp.fromMillis(Date.now()) })), false);
+  await t('F4: consent for someone else denied', setDoc(doc(dAd, `${P}/consents/t`), cs()), false);
+  await t('F4: consent wrong kind denied', setDoc(doc(dF, `${P}/consents/f`), cs({ kind: 'other' })), false);
+  await t('F4: consent extra key denied', setDoc(doc(dF, `${P}/consents/f`), cs({ note: 1 })), false);
+  await t('F4: trainee reads own consent', getDoc(doc(dT, `${P}/consents/t`)));
+  await t('F4: admin reads the trainee consent', getDoc(doc(dAd, `${P}/consents/t`)));
+  await t('F4: plain family cannot read the trainee consent', getDoc(doc(dF, `${P}/consents/t`)), false);
+  await t('F4: trainee withdraws (server time)', updateDoc(doc(dT, `${P}/consents/t`), { withdrawnTs: serverTimestamp() }));
+  await t('F4: re-acknowledge a new version clears the withdrawal', updateDoc(doc(dT, `${P}/consents/t`), { version: '2027-01-v2', ackTs: serverTimestamp(), withdrawnTs: deleteField() }));
+  await t('F4: consent kind cannot change', updateDoc(doc(dT, `${P}/consents/t`), { kind: 'x' }), false);
+  await t('F4: re-ack with client time denied', updateDoc(doc(dT, `${P}/consents/t`), { version: 'v3', ackTs: Timestamp.fromMillis(Date.now()) }), false);
+  await t('F4: consent cannot be deleted', deleteDoc(doc(dT, `${P}/consents/t`)), false);
+
+  // ---- server-only top-level AI collections: closed to members, admins, strangers and "worker"-style accounts
+  const pw = env.authenticatedContext('worker-uid', { firebase: { sign_in_provider: 'password' }, email: 'bw-ai-worker@example.invalid' }).firestore();
+  const anonCtx = env.authenticatedContext('anon-uid', { firebase: { sign_in_provider: 'anonymous' } }).firestore();
+  for (const [who, d] of [['owner', dO], ['admin', dAd], ['password account', pw], ['anonymous account', anonCtx]]) {
+    await t(`F4: ${who} cannot read aiConfig`, getDoc(doc(d, 'aiConfig/main')), false);
+    await t(`F4: ${who} cannot read the aggregate`, getDoc(doc(d, 'aiAggregates/current')), false);
+    await t(`F4: ${who} cannot read a job`, getDoc(doc(d, 'aiJobs/w-20270408-1410-a1')), false);
+    await t(`F4: ${who} cannot read the bank`, getDoc(doc(d, 'aiBank/bk_0123456789abcdef0123')), false);
+    await t(`F4: ${who} cannot write the inbox`, setDoc(doc(d, 'aiInbox/h1-0'), { kind: 'items', runId: '20270101-0330', payload: '{}', status: 'new', createdTs: serverTimestamp() }), false);
+  }
+  await t('F4: admin cannot set the routine key hash', setDoc(doc(dAd, 'aiConfig/main'), { routineKeyHash: 'a'.repeat(64) }), false);
+  await t('F4: nobody lists the inbox', getDocs(collection(dO, 'aiInbox')), false);
+  await t('F4: nobody lists rejects', getDocs(collection(dO, 'aiRejects')), false);
+  await t('F4: nobody reads rate counters', getDoc(doc(dO, 'aiRate/keyuse')), false);
+  await t('F4: nobody reads the push heartbeat', getDoc(doc(dO, 'ops/pushTick')), false);
+  await t('F4: nobody lists the bank index', getDocs(collection(dAd, 'aiBankIndex')), false);
+  await t('F4: unauthenticated cannot read aiConfig', getDoc(doc(anon, 'aiConfig/main')), false);
 }
 console.log(`\n${pass} passed, ${fail} failed`);
 await env.cleanup();

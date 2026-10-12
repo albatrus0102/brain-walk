@@ -655,7 +655,136 @@ service cloud.firestore {
           && (resource == null || resource.data.lastSeen < request.time - duration.value(20, 's'));
         allow delete: if isMember(fid) && (mid == myId(fid) || isAdmin(fid));
       }
+
+      // ====================================================== AI 문제 은행·리포트 (DESIGN-AI 부록 C)
+      // 서버(Cloud Functions, Admin SDK)가 계산하고 쓰는 문서는 클라이언트 쓰기 금지예요.
+      // AI 루틴은 Firestore 에 직접 접근하지 않아요(HTTPS 함수 aiRead/aiSubmit 만). 그래서 AI 를 위한 규칙은 없어요.
+
+      // ---- 문항별 기록: 게임 한 판 = 문서 1개. 지정된 훈련하는 분의 기기만 만들어요. 배열 안쪽은 크기만 보고 서버가 정리해요.
+      function validItemLog() {
+        let d = newData();
+        return d.keys().hasOnly(['v', 'userId', 'date', 'ts', 'sts', 'gameId', 'inCourse', 'level', 'speechOn', 'size', 'device', 'hour', 'abandoned', 'items'])
+          && d.keys().hasAll(['v', 'userId', 'date', 'ts', 'sts', 'gameId', 'items'])
+          && d.v == 1
+          && d.userId == myId(fid)
+          && okDate(d.date) && okMs(d.ts) && d.sts == request.time
+          && str(d.gameId, 40)
+          && d.items is list && d.items.size() >= 1 && d.items.size() <= 20
+          && optBool('inCourse') && optBool('speechOn') && optBool('abandoned')
+          && optNum('level') && optNum('hour')
+          && optStr('size', 10) && optStr('device', 20);
+      }
+      match /itemLogs/{sid} {
+        allow read: if isMember(fid) && isFamilyRole(fid);
+        allow create: if isMember(fid) && okId(sid) && isAssignedTrainee(fid) && validItemLog();
+        allow update: if false;
+        allow delete: if isMember(fid) && (resource.data.userId == myId(fid) || isAdmin(fid));
+      }
+
+      // ---- 쓸 문항 묶음 (서버가 만들어요): 가족 구성원 모두 읽기 (훈련하는 분의 기기가 받아 써요)
+      match /aiPacks/{k} {
+        allow read: if isMember(fid);
+        allow write: if false;
+      }
+
+      // ---- AI 상태: plan(서버) / themes(관심사 낱말, 관리자) / switch(AI 리포트 켜기·끄기, 관리자)
+      function okThemeAt(l, i) { return l.size() <= i || (l[i] is string && l[i].size() >= 1 && l[i].size() <= 10); }
+      function validThemes() {
+        let d = newData();
+        return d.keys().hasOnly(['words', 'updatedBy', 'updatedTs']) && d.keys().hasAll(['words', 'updatedBy', 'updatedTs'])
+          && d.words is list && d.words.size() <= 8
+          && okThemeAt(d.words, 0) && okThemeAt(d.words, 1) && okThemeAt(d.words, 2) && okThemeAt(d.words, 3)
+          && okThemeAt(d.words, 4) && okThemeAt(d.words, 5) && okThemeAt(d.words, 6) && okThemeAt(d.words, 7)
+          && d.updatedBy == myId(fid) && okMs(d.updatedTs);
+      }
+      function validSwitch() {
+        let d = newData();
+        return d.keys().hasOnly(['enabled', 'updatedBy', 'updatedTs']) && d.keys().hasAll(['enabled', 'updatedBy', 'updatedTs'])
+          && d.enabled is bool && d.updatedBy == myId(fid) && okMs(d.updatedTs);
+      }
+      match /aiState/{k} {
+        allow read: if isMember(fid);
+        allow create, update: if isAdmin(fid) && ((k == 'themes' && validThemes()) || (k == 'switch' && validSwitch()));
+        allow delete: if false;
+      }
+
+      // ---- 서버가 계산한 숫자·신호·리포트·운영 기록: 관리자만 읽어요 (리포트는 모든 관리자). 쓰기는 서버만.
+      match /aiStats/{k} {
+        allow read: if isAdmin(fid);
+        allow write: if false;
+      }
+      match /aiSignals/{k} {
+        allow read: if isAdmin(fid);
+        allow write: if false;
+      }
+      match /aiReports/{k} {
+        allow read: if isAdmin(fid);
+        allow write: if false;
+      }
+      match /aiOps/{k=**} {
+        allow read: if isAdmin(fid);
+        allow write: if false;
+      }
+
+      // ---- 관리자 메모: 기간 + 분류 코드 + 자유 글(200자). 자유 글은 AI 에 보내지 않아요(서버는 분류 코드와 날짜만 써요).
+      function validNote() {
+        let d = newData();
+        return d.keys().hasOnly(['from', 'to', 'codes', 'text', 'by', 'ts']) && d.keys().hasAll(['from', 'codes', 'by', 'ts'])
+          && okDate(d.from)
+          && (!('to' in d) || d.to == null || (okDate(d.to) && d.to >= d.from))
+          && d.codes is list && d.codes.size() >= 1 && d.codes.size() <= 9
+          && d.codes.hasOnly(['sleep', 'illness', 'med_change', 'hospital', 'event', 'travel', 'device', 'mood', 'other'])
+          && optStr('text', 200)
+          && d.by == myId(fid) && okMs(d.ts);
+      }
+      match /aiNotes/{nid} {
+        allow read: if isAdmin(fid);
+        allow create, update: if isAdmin(fid) && okId(nid) && validNote();
+        allow delete: if isAdmin(fid);
+      }
+
+      // ---- 관리자의 문항 검토 결정 (옛날 이야기 내보내기, 모호 의심 문항 은퇴·신고). 서버 트리거가 처리해요.
+      match /aiReview/{itemId} {
+        allow read: if isAdmin(fid);
+        allow create: if isAdmin(fid) && itemId.matches('^bk_[0-9a-f]{20}$')
+          && newData().keys().hasOnly(['decision', 'note', 'by', 'ts']) && newData().keys().hasAll(['decision', 'by', 'ts'])
+          && newData().decision in ['approve', 'retire', 'flag']
+          && optStr('note', 100) && newData().by == myId(fid) && okMs(newData().ts);
+        allow update, delete: if false;
+      }
+
+      // ---- AI 리포트 안내를 본 기록 (consents/{memberId}): 본인만 만들고, 서버 시각. 철회도 기록으로 남겨요.
+      function validConsentCreate() {
+        let d = newData();
+        return d.keys().hasOnly(['kind', 'version', 'ackTs', 'withFamily']) && d.keys().hasAll(['kind', 'version', 'ackTs'])
+          && d.kind == 'ai-report-notice' && nonEmpty(d.version, 20) && d.ackTs == request.time && optBool('withFamily');
+      }
+      match /consents/{mid} {
+        allow read: if isMember(fid) && (isAdmin(fid) || mid == myId(fid));
+        allow create: if isMember(fid) && mid == myId(fid) && validConsentCreate();
+        allow update: if isMember(fid) && mid == myId(fid) && newData().kind == oldData().kind && (
+             // 다시 확인 (문구 버전이 바뀌었거나 철회 뒤 다시 동의): 서버 시각, 철회 표시는 지워요
+             (changed().hasOnly(['version', 'ackTs', 'withFamily', 'withdrawnTs']) && nonEmpty(newData().version, 20)
+                && newData().ackTs == request.time && !('withdrawnTs' in newData()) && optBool('withFamily'))
+             // 철회: 서버 시각만 더해요
+          || (changed().hasOnly(['withdrawnTs']) && newData().withdrawnTs == request.time));
+        allow delete: if false;
+      }
     }
+
+    // =========================================== AI: 서버 전용 (Cloud Functions 의 Admin SDK 만)
+    // aiConfig(설정·루틴 키 해시), aiInbox(루틴 결과 대기실), aiBank·aiBankIndex·aiRejects(문제 은행),
+    // aiAggregates·aiJobs(가명 집계·깨우기 작업, 루틴은 aiRead 함수로만 읽어요), aiRate(한도 계수기), ops(서버 하트비트).
+    // 구성원·익명·이메일 계정 누구에게도 열지 않아요. (아래 catch-all 과 같지만, 뜻을 분명히 하려고 따로 적어요.)
+    match /aiConfig/{d} { allow read, write: if false; }
+    match /aiInbox/{d} { allow read, write: if false; }
+    match /aiBank/{d} { allow read, write: if false; }
+    match /aiBankIndex/{d} { allow read, write: if false; }
+    match /aiRejects/{d} { allow read, write: if false; }
+    match /aiAggregates/{d} { allow read, write: if false; }
+    match /aiJobs/{d} { allow read, write: if false; }
+    match /aiRate/{d} { allow read, write: if false; }
+    match /ops/{d} { allow read, write: if false; }
 
     // Everything else is closed.
     match /{document=**} {
