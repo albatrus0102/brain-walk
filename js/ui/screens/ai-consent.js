@@ -4,7 +4,7 @@ import { say } from '../../sound.js';
 import { ACTS } from '../acts.js';
 import { dialog, toast } from '../dom.js';
 import { SCREENS } from '../registry.js';
-import { go } from '../shell.js';
+import { go, render } from '../shell.js';
 import { esc } from '../../util.js';
 
 /* 아버지 안내 화면 (처음 한 번, DESIGN-AI §8.6). 글자 크기는 화면 설정을 따르고, 소리 안내가 켜져 있으면 읽어 드려요. */
@@ -19,6 +19,7 @@ SCREENS.aiConsent = {
   bind() { say(consentSpeech(traineeLabel())); }
 };
 async function ack(withFamily) {
+  document.querySelectorAll('#btn-consent-ok, #btn-consent-fam').forEach(b => { b.disabled = true; });   // 두 번 눌러도 한 번만
   const ok = await acknowledge(withFamily);
   if (!ok) toast('지금은 저장하지 못했어요. 다음에 한 번 더 보여 드릴게요.');
   go('home');
@@ -26,4 +27,5 @@ async function ack(withFamily) {
 }
 ACTS['consent-ok'] = () => ack(false);
 ACTS['consent-fam'] = () => ack(true);
-ACTS['consent-withdraw'] = () => dialog('가족이 숫자를 살펴보는 것을 멈출까요?', '멈추면 새 숫자를 모으지 않아요. 훈련은 그대로 하실 수 있어요. 나중에 안내를 다시 보면 다시 시작해요.', [{ label: '그대로 둘게요', kind: 'filled' }, { label: '멈추기', kind: 'text', run: async () => toast((await withdraw()) ? '멈췄어요.' : '지금은 저장하지 못했어요.') }]);
+ACTS['consent-withdraw'] = () => dialog('가족이 숫자를 살펴보는 것을 멈출까요?', '멈추면 새 숫자를 모으지 않아요. 훈련은 그대로 하실 수 있어요. 다시 시작하고 싶으시면 이 설정 화면에서 언제든 다시 켤 수 있어요.', [{ label: '그대로 둘게요', kind: 'filled' }, { label: '멈추기', kind: 'text', run: async () => { toast((await withdraw()) ? '멈췄어요.' : '지금은 저장하지 못했어요.'); render(true); } }]);
+ACTS['consent-again'] = () => go('aiConsent');

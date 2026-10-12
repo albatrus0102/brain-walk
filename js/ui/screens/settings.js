@@ -1,5 +1,6 @@
 import { chatAvail, getPlan, isAdmin, isOwnerNow, isTrainee, traineeId, traineeLabel } from '../../data.js';
 import { refreshRole } from '../../data.js';
+import { localConsent } from '../../ai/consent.js';
 import { FirebaseAdapter } from '../../store/firebase-adapter.js';
 import { Store } from '../../store/store.js';
 import { S } from '../../state.js';
@@ -41,7 +42,9 @@ SCREENS.settings = {
         (fb ? '<section class="card outlined" aria-labelledby="push-h2"><h2 class="t-title" id="push-h2">알림 받기</h2><div class="mt" id="push-slot"></div></section>' : '') +
         '<section class="card outlined" aria-labelledby="inst-h"><h2 class="t-title" id="inst-h">앱 설치</h2><div class="mt" id="install-slot"></div></section>' +
         (fb ? '<section class="card outlined" aria-label="이 기기"><div class="stack" id="dev-slot"></div></section>' : '') + mg +
-        '<section class="card outlined" id="ai-consent-card" aria-labelledby="aic-h"><h2 class="t-title" id="aic-h">가족이 숫자를 살펴보는 것</h2><p class="t-body mt">푼 문제의 맞힌 개수와 걸린 시간을 가족이 살펴봐요. 싫으시면 멈출 수 있어요.</p><div class="mt"><button class="btn outlined" id="btn-ai-withdraw" type="button" data-act="consent-withdraw">살펴보지 말아 주세요</button></div></section>' +
+        (localConsent() === 'withdrawn'
+          ? '<section class="card outlined" id="ai-consent-card" aria-labelledby="aic-h"><h2 class="t-title" id="aic-h">가족이 숫자를 살펴보는 것</h2><p class="t-body mt" id="aic-state">지금은 멈춰 있어요. 가족이 숫자를 살펴보지 않아요.</p><div class="mt"><button class="btn tonal" id="btn-ai-again" type="button" data-act="consent-again">다시 살펴봐도 돼요</button></div></section>'
+          : '<section class="card outlined" id="ai-consent-card" aria-labelledby="aic-h"><h2 class="t-title" id="aic-h">가족이 숫자를 살펴보는 것</h2><p class="t-body mt" id="aic-state">푼 문제의 맞힌 개수와 걸린 시간을 가족이 살펴봐요. 싫으시면 멈출 수 있어요.</p><div class="mt"><button class="btn outlined" id="btn-ai-withdraw" type="button" data-act="consent-withdraw">살펴보지 말아 주세요</button></div></section>') +
         (local ? '<section class="card outlined" id="demo-card" aria-labelledby="demo-h"><h2 class="t-title" id="demo-h">체험 모드</h2><p class="t-body mt">지금은 체험 모드예요. 기록은 이 기기에만 저장되고, 가족 대화와 알림은 쓸 수 없어요. 체험 모드에서는 한 사람이 관리자와 훈련하는 분을 모두 해 볼 수 있어요.</p><div class="stack mt"><button class="btn tonal" id="btn-role-switch" type="button" data-act="roleswitch">가족(관리자) 화면으로 보기</button></div></section>' : '') +
         '<div class="cta"><button class="btn filled" id="btn-set-home" type="button" data-act="home">처음으로</button></div></div>';
     }

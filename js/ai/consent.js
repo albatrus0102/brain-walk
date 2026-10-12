@@ -1,12 +1,13 @@
 import { dbReady, isTrainee } from '../data.js';
 import { S } from '../state.js';
 import { Store } from '../store/store.js';
-import { DELETE_FIELD, LS, SERVER_TS } from '../util.js';
+import { LS } from '../util.js';
+import { CONSENT_KIND, CONSENT_VERSION, consentState, consentWrite, withdrawPatch } from './consent-doc.js';
 
 /* ================= AI 리포트 안내 동의 (CLIENT-CONTRACT §5, DESIGN-AI §8.6) =================
  * 훈련하는 분 기기에서 처음 한 번 보여 주고 consents/{memberId} 에 기록해요. 서버는 이 기록이 있는 동안만 숫자를 모아요.
  * 문구를 바꾸면 version 을 올려요: 그러면 한 번 더 보여요. */
-export const CONSENT_KIND = 'ai-report-notice', CONSENT_VERSION = '2026-11-v1';
+export { CONSENT_KIND, CONSENT_VERSION };
 const LSK = 'bw.aiConsent';
 const myKey = () => S.myId || 'local';
 export const aiDemoOff = () => Store.mode === 'local' && LS.get('bw.aiDemo', true) === false;   // 시험용: 체험 모드에서 AI 화면·안내를 끔
@@ -29,39 +30,43 @@ export const consentSpeech = label => { const t = consentText(label); return t.t
 export async function aiSwitchOff() {
   try { const d = await Store.getDoc('aiState/switch'); return !!(d && d.enabled === false); } catch (e) { return false; }
 }
-/* 지금 안내를 보여야 하는지: 훈련하는 분 기기이고, 이 문구 버전의 동의가 없거나 철회했고, 관리자가 AI 리포트를 끄지 않았을 때 */
+/* 이 기기에서 본 기록 (규칙이 없거나 읽을 수 없을 때, 그리고 설정 화면의 "멈추기/다시 시작" 줄에 써요) */
+export const localConsent = () => { const l = LS.get(LSK, null); return l && l.version === CONSENT_VERSION ? (l.withdrawn ? 'withdrawn' : 'ok') : 'none'; };
+/* 지금 안내를 보여야 하는지: 훈련하는 분 기기이고, 이 문구 버전으로 확인한 적이 없고, 관리자가 AI 리포트를 끄지 않았을 때.
+ * 철회한 뒤에는 저절로 다시 묻지 않아요 (설정의 "다시 살펴봐도 돼요"로만 다시 열어요). 문구 버전이 바뀌면 한 번 더 보여요. */
 export async function needConsent() {
   if (!isTrainee() || !Store.adapter || aiDemoOff()) return false;
   if (Store.mode === 'firebase' && !S.myId) return false;
   if (await aiSwitchOff()) return false;
   try {
-    const d = await Store.getDoc('consents/' + myKey());
-    return !(d && d.kind === CONSENT_KIND && d.version === CONSENT_VERSION && d.ackTs && !d.withdrawnTs);
+    const st = consentState(await Store.getDoc('consents/' + myKey()));
+    if (st === 'withdrawn') LS.set(LSK, { version: CONSENT_VERSION, withdrawn: true });
+    return st === 'none' || st === 'old';
   } catch (e) {
-    const l = LS.get(LSK, null);                        // 읽을 수 없으면(규칙이 아직 없는 등) 이 기기에서 본 적이 있는지만 봐요
-    return !(l && l.version === CONSENT_VERSION);
+    return localConsent() === 'none';                 // 읽을 수 없으면(오프라인·규칙이 아직 없는 등) 이 기기에서 본 적이 있는지만 봐요
   }
 }
-/* "알겠어요" / "가족과 함께 봤어요": 서버 시각으로 기록 */
-export async function acknowledge(withFamily) {
-  LS.set(LSK, { version: CONSENT_VERSION, ts: Date.now() });
+/* "알겠어요" / "가족과 함께 봤어요": 서버 시각으로 기록. 한 번만 (두 번 눌러도 쓰기는 한 번) */
+let acking = null;
+export function acknowledge(withFamily) {
+  if (!acking) acking = ackOnce(withFamily).finally(() => { acking = null; });
+  return acking;
+}
+async function ackOnce(withFamily) {
   await dbReady;
   if (!Store.adapter) return false;
   const id = 'consents/' + myKey();
   try {
     let cur = null; try { cur = await Store.getDoc(id); } catch (e) {}
-    if (!cur) {
-      const d = { kind: CONSENT_KIND, version: CONSENT_VERSION, ackTs: SERVER_TS }; if (withFamily) d.withFamily = true;
-      await Store.setDoc(id, d);
-    } else {
-      const d = { version: CONSENT_VERSION, ackTs: SERVER_TS, withdrawnTs: DELETE_FIELD }; if (withFamily) d.withFamily = true;
-      await Store.updateDoc(id, d);
-    }
+    if (consentState(cur) === 'ok') { LS.set(LSK, { version: CONSENT_VERSION, ts: Date.now() }); return true; }
+    const w = consentWrite(cur, withFamily);
+    if (w.op === 'set') await Store.setDoc(id, w.data); else await Store.updateDoc(id, w.data);
+    LS.set(LSK, { version: CONSENT_VERSION, ts: Date.now() });
     return true;
   } catch (e) { return false; }
 }
 /* 철회: 서버 시각만 더해요 (지우지 않아요) */
 export async function withdraw() {
   await dbReady;
-  try { await Store.updateDoc('consents/' + myKey(), { withdrawnTs: SERVER_TS }); LS.set(LSK, null); return true; } catch (e) { return false; }
+  try { await Store.updateDoc('consents/' + myKey(), withdrawPatch()); LS.set(LSK, { version: CONSENT_VERSION, withdrawn: true }); return true; } catch (e) { return false; }
 }
