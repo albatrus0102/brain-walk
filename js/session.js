@@ -79,7 +79,8 @@ export function startCourse(opts) {
   const today = todayS(), p = todayProgressDoc(), done = !!(p && p.kind === 'course' && p.status === 'done');
   const replay = !!((opts && opts.replay) || done);
   let games, results = [];
-  if (replay) games = (p && Array.isArray(p.planned) && p.planned.length ? p.planned.slice() : buildCourse(getPlan(), today, catalog()));
+  // 점검 날(진행 문서가 'check')의 "한 번 더"는 점검 과제가 아니라 오늘의 코스를 해요
+  if (replay) games = (p && p.kind === 'course' && Array.isArray(p.planned) && p.planned.length ? p.planned.slice() : buildCourse(getPlan(), today, catalog()));
   else { const r = resumeSource(today); games = r ? r.games : buildCourse(getPlan(), today, catalog()); results = r ? r.results : []; }
   S.course = { date: today, games, results, replay };
   nextCourseStep();

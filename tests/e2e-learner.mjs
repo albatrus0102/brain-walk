@@ -162,4 +162,19 @@ const plan = o => ({ 'bw.localdb': { 'state/plan': o } });
   must(!(await vis(page, '.dialog')) && (await page.innerText('#btn-main')).trim() === '오늘 훈련 시작', '점검을 끄면 첫 점검 권유도 없어요');
   await page.close();
 }
+
+/* ---------- 9) 점검을 마친 날의 "한 번 더": 점검 과제가 아니라 오늘의 코스 ---------- */
+{
+  const n = new Date(), today = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+  const planned = ['words', 'odd', 'shop', 'today', 'flash', 't_words', 't_trails_a', 't_trails_b', 't_digits', 't_reaction', 't_stroop', 't_fluency', 't_delayed'];
+  const results = planned.map(g => ({ g, acc: 1, c: 1, t: 1, sec: 30, lv: 1, ts: Date.now() - 6e5 }));
+  const prog = { userId: 'local', date: today, v: 1, kind: 'check', planned, idx: 13, current: null, currentTs: null, results, status: 'done', startTs: Date.now() - 9e5, updatedTs: Date.now() - 6e5, doneTs: Date.now() - 6e5, sts: Date.now() - 6e5 };
+  const { page } = await newPage(browser, { tag: 'checkreplay', seed: { 'bw.localdb': { ['progress/' + today + '-local']: prog } } });
+  await startDemo(page);
+  must((await page.innerText('#btn-main')).trim() === '오늘 완료 ✓', '점검을 마친 날: "오늘 완료 ✓"');
+  await page.click('#btn-main'); await page.waitForSelector('.dialog'); await page.click('#dlg-btn-1'); await page.waitForSelector('#g-title');
+  const st = await page.evaluate(() => ({ title: document.getElementById('appbar-title').innerText, games: window.__S.course.games, id: window.__S.sess.g.id, assess: window.__S.sess.assess }));
+  must(st.games.length === 5 && st.games.every(g => !/^t_/.test(g)) && !st.assess && /^오늘의 훈련 1\/5$/.test(st.title), '"한 번 더"는 오늘의 코스 5개 (점검 과제 아님) ' + JSON.stringify(st));
+  await page.close();
+}
 await done(browser);
