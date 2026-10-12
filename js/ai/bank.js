@@ -1,6 +1,6 @@
 import { S } from '../state.js';
-import { LS, shuffle, ymd } from '../util.js';
-import { weekKey } from './kdate.js';
+import { LS, parseYmd, shuffle, ymd } from '../util.js';
+import { weekKey, weekStart } from './kdate.js';
 
 /* ================= AI 문제 은행: 받아서 기기에 저장하고, 꺼내 쓰기 (CLIENT-CONTRACT §2) =================
  * families/{fid}/aiPacks 를 한 번 구독해요 (data.js 가 startBank 를 불러요). 받은 묶음은 localStorage 에도 저장해서 오프라인에서도 써요.
@@ -72,18 +72,22 @@ export function startBank(subscribeFn) {
 }
 export function stopBank() { AI.subscribed = false; }
 
-/* ---- 이미 본 문항 ---- */
+/* ---- 이미 본 문항 ----
+ * 60일까지만 기억해요: 서버는 60일 넘게 안 나온 훈련 문항을 다시 'ready' 로 돌려 묶음에 넣어요(functions/ai/bank.js reactivate).
+ * 앵커는 12주마다 같은 문항을 다시 풀어야 하니까, "이번 주에 본 것"만 건너뛰어요 (measureNext). */
+export const SEEN_DAYS = 60;
 let seenMem = null;
 function seenMap() {
   if (seenMem) return seenMem;
   const m = LS.get(SEEN_KEY, {}); seenMem = isObj(m) ? m : {};
-  const cut = Date.now() - 400 * 864e5; let n = 0;
+  const cut = Date.now() - SEEN_DAYS * 864e5; let n = 0;
   Object.keys(seenMem).forEach(k => { if (!(seenMem[k] > cut)) delete seenMem[k]; else n++; });
   if (n > 3000) Object.keys(seenMem).sort((a, b) => seenMem[a] - seenMem[b]).slice(0, n - 3000).forEach(k => delete seenMem[k]);
   return seenMem;
 }
 const baseId = id => String(id).split('#')[0];
 export const isSeen = id => !!seenMap()[baseId(id)];
+const seenSince = (id, ms) => (seenMap()[baseId(id)] || 0) >= ms;
 export function markSeen(id) { seenMap()[baseId(id)] = Date.now(); LS.set(SEEN_KEY, seenMem); }
 export function resetSeen() { seenMem = {}; LS.set(SEEN_KEY, {}); }
 
@@ -128,9 +132,11 @@ export function measureNext(cds, used) {
   const d = measureDoc(); if (!d) return null;
   const perDay = Math.max(1, Number(d.plan.perDay) || 5);
   if (dayCount() >= perDay) return null;
-  const u = used || [];
-  const fits = it => cds.includes(it.cdomain) && !isSeen(it.id) && !u.includes(it.id) && inWindow(it, todayYmd());
-  const a = d.anchor.filter(fits); if (a.length) return a[0];       // 앵커: 저장된 순서 그대로
+  const u = used || [], today = todayYmd(), weekMs = parseYmd(weekStart(d.week) || today).getTime();
+  const base = it => cds.includes(it.cdomain) && !u.includes(it.id) && inWindow(it, today);
+  const fits = it => base(it) && !isSeen(it.id);
+  // 앵커: 같은 세트를 12주마다 다시 풀어요. 예전에 본 적이 있어도 이번 주에 아직 안 풀었으면 내요. 저장된 순서 그대로.
+  const a = d.anchor.filter(it => base(it) && !seenSince(it.id, weekMs)); if (a.length) return a[0];
   const r = d.ref.filter(fits); return r.length ? shuffle(r)[0] : null;
 }
 export const measureFirstPos = () => { const d = measureDoc(); const p = d && Number(d.plan.firstPosition); return Number.isInteger(p) && p >= 0 && p <= 3 ? p : 1; };
