@@ -546,7 +546,12 @@ select.input{appearance:auto}
 
 /* 잊지 말고 누르기 단추 (위쪽 바) */
 .pm-wrap{display:inline-flex;gap:8px;flex:none;margin-left:auto}
-@media (max-width:520px){.appbar.has-pm .appbar-title{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
+@media (max-width:520px){.appbar.has-pm .appbar-title{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  /* 🌼·🌻 두 개 + "처음으로"(최대 글자)가 360px 에 들어가게: 단추를 조금 줄이고(48px 이상), 그래도 넘치면 다음 줄로 (화면 밖·오른쪽 여백으로 밀려나지 않게) */
+  .appbar.has-pm .appbar-in{flex-wrap:wrap;row-gap:4px}
+  .appbar.has-pm .pm-wrap.two{gap:6px}
+  .appbar.has-pm .pm-wrap.two .pm-btn{width:52px;min-width:52px;height:52px;font-size:26px}
+  .appbar.has-pm #btn-back{padding:0 10px}}
 .pm-btn{min-width:56px;height:56px;border:3px solid var(--md-sys-color-tertiary);border-radius:var(--md-sys-shape-corner-full);background:var(--md-sys-color-tertiary-container);font-size:30px;line-height:1;cursor:pointer;display:inline-grid;place-items:center;padding:0}
 
 /* ======================= 관리자 AI 리포트 ======================= */
@@ -618,6 +623,10 @@ select.input{appearance:auto}
 .ai-table thead th{font-weight:700;color:var(--md-sys-color-on-surface-variant)}
 .ai-table.bank td,.ai-table.bank th{text-align:center}
 .ai-table.bank th[scope=row]{text-align:left}
+/* 문제 은행 표: 숫자·"1단계"·⚠ 가 글자 단위로 쪼개지지 않게 (좁으면 표만 옆으로 밀어 봐요) */
+.ai-table.bank th,.ai-table.bank td{white-space:nowrap;overflow-wrap:normal;text-align:center;padding-inline:4px}
+.ai-table.bank th[scope=row]{text-align:left;white-space:normal;min-width:4.5em}
+.ai-table.bank td[colspan]{white-space:normal}
 .ai-table td.low{font-weight:700;color:var(--md-app-color-orange)}
 .ac-ok.y{font-weight:700;color:var(--md-sys-color-primary)}
 .ac-ok.n{font-weight:700;color:var(--md-sys-color-tertiary)}

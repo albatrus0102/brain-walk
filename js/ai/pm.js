@@ -53,7 +53,7 @@ export function pmButtons() {
   const p = pmState(); if (!p) return null;
   const btn = (cue, name) => h('button', { class: 'icon-btn pm-btn', id: 'btn-pm-' + (cue === p.cue ? 'cue' : 'other'), type: 'button', 'data-act': 'pm-press', 'data-cue': cue, 'aria-label': name + ' 단추', text: cue });
   const other = p.cue === '🌼' ? '🌻' : '🌼';
-  return h('span', { class: 'pm-wrap', id: 'pm-wrap' }, btn(p.cue, '꽃'), p.wrongCue ? btn(other, '다른 꽃') : null);
+  return h('span', { class: 'pm-wrap' + (p.wrongCue ? ' two' : ''), id: 'pm-wrap' }, btn(p.cue, '꽃'), p.wrongCue ? btn(other, '다른 꽃') : null);
 }
 function finalize(p, ok, err) {
   p.done = true; save(p);
