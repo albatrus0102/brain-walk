@@ -3,5 +3,10 @@
   "private": true,
   "main": "index.js",
   "engines": { "node": "22" },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "vendor": "node ai/tools/vendor-validator.mjs",
+    "simulate": "node ai/tools/simulate.mjs"
+  },
   "dependencies": { "firebase-admin": "^13.10.0", "firebase-functions": "^6.6.0" }
 }

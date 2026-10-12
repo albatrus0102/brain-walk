@@ -17,6 +17,96 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "aiBank",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "role",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "cdomain",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "level",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiBank",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "role",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "format",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "level",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "specVer",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiBank",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastExposed",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiBank",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "retiredTs",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiBank",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "anchorSet",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "excluded",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -56,6 +146,117 @@
     {
       "collectionGroup": "messages",
       "fieldPath": "record",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "messages",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiInbox",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiAggregates",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiJobs",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiRejects",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiRate",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "aiBank",
+      "fieldPath": "sketch",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiBank",
+      "fieldPath": "body",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiBank",
+      "fieldPath": "choices",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiBank",
+      "fieldPath": "options",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiBank",
+      "fieldPath": "exposures",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiInbox",
+      "fieldPath": "payload",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiStats",
+      "fieldPath": "rows",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiStats",
+      "fieldPath": "weeks",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiPacks",
+      "fieldPath": "items",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "itemLogs",
+      "fieldPath": "items",
       "indexes": []
     }
   ]

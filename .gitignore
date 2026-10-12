@@ -12,3 +12,5 @@ firebase-debug.log*
 firestore-debug.log
 ui-debug.log
 .DS_Store
+functions/.secret.local
+functions/test-emulator.log

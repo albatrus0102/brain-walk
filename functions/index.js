@@ -399,3 +399,8 @@ exports.dailyPurge = onSchedule(
     logger.info('purge', { joinCodes: jc, transferCodes: tc, devices: dv });
   },
 );
+
+// ------------------------------------------------------------------ AI (functions/ai)
+// AI question bank + admin reports. See functions/ai/index.js and README "AI 문제 은행·리포트".
+const ai = require('./ai');
+for (const name of ['aiRead', 'aiSubmit', 'aiOnInbox', 'aiOnItemLog', 'aiOnProgress', 'aiOnReview', 'aiDaily', 'aiTick', 'aiPurge']) exports[name] = ai[name];

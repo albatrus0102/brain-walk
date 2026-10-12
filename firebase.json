@@ -1,5 +1,5 @@
 {
   "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
-  "functions": [{ "source": "functions", "codebase": "default", "runtime": "nodejs22" }],
-  "emulators": { "firestore": { "port": 8080 }, "auth": { "port": 9099 }, "ui": { "enabled": false } }
+  "functions": [{ "source": "functions", "codebase": "default", "runtime": "nodejs22", "ignore": ["node_modules", ".git", "test", "*.local", "firebase-debug.log*"] }],
+  "emulators": { "firestore": { "port": 8080 }, "auth": { "port": 9099 }, "functions": { "port": 5001 }, "ui": { "enabled": false } }
 }
