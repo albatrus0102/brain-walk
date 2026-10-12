@@ -88,17 +88,44 @@ async function sendTelegram(kind, orangeCount = 0, nowMs = Date.now(), opts = {}
   return (await deliver(messageText(kind, orangeCount, await appUrl()), kind)) ? 'sent' : 'failed';
 }
 
+const MAX_TRIES = 3;                       // a digest that failed 3 times is dropped (no endless 10-min resends)
+const LOCK_MS = 120e3;
+/** One flusher at a time: aiTgFlush (08:00) and aiTick (every 10 min, also 08:00) run concurrently. Real time on purpose. */
+async function claimFlush() {
+  const { db, expireIn } = require('./fb.js');
+  const ref = db().collection('aiRate').doc('tgflush');
+  const now = Date.now();
+  const won = await db().runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (s.exists && (s.get('until') || 0) > now) return false;
+    tx.set(ref, { until: now + LOCK_MS, expireAt: expireIn(30) });
+    return true;
+  });
+  return won ? ref : null;
+}
+
 /** Send everything queued as ONE digest (08:00 schedule; aiTick backstop). Does nothing inside the hold window. */
 async function flushOutbox(nowMs = Date.now()) {
   if (inHold(nowMs)) return { held: true };
-  const { db } = require('./fb.js');
-  const s = await db().collection('tgOutbox').where('status', '==', 'queued').limit(200).get();
-  if (s.empty) return { sent: 0 };
-  const entries = s.docs.map((d) => ({ kind: d.get('kind'), n: d.get('n') }));
-  const ok = await deliver(digestText(entries, await appUrl()), 'digest');
-  if (ok) { const b = db().batch(); s.docs.forEach((d) => b.delete(d.ref)); await b.commit(); }
-  log.info('telegram_digest', { ok, queued: s.size });
-  return { sent: ok ? 1 : 0, merged: s.size };
+  const { db, FieldValue } = require('./fb.js');
+  const lock = await claimFlush();
+  if (!lock) { log.info('telegram_digest', { busy: true }); return { busy: true, sent: 0 }; }
+  try {
+    const s = await db().collection('tgOutbox').where('status', '==', 'queued').limit(200).get();
+    if (s.empty) return { sent: 0 };
+    const dead = s.docs.filter((d) => (d.get('tries') || 0) >= MAX_TRIES), live = s.docs.filter((d) => (d.get('tries') || 0) < MAX_TRIES);
+    if (dead.length) { const b = db().batch(); dead.forEach((d) => b.delete(d.ref)); await b.commit(); log.warn('telegram_dropped', { n: dead.length }); }
+    if (!live.length) return { sent: 0, dropped: dead.length };
+    const entries = live.map((d) => ({ kind: d.get('kind'), n: d.get('n') }));
+    const ok = await deliver(digestText(entries, await appUrl()), 'digest');
+    const b = db().batch();
+    live.forEach((d) => (ok ? b.delete(d.ref) : b.update(d.ref, { tries: FieldValue.increment(1) })));
+    await b.commit();
+    log.info('telegram_digest', { ok, queued: live.length });
+    return { sent: ok ? 1 : 0, merged: live.length };
+  } finally {
+    await lock.set({ until: 0 }, { merge: true }).catch(() => {});
+  }
 }
 
 module.exports = { sendTelegram, flushOutbox, digestText, messageText, inHold, KIND };

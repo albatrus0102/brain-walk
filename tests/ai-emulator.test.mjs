@@ -290,6 +290,20 @@ await t('B12 Telegram gate: nothing sent 02:00–08:00 KST; queued messages go o
   assert((await db.collection('tgOutbox').get()).empty, 'outbox emptied');
   assert(await sendTelegram('rule_only', 1, at('08:30')) === 'sent', 'after 08:00 alerts go straight out');
 });
+await t('B12a 08:00: aiTgFlush and aiTick flushing at the same moment send ONE digest; a failing digest is dropped after 3 tries', async () => {
+  const { sendTelegram, flushOutbox } = require('./ai/telegram.js');
+  const at = (hhmm) => Date.parse(`${today}T${hhmm}:00+09:00`);
+  for (const d of (await db.collection('tgOutbox').get()).docs) await d.ref.delete();
+  await sendTelegram('key_offschedule', 0, at('03:10'));
+  const tg0 = tgs.length;
+  const rs = await Promise.all([flushOutbox(at('08:00')), flushOutbox(at('08:00')), flushOutbox(at('08:00'))]);
+  assert(tgs.length === tg0 + 1, `digests sent: ${tgs.length - tg0}`);
+  assert(rs.filter((r) => r.sent === 1).length === 1, JSON.stringify(rs));
+  // a queued entry that already failed 3 times is dropped without sending
+  await db.collection('tgOutbox').add({ kind: 'test', n: 0, status: 'queued', tries: 3, expireAt: Timestamp.fromMillis(Date.now() + 864e5) });
+  const r = await flushOutbox(at('08:10'));
+  assert(r.sent === 0 && r.dropped === 1 && tgs.length === tg0 + 1 && (await db.collection('tgOutbox').get()).empty, JSON.stringify(r));
+});
 await t('B12b tick: no report by 08:30 → template + "간단판" Telegram; tick also flushes a leftover outbox', async () => {
   const { tick } = require('./ai/tick.js');
   await db.doc(`families/${FID}/aiOps/health`).set({ morningDone: null }, { merge: true });
