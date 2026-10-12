@@ -25,6 +25,7 @@
 12. [가족 초대하기](#12-가족-초대하기)
     - [12-1. 관리자와 훈련하는 분 화면 설정](#12-1-관리자와-훈련하는-분-화면-설정)
 13. [알림 보내는 방법 고르기](#13-알림-보내는-방법-고르기-둘-중-하나)
+    - [13-1. AI 문제 은행·리포트 (Cloud Functions)](#13-1-ai-문제-은행리포트-cloud-functions)
 14. [(선택) 보안 강화](#14-선택-보안-강화)
 15. [기기를 바꿨을 때 / 잃어버렸을 때](#15-기기를-바꿨을-때--잃어버렸을-때)
 16. [문제 해결](#16-문제-해결)
@@ -171,7 +172,47 @@
 
 > ⚠ 키 파일을 저장소에 절대 올리지 마세요. (`.gitignore` 가 막아 주지만 직접 확인하세요.)
 > ⚠ 저장소에 60일 동안 변화가 없으면 GitHub가 예약 실행을 멈춰요. 메일이 오면 Actions에서 다시 켜 주세요.
-> 둘을 함께 켜 둬도 안전해요. 같은 알림이 두 번 가지 않아요.
+> 둘을 함께 켜 둬도 안전해요. 같은 알림이 두 번 가지 않아요. A(Cloud Functions)를 배포하면 그 `tick` 이 5분마다 `ops/pushTick` 에 "살아 있음"을 남기고, B(Actions)는 그 기록이 20분 안이면 아무것도 보내지 않고 쉬어요(로그: `fallback idle`). Functions 가 멈추면 B 가 다음 실행부터 다시 보내요. 시험으로 B 를 강제로 돌리려면 `FORCE=1`.
+
+## 13-1. AI 문제 은행·리포트 (Cloud Functions)
+설계: `DESIGN-AI.md` (승인본). 앱 화면은 아직이에요(다음 작업). 서버는 **Cloud Functions 2세대, 지역 asia-northeast3**(Firestore 서울과 같은 곳)예요. 코드: `functions/ai/`.
+
+**무엇이 어디서 돌아가나**
+| 함수 | 언제 | 하는 일 |
+|---|---|---|
+| `aiRead` (HTTPS GET) | 루틴이 부를 때 | `?doc=current` 가명 집계 · `?doc=bankNeeds` 만들 문항 수 · `?doc=job&job=<id>` 깨우기 작업과 그 집계. 그 밖은 400 |
+| `aiSubmit` (HTTPS POST) | 루틴이 부를 때 | 결과 한 건(`items` 또는 `report`)을 대기실(`aiInbox`)에 써요. 본문 512KB, 한 시간 20건, 모양 검사 |
+| `aiOnInbox` | 대기실에 문서가 생기면 즉시 | 검사기(정답 재계산·금지어·개인정보·중복·검사 문항 지문·품질 기록·하루 400개) → 은행/거절 기록 → 가족 묶음·필요 수 갱신. 리포트는 숫자 자리표시자·신호등 검사 → `aiReports`(떨어지면 간단판) → 텔레그램 |
+| `aiOnItemLog` | 문항 기록이 생기면 | 문항 사용 표시, 모호 의심 격리, 묶음 갱신 |
+| `aiOnProgress` | 오늘 코스가 끝나면 | 다시 집계·신호 계산 → 새 주황 신호면 리포트 루틴을 바로 깨워요(하루 2번, 같은 신호 7일, 20:00–08:00 제외, 다시 시도 안 함, 실패하면 간단판 + 규칙 알림) |
+| `aiDaily` | 매일 06:50 | 주간 통계, 신호(S1–S6), 가명 집계, 기준·앵커 묶음, 훈련 묶음, 필요 수 |
+| `aiTgFlush` | 매일 08:00 | **02:00–08:00 에는 어떤 텔레그램도 보내지 않아요.** 그 사이에 생긴 알림과 08:00 전의 아침·주간 리포트 알림은 `tgOutbox` 에 모였다가 08:00 에 **한 통**으로 가요(같은 종류는 한 줄로) |
+| `aiTick` | 10분마다 | 남은 텔레그램 대기열 보내기(08:00 뒤 뒷받침), 08:30까지 리포트가 없으면 간단판, 깨운 뒤 90분 동안 리포트가 없으면 간단판, 문제 만들기 2일 멈춤 알림, 예정에 없던 키 사용 알림 |
+| `aiPurge` | 매일 04:30 | 보관 기한(문항 기록 2년, 리포트·통계·신호·메모 5년, 은퇴 문항 1년)과 지운 가족방의 남은 자료. 대기실·집계·작업·거절 기록은 Firestore TTL(`expireAt`)이 지우고 이건 뒷받침이에요 |
+| `aiOnReview` | 관리자가 검토 결정을 쓰면 | 옛날 이야기 내보내기, 문항 은퇴·신고 |
+
+**루틴 인증 (고정 키 하나):** 루틴은 Firestore 에 직접 접근하지 않고 위 두 함수만 불러요. 키는 48글자 무작위 값이고, Firestore `aiConfig/main.routineKeyHash` 에는 **sha256 만** 둬요(원래 키는 DB·코드·로그·git 어디에도 없어요). 함수는 `Authorization: Bearer <키>` 를 sha256 해서 `timingSafeEqual` 로 비교해요. 해시가 없거나 짧으면 503, 키가 틀리면 401. 설정은 60초 동안 기억했다가 다시 읽어서, 해시를 바꾸거나 지우면 배포 없이 60초 안에 막혀요. 보안 규칙은 AI 를 위해 아무 계정에도 문을 열지 않아요.
+
+**비밀값 (Secret Manager):** `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `ROUTINE_REPORTER_URL`, `ROUTINE_REPORTER_TOKEN`. 코드·로그에 없어요. 함수 배포 **전에** 네 개가 모두 있어야 해요(루틴 API 트리거를 만들기 전이면 두 ROUTINE 값은 `unset` 으로 넣어 두면 깨우기 대신 규칙 알림만 가요).
+
+**배포 순서** (Blaze, `firebase login`, `firebase use brain-walk`)
+```
+cd functions && npm ci && npm test && cd ..
+cd tests && npm install && npm test && npm run test:ai && cd ..
+firebase functions:secrets:set TELEGRAM_BOT_TOKEN
+firebase functions:secrets:set TELEGRAM_CHAT_ID
+firebase functions:secrets:set ROUTINE_REPORTER_URL      # 아직이면 unset
+firebase functions:secrets:set ROUTINE_REPORTER_TOKEN    # 아직이면 unset
+echo 'APP_URL=https://albatrus0102.github.io/brain-walk/' > functions/.env.brain-walk   # git 에 안 올라가요(.gitignore)
+firebase deploy --only functions,firestore:rules,firestore:indexes
+gcloud auth application-default login
+cd functions && node ai/tools/set-routine-key.mjs --project brain-walk --family <가족방 id> --enable --out ~/bw-routine-key.txt
+```
+이 배포는 기존 알림 함수(`onFamilyMessage`, `tick`, `dailyPurge`)도 함께 올려요(13번 A). 그 뒤 GitHub Actions 알림은 저절로 쉬어요.
+함수 주소: `https://asia-northeast3-brain-walk.cloudfunctions.net/aiRead`, `…/aiSubmit` (2세대라 `…run.app` 주소도 함께 생겨요). 키 없이 부르면 401 이 나와야 해요.
+루틴 쪽 준비(전용 환경, 네트워크 허용 한 줄, 키 파일, 루틴 두 개, API 트리거)는 `brain-walk-ai` 저장소의 `SETUP.md` 에 있어요. API 트리거를 만든 뒤 `ROUTINE_REPORTER_URL/TOKEN` 을 다시 넣고 `firebase deploy --only functions:aiOnProgress`.
+
+**한 번만 할 일·조정:** 기준선 4주가 끝나고 6~8주차에 `node ai/tools/simulate.mjs --firestore --write` 로 신호 문턱을 맞춰요(거짓 주황 1년 1회 이하). 키는 6개월마다 `set-routine-key.mjs` 로 바꿔요(급할 때 `--revoke`).
 
 ## 14. (선택) 보안 강화
 - **API 키를 주소로 제한:** Google Cloud 콘솔 › API 및 서비스 › 사용자 인증 정보 › "Browser key (auto created by Firebase)" › 애플리케이션 제한 = HTTP 리퍼러 → `https://내아이디.github.io/brain-walk/*` (개발용으로 `http://localhost:*/*` 추가). API 제한 목록에는 Identity Toolkit, Token Service, Cloud Firestore, Firebase Installations, FCM Registration API를 꼭 넣어요. 너무 좁히면 알림 켜기가 조용히 실패하니, 제한한 뒤 알림을 꼭 시험하세요.
@@ -214,6 +255,7 @@ js/display.js         글꼴·글자 크기·소리를 html[data-*] 로 적용 (
 js/games/ · js/ui/    게임 9종, 화면과 공통 컴포넌트
 js/push.js            알림 켜기(getToken) / 끄기 / 포그라운드 메시지
 firestore.rules       보안 규칙      functions/   Cloud Functions     scripts/   Actions 대체 발송
+functions/ai/         AI 문제 은행·리포트: core/(검사기·통계·신호·리포트, 의존성 없음) data/(사전·명절·이모지·금지어) tools/(키·시뮬레이션·검사기 사본)
 tests/                규칙 시험, 어댑터 스모크 시험, 체험 모드 e2e (tests/README.md)
 tools/                make-icons.py, shell-list.mjs (sw.js 파일 목록 점검)
 ```
