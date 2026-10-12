@@ -31,6 +31,10 @@ function back(n) {
   }));
 }
 const later = f => { chain = chain.then(() => { safe(f); }); };
+/* 지킴이 칸이 없으면(맨 앞 칸만 남았으면) 다시 쌓아요. 단, 앱 닫기 확인창이 떠 있는 동안엔 그 창이 지킴이 대신이에요 */
+function ensureGuard() {
+  if (armed && !exiting && stack.length === 1 && !layers.some(l => l.nopush)) doPush({ s: S.screen, f: isFlowScreen(S.screen) });
+}
 
 /* ---------- 창(대화상자·시트) ---------- */
 /* opts.nopush: 칸을 쌓지 않아요 (앱 닫기 확인창: 이 창이 떠 있을 때 Back 을 또 누르면 그대로 앱을 나가요) */
@@ -44,7 +48,7 @@ export function openLayer(dismiss, opts) {
 export function closeLayer(l) {
   const k = layers.indexOf(l); if (k < 0) return;
   layers.splice(k, 1);
-  if (l.pushed) { l.pushed = false; later(() => { if (stack.length > 1 && stack[stack.length - 1].d) { stack.pop(); back(1); } }); }
+  if (l.pushed) { l.pushed = false; later(() => { if (stack.length > 1 && stack[stack.length - 1].d) { stack.pop(); back(1); } later(ensureGuard); }); }
 }
 /* Escape: Back 과 같아요 */
 export function dismissTop() {
@@ -85,6 +89,7 @@ function onPop(e) {
   const dcount = removed.filter(x => x.d && !x.dead).length;
   if (dcount > 0 && layers.some(l => l.pushed)) {
     for (let n = 0; n < dcount; n++) { const l = layers.slice().reverse().find(x => x.pushed); if (!l) break; layers.splice(layers.indexOf(l), 1); l.pushed = false; safe(l.dismiss); }
+    later(ensureGuard);   // 맨 앞 칸까지 돌아왔으면 지킴이 칸을 다시 쌓아요
     return;
   }
   // 창이 없으면 화면 단위 Back
@@ -113,7 +118,7 @@ function arm() {
 /* 앱 닫기 확인창에서 '계속하기' (또는 Escape): 지킴이 칸을 다시 쌓아요 */
 export function rearm() {
   if (!armed || exiting) return;
-  later(() => { if (stack.length === 1) doPush({ s: S.screen, f: isFlowScreen(S.screen) }); });
+  later(ensureGuard);
 }
 /* '닫기': 지킴이 칸을 지나 앞으로 돌아가요. 갈 곳이 없으면 창 닫기를 시도하고, 그래도 남으면 계속 쓸 수 있게 다시 지켜요 */
 export function exitApp() {
