@@ -6,7 +6,8 @@ const BASE = process.env.BASE || 'http://localhost:8765/brain-walk/';
 const SHOTS = process.env.SHOT_DIR || '/tmp';
 const browser = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium' });
 const errors = [], out = (...a) => console.log(...a);
-const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true })).newPage();
+const ctx0 = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true }); await ctx0.addInitScript(() => { window.__DEBUG = true; });
+const page = await ctx0.newPage();
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 const vis = sel => page.locator(sel).first().isVisible().catch(() => false);
@@ -14,14 +15,14 @@ const must = (c, msg) => { if (!c) { errors.push('ASSERT ' + msg); out('FAIL', m
 await page.goto(BASE); await page.waitForSelector('#btn-demo'); await page.click('#btn-demo');
 await page.waitForSelector('.dialog'); await page.click('#dlg-btn-0'); if (await vis('.dialog')) await page.click('#dlg-btn-1');
 // 1) 생활 체크 + 잠 기록 (훈련하는 분)
-await page.click('#btn-checkin'); await page.waitForSelector('#ci-h');
+await page.evaluate(() => window.__go('checkin')); await page.waitForSelector('#ci-h');
 await page.click('#ci-mood-4'); await page.click('#ci-sleep-7'); await page.click('#ci-exercise-yes'); await page.click('#ci-social-no'); await page.click('#ci-meals-yes');
 await page.click('#sl-summary'); await page.fill('#sl-bed', '22:30'); await page.fill('#sl-wake', '06:40'); await page.click('#ci-wk-2');
 must((await page.inputValue('#sl-bed')) === '22:30', '잠든 시각 유지(다시 그려도)');
-await page.click('#btn-ci-save'); await page.waitForSelector('#btn-start-course');
+await page.click('#btn-ci-save'); await page.waitForSelector('#btn-main');
 must(await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('bw.localdb'))).some(k => k.startsWith('sleeplogs/'))), '수면 기록 저장');
 // 2) 시계 그리기 (훈련하는 분)
-await page.click('#nav-pick'); await page.click('#btn-open-clock'); await page.waitForSelector('#clock-canvas');
+await page.evaluate(() => window.__go('clock')); await page.waitForSelector('#clock-canvas');
 must((await page.innerText('#clk-prompt')).includes('11시 10분을 가리키는 시계를 그려 주세요'), '시계 그리기 안내 문구');
 must(await page.locator('#btn-clock-done').isDisabled(), '그리기 전에는 저장 불가');
 const box = await page.locator('#clock-canvas').boundingBox(), cx = box.x + box.width / 2, cy = box.y + box.height / 2, R = box.width * 0.38;

@@ -17,10 +17,10 @@ await page.waitForSelector('#setup-h');
 await must((await page.innerText('#setup-h')).includes('관리자 설정이 필요해요'), '설정 안내 화면');
 await must((await page.innerText('#screen')).includes('README'), 'README 안내 문구');
 await page.click('#btn-demo');
-await page.waitForSelector('#btn-start-course, .dialog');
+await page.waitForSelector('#btn-main, .dialog');
 if (await vis('.dialog')) { out('dialog:', await page.innerText('#dlg-title')); await page.click('#dlg-btn-0'); }
 if (await vis('.dialog')) { out('dialog:', await page.innerText('#dlg-title')); await page.click('#dlg-btn-1'); }
-await must(await vis('#btn-start-course'), '홈 훈련 시작 버튼');
+await must(await vis('#btn-main'), '홈 훈련 시작 버튼');
 
 async function playRound() {
   // 숫자 순서대로 누르기: "다음: N" 에 맞는 칸을 눌러요 (오늘의 코스 첫 게임이 날짜마다 달라져요)
@@ -29,10 +29,10 @@ async function playRound() {
   if (await vis('#btn-memorized')) { await page.click('#btn-memorized'); const t = await page.locator('#cnt').innerText(); const n = +t.match(/\/ (\d+)/)[1]; const chips = page.locator('#pool .chip'); for (let i = 0; i < n; i++) await chips.nth(i).click(); await page.click('#btn-check'); return true; }
   return false;
 }
-await page.click('#btn-start-course');
+await page.click('#btn-main');
 await page.waitForSelector('#g-title');
 let steps = 0, fbHidden = 0;
-while (steps++ < 80 && !(await vis('#res-score'))) {
+while (steps++ < 80 && !(await vis('#brk-h'))) {
   if (await vis('#btn-next')) {
     // 답한 뒤 안내 글은 위 앱 바와 아래 고정 버튼 사이에 보여야 해요 (예전에는 고정 버튼 밑에 숨었어요)
     await page.waitForTimeout(150);
@@ -46,27 +46,27 @@ while (steps++ < 80 && !(await vis('#res-score'))) {
   }
   await page.waitForTimeout(30);
 }
-await must(await vis('#res-score') || await vis('#btn-next'), '게임 한 판 진행/결과');
+await must(await vis('#brk-h'), '게임 한 판을 끝내면 쉬는 화면 (다음은 ‘…’)');
 await must(fbHidden === 0, '답한 뒤 안내 글이 고정 버튼에 가려지지 않음 (가려진 횟수 ' + fbHidden + ')');
 await page.screenshot({ path: process.env.SHOT_DIR ? process.env.SHOT_DIR + '/game.png' : '/tmp/game.png' });
-await page.click('#btn-home').catch(() => {});
-await page.evaluate(() => { location.hash = ''; });
-await page.goto(BASE); await page.waitForSelector('#btn-start-course, .dialog');
-if (await vis('.dialog')) await page.click('#dlg-btn-1').catch(() => {});
-
-must((await page.locator('#nav-family').count()) === 0 && (await page.locator('#nav-assess').count()) === 0 && (await page.locator('.nav-item').count()) === 3, '훈련하는 분 메뉴는 홈·훈련·대화 3개');
-must((await page.locator('.card').count()) <= 4 && await vis('#btn-start-course'), '홈: 큰 버튼 하나 + 카드 몇 개');
+await page.click('#btn-brk-stop'); await page.click('#dlg-btn-1');
+await page.waitForSelector('#btn-main');
+must((await page.locator('.nav-item').count()) === 0, '훈련하는 분 화면에는 하단 메뉴가 없어요');
+must((await page.innerText('#btn-main')).trim() === '이어서 하기', '홈: 이어서 하기');
 await page.screenshot({ path: (process.env.SHOT_DIR || '/tmp') + '/home-trainee.png' });
-await page.click('#nav-pick').catch(() => {});
-await page.click('#nav-home').catch(() => {});
+// 가족(관리자) 화면으로 바꿔서 설정·채팅 확인
+await page.click('#btn-gear'); await page.click('#dlg-btn-1'); await page.waitForSelector('#set-main-h');
+await page.click('#btn-role-switch'); await page.click('#dlg-btn-1'); await page.waitForSelector('#btn-settings');
 await page.click('#btn-settings'); await page.waitForSelector('#set-main-h');
 await must(await vis('#btn-delete-local'), '설정: 체험 모드 안내/삭제 버튼');
-await must(await vis('#btn-ics'), '설정: ICS 버튼');
+await page.click('#xp-mgmt'); await page.click('#row-plan'); await page.waitForSelector('#plan-h');
+await page.click('#xp-p2');
+await must(await vis('#btn-ics'), '훈련 계획: ICS 버튼');
 const dl = page.waitForEvent('download');
 await page.click('#btn-ics'); const d = await dl; await must(d.suggestedFilename().endsWith('.ics'), 'ICS 실제 다운로드 ' + d.suggestedFilename());
+await page.click('#btn-back'); await page.waitForSelector('#set-main-h');
 await page.click('#btn-delete-local'); await must(await vis('#dlg-title'), '삭제 확인 대화상자(M3)'); await page.click('#dlg-btn-0');
 await page.click('#btn-back'); await page.click('#nav-chat'); await page.waitForSelector('#chat-h'); must(!(await page.innerText('#screen')).includes('claude.ai') && (await page.innerText('#screen')).includes('체험 모드'), '채팅(체험 모드) 안내 문구에 claude.ai 없음');
-await page.goBack().catch(() => {});
 out('ERRORS:', JSON.stringify(errors));
 await browser.close();
 process.exit(errors.length ? 1 : 0);

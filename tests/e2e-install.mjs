@@ -1,5 +1,5 @@
 // 홈 화면 설치 안내: 설치 버튼(beforeinstallprompt) / 앱 안 브라우저(카카오톡) / 아이폰 사파리 안내 / 설정의 "앱 설치" 줄.
-// 체험 모드로 들어가 화면만 확인해요 (firebase-config.js 가 비어 있는 상태).
+// 체험 모드(가족 화면: 훈련하는 분 홈에는 설치·알림 카드가 없어요)로 들어가 화면만 확인해요 (firebase-config.js 가 비어 있는 상태).
 import { createRequire } from 'node:module';
 const require = createRequire(process.env.PW_MODULES || '/opt/node-tools/node_modules/');
 const { chromium } = require('playwright');
@@ -22,7 +22,7 @@ async function open(ua, o = {}) {
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errors.push('console: ' + m.text()); });
   await page.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: FILLED }));
   await page.route('https://www.gstatic.com/**', r => r.abort());
-  await page.addInitScript(o2 => { window.__DEBUG = true; if (o2.size) localStorage.setItem('bw.size', JSON.stringify(o2.size)); if (o2.standalone) Object.defineProperty(navigator, 'standalone', { value: true }); }, o);
+  await page.addInitScript(o2 => { window.__DEBUG = true; localStorage.setItem('bw.role', JSON.stringify('family')); if (o2.size) localStorage.setItem('bw.size', JSON.stringify(o2.size)); if (o2.standalone) Object.defineProperty(navigator, 'standalone', { value: true }); }, o);
   return page;
 }
 /* 연결 실패 → 체험 모드로 앱을 열어요 (url 은 ?join=… 처럼 주소 확인용) */

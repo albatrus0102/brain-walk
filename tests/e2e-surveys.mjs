@@ -13,7 +13,7 @@ const must = (c, msg) => { if (!c) { errors.push('ASSERT ' + msg); out('FAIL', m
 await page.goto(BASE); await page.waitForSelector('#btn-demo'); await page.click('#btn-demo');
 await page.waitForSelector('.dialog'); await page.click('#dlg-btn-0'); if (await vis('.dialog')) await page.click('#dlg-btn-1');
 // 가족 화면으로 바꾸기
-await page.click('#btn-settings'); await page.click('#btn-role-switch'); await page.click('#dlg-btn-1');
+await page.evaluate(() => localStorage.setItem('bw.role', JSON.stringify('family')));
 await page.click('#btn-back').catch(() => {});
 await page.goto(BASE); await page.waitForSelector('#appbar-title'); if (await vis('.dialog')) await page.click('#dlg-btn-1').catch(() => {});
 await page.click('#nav-assess'); await page.waitForSelector('#hub-h'); must(true, '가족 점검 탭(목록)');

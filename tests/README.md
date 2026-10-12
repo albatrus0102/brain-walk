@@ -1,6 +1,6 @@
 # tests
 
-네 가지 시험이 있어요. 모두 이 저장소의 루트에서 쓰는 파일을 읽으니, 아래 명령은 `tests/` 안에서 실행해요.
+다섯 가지 시험이 있어요. 모두 이 저장소의 루트에서 쓰는 파일을 읽으니, 아래 명령은 `tests/` 안에서 실행해요.
 
 ```
 cd tests
@@ -30,29 +30,34 @@ npm run test:unit      # = node --test program.test.mjs
 ```
 npm run test:smoke
 ```
-끝에 `SMOKE: ALL PASSED`. (노드에는 브라우저 저장소가 없어서 `localStorage` 등을 흉내 내고, SDK 는 npm `firebase` 패키지로 바꿔 끼워요. `setSdkImporter` 참고.)
+끝에 `SMOKE: ALL PASSED`. 관리자 기능도 여기서 확인해요: 방 주인이 관리자 지정 → 관리자가 계획·화면 저장(한 배치) → 훈련하는 분 기기가 실시간으로 받음, 진행 문서 쓰기와 가족의 실시간 구독, 접속 기록 20초 제한, 훈련하는 분 정하기/해제, 방 주인 넘기기, 구성원 내보내기, 관리자가 아닌 가족의 쓰기는 permission-denied. (네 사람: A 아버지·B 가족·C 새 기기·D 낯선 사람) (노드에는 브라우저 저장소가 없어서 `localStorage` 등을 흉내 내고, SDK 는 npm `firebase` 패키지로 바꿔 끼워요. `setSdkImporter` 참고.)
 
 ## 3) 화면 시험 (Playwright, 체험 모드 중심)
 Playwright(Chromium)로 화면을 직접 눌러 봐요. 콘솔 오류가 하나라도 있으면 실패해요. 모두 `firebase-config.js` 가 **채워지지 않은 상태**에서 돌려요(설정 안내 화면부터 시험).
 
 | 파일 | 확인하는 것 |
 |---|---|
-| `e2e-demo.mjs` | 설정 안내 → 체험 모드 → 오늘의 훈련 한 판 → 훈련하는 분 메뉴 3개 → 설정(ICS 실제 다운로드, 삭제 확인) → 채팅 안내 |
+| `e2e-demo.mjs` | 설정 안내 → 체험 모드 → 오늘의 훈련 한 판(실제로 눌러서) → 쉬는 화면 → 가족 화면으로 바꿔 설정(ICS 실제 다운로드, 삭제 확인) → 채팅 안내 |
 | `e2e-surveys.mjs` | 설문 목록, KDSQ-C 원문/채점/참고 기준 문구, PHQ-9 9번 안내 창(109, 1577-0199), 본인 답은 점수 숨김, 가족 기록의 설문 결과 |
 | `e2e-tasks.mjs` | 월간 점검 2부분의 자체 과제 8개 끝까지(타이머 20배속), 쉬는 화면/내일 이어서 하기, 가족 기록의 과제 상세 |
 | `e2e-records.mjs` | 잠 기록, 시계 그리기(캔버스, 저장 크기), 가족의 시계 그림 보기, 일상생활 체크 |
 | `e2e-clinical.mjs` | 치매안심센터 카드, 병원·센터 검사 기록 폼(점진적 입력), 추세, 재검 알림, 채팅 공유 확인창, 훈련하는 분에게 숨김 |
 | `e2e-onboarding.mjs` | 연결 실패 → 체험 모드, `?join=CODE` 미리 입력, 가입 화면들, 초대 복사/카톡 문구/대체 복사, iOS 홈 화면 안내 (SDK 로드를 막고 화면만 확인. 실제 가입은 스모크 시험이 에뮬레이터로 확인) |
 | `e2e-install.mjs` | 홈 화면 설치 안내: 가짜 `beforeinstallprompt` 로 설치 카드·`prompt()` 호출·`appinstalled`·닫기 7일, 카카오톡/네이버 안 `kakaotalk://`·`intent://` 링크(`?join=` 유지), 아이폰 사파리 그림 안내, 설정의 "앱 설치" 줄, 가장 큰 글자·다크 화면 |
+| `e2e-learner.mjs` | 훈련하는 분 화면: 큰 버튼 하나·하단 메뉴 없음, 2개짜리 코스의 쉬는 화면과 자동 넘김(가짜 시계), 화면을 누르면 멈춤, 오늘은 여기까지→이어서 하기, 생활 체크 건너뛰기, 처음으로 하나, 톱니바퀴 확인, 쉬는 날·점검 날, 점수 숨김/켬 |
+| `e2e-admin.mjs` | 관리자 화면: 설정 칸(펼치는 카드), 훈련 계획(게임 수 1~9, 문제 안내, 순서, 저장=계획+알람), 계획이 코스·문제 수·고정/범위 난이도에 반영, 훈련하는 분 화면 설정(미리보기·적용), 관리자가 아닌 사람의 읽기 전용, 가족 홈 현황 상태들(체험 모드로 흉내)과 구독 개수, 아주 크게/최대·다크에서 가로 스크롤 없음 |
+| `e2e-live.mjs` | (에뮬레이터) 실제 화면 3대: 관리자가 저장한 화면 설정이 훈련하는 분 기기에 저절로 적용, 계획 반영, 진행 현황이 관리자 홈에 실시간, 읽기 전용 가족, 관리자 지정·내보내기. `npm run test:live` (인터넷에서 Firebase SDK 를 받아요) |
 | `e2e-pwa.mjs` | 매니페스트, 아이콘, 서비스 워커 등록, 오프라인에서 앱 열림 |
 
 ```
 cd .. && python3 -m http.server 8765 --directory ..   # 저장소 폴더 이름이 brain-walk 라서 /brain-walk/ 아래로 보이게 상위 폴더에서 서빙
 cd tests && BASE=http://localhost:8765/brain-walk/ CHROME=/path/to/chromium node e2e-demo.mjs   # 나머지도 같은 방법
-npm run test:e2e   # = e2e-demo 만
+npm run test:e2e   # = e2e-demo + e2e-learner + e2e-admin
 ```
 (`CHROME` 을 비우면 `/opt/pw-browsers/chromium`, `PW_MODULES` 로 playwright 위치를 바꿀 수 있어요.)
 
 ## 4) 기타
 - `npm run check` : `sw.js` 문법과 캐시 파일 목록이 실제 파일과 같은지 확인.
 - 모든 JS 문법 확인: `find js tools -name '*.js' -o -name '*.mjs' | xargs -n1 node --check`
+
+공용 도우미는 `e2e-lib.mjs` (새 시험용: 페이지 만들기, 설정 미리 넣기, 게임 빨리 끝내기).

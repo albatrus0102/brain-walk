@@ -20,9 +20,9 @@ await page.waitForSelector('.dialog'); await page.click('#dlg-btn-0'); if (await
 // 1부분을 마친 상태로 만들고: 쉬는 화면 → "내일 이어서 하기" → 점검 화면의 이어서 하기 카드
 await page.evaluate(() => { const S = window.__S; S.assess = { idx: 5, scores: { memory: 70, attention: 60, executive: 55, orientation: 80, speed: 65 }, tasks: {}, t0: Date.now(), memo: null }; window.__go('assessBreak'); });
 await page.waitForSelector('#ab-h'); must(await vis('#btn-ab-continue') && await vis('#btn-ab-later') && await vis('#btn-ab-end'), '쉬는 화면: 이어서/내일/마치기');
-await page.click('#btn-ab-later'); await page.waitForSelector('#btn-start-course');
+await page.click('#btn-ab-later'); await page.waitForSelector('#btn-main');
 must(await page.evaluate(() => !!JSON.parse(localStorage.getItem('bw.assessDraft')).idx), '초안 저장(내일 이어서)');
-await page.click('#nav-pick'); await page.click('#btn-nextcheck'); await page.waitForSelector('#assess-resume'); await page.click('#btn-assess-resume'); await page.waitForSelector('#ast-h');
+must((await page.innerText('#btn-main')).trim() === '점검 이어서 하기', '홈: 점검 이어서 하기'); await page.click('#btn-main'); await page.waitForSelector('#ast-h');
 must((await page.innerText('#ast-h')).includes('낱말'), '이어서 하기 → 2부분 첫 과제');
 const next = async () => { await page.waitForSelector('#btn-next:not([hidden])', { timeout: 15000 }); await page.click('#btn-next'); };
 const begin = async name => { await page.waitForSelector('#btn-assess-begin'); out('--', await page.innerText('#ast-h')); await page.click('#btn-assess-begin'); await page.waitForSelector('#g-title'); must((await page.innerText('#g-title')).includes(name), '과제 화면: ' + name); };
