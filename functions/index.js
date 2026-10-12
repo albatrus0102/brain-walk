@@ -370,6 +370,9 @@ exports.tick = onSchedule(
   { schedule: 'every 5 minutes', timeZone: 'Asia/Seoul', retryCount: 0 },
   async () => {
     const now = kstNow();
+    // Heartbeat: the GitHub Actions fallback (scripts/send-reminders.mjs) stands down while this is fresh,
+    // so alarms/reminders/digests are sent by exactly one sender (claims make doubles impossible anyway).
+    await db.collection('ops').doc('pushTick').set({ lastTickTs: FieldValue.serverTimestamp() }).catch(() => {});
     const fams = await db.collection('families').select().get();
     for (const f of fams.docs) {
       try { await runAlarmsForFamily(f.id, now, DUE_WINDOW_MIN); } catch (e) { logger.error('alarms failed', { fid: f.id, e: String(e) }); }

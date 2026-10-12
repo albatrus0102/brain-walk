@@ -24,6 +24,7 @@
  *   DRY_RUN=1                 log notifications instead of sending (state is still claimed!)
  *   GCLOUD_PROJECT            project id when using the emulator
  *   NOW_MS                    (tests only) pretend the current time is this epoch-ms
+ *   FORCE=1                   run even while the Cloud Functions heartbeat (ops/pushTick) is fresh
  */
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
@@ -66,6 +67,7 @@ const QUIET_END = 8 * 60;
 const NUDGE_PUSH_GAP_MS = 110 * 60 * 1000;
 const MAX_MESSAGE_AGE_MS = 14 * 3600 * 1000;
 const DEVICE_STALE_MS = 90 * 864e5;
+const FUNCTIONS_FRESH_MS = 20 * 60 * 1000; // Functions tick runs every 5 min
 const DEAD_TOKEN_CODES = new Set([
   'messaging/registration-token-not-registered',
   'messaging/invalid-registration-token',
@@ -361,6 +363,13 @@ async function main() {
   log(`KST ${now.dateKey} ${String(Math.floor(now.minutes / 60)).padStart(2, '0')}:${String(now.minutes % 60).padStart(2, '0')}`,
     `weekday=${now.weekday} quiet=${isQuiet(now)} window=${WINDOW_MIN}m dryRun=${DRY_RUN}`);
 
+  // Cloud Functions `tick` (every 5 min) writes ops/pushTick. While it is fresh the Functions are the sender
+  // and this fallback stays idle (FORCE=1 overrides, e.g. for a manual test run).
+  if (env.FORCE !== '1') {
+    const hb = await db.collection('ops').doc('pushTick').get().catch(() => null);
+    const last = hb && hb.exists && hb.get('lastTickTs') ? hb.get('lastTickTs').toMillis() : 0;
+    if (Date.now() - last < FUNCTIONS_FRESH_MS) { log('cloud functions are sending (heartbeat fresh); fallback idle'); return; }
+  }
   const fams = await db.collection('families').select().get();
   for (const f of fams.docs) {
     stats.families++;
