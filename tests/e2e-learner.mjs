@@ -98,7 +98,7 @@ const plan = o => ({ 'bw.localdb': { 'state/plan': o } });
   await page.click('#btn-main'); await page.waitForSelector('#g-title');
   must((await page.innerText('#appbar-title')) === '오늘의 훈련 2/3', '이어서 하면 둘째 게임부터');
   await page.click('#btn-quit'); await page.waitForSelector('.dialog');
-  must((await page.innerText('#dlg-title')) === '잠깐 쉬실래요?', '게임 중 그만하기: "잠깐 쉬실래요?"');
+  must((await page.innerText('#dlg-title')) === '게임을 그만둘까요?', '게임 중 그만하기: "게임을 그만둘까요?"');
   await page.click('#dlg-btn-0');
   await page.close();
 }

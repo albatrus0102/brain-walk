@@ -82,6 +82,7 @@ const SHELL_FILES = /*SHELL_START*/ [
   "./js/ui/dashboard.js",
   "./js/ui/dom.js",
   "./js/ui/install.js",
+  "./js/ui/nav.js",
   "./js/ui/onboarding.js",
   "./js/ui/plan-text.js",
   "./js/ui/registry.js",

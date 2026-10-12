@@ -3,7 +3,8 @@ import { memberIds, unreadCount } from '../messages.js';
 import { ASSESS_STEPS, courseLen } from '../session.js';
 import { stopSpeech } from '../sound.js';
 import { S } from '../state.js';
-import { closeSheet, h, svgIcon } from './dom.js';
+import { closeSheet, dialog, h, svgIcon } from './dom.js';
+import { exitApp, initNav, navTo, rearm } from './nav.js';
 import { SCREENS } from './registry.js';
 import { $ } from '../util.js';
 
@@ -20,10 +21,40 @@ export const ADMIN_SUBSCREENS = ADMIN_SCREENS;
 const TITLES = { clinical: '병원·센터 검사', clinicalForm: '검사 결과 기록', clock: '시계 그리기', clockDone: '시계 그리기', clocks: '시계 그림', assessBreak: '두뇌 건강 점검', surveys: '설문', surveyIntro: '설문', surveyQ: '설문', surveyDone: '설문', assessView: '두뇌 건강 점검 결과', home: '오늘의 두뇌 산책', pick: '골라서 하기', assess: '두뇌 건강 점검', assessStep: '두뇌 건강 점검', assessDone: '점검 결과', game: '', result: '훈련 결과', courseDone: '오늘의 훈련', courseBreak: '오늘의 훈련', checkIntro: '두뇌 점검', family: '가족이 보는 기록', checkin: '오늘의 생활 체크', settings: '설정', chat: '우리 가족 대화방', adminPlan: '훈련 계획', members: '가족 구성원' };
 const BARE = n => n === 'setup' || n.indexOf('ob-') === 0;   // 설정 안내·가입 화면: 뒤로가기/설정 버튼 없음
 
+const guard = name => (isTrainee() && !BARE(name) && !TRAINEE_SCREENS.includes(name) && !(ADMIN_SCREENS.includes(name) && isAdmin())) ? 'home' : name;
 export function go(name) {
-  if (isTrainee() && !BARE(name) && !TRAINEE_SCREENS.includes(name) && !(ADMIN_SCREENS.includes(name) && isAdmin())) name = 'home';
-  stopSpeech(); closeSheet(); S.screen = name; render();
+  name = guard(name);
+  stopSpeech(); closeSheet(); navTo(name); S.screen = name; render();
 }
+
+/* ================= 뒤로 가기 (History API, nav.js) ================= */
+/* 하던 일이 있는 화면: 게임, 설문 문항, 시계 그리기, 생활 체크. 여기서 Back 은 바로 나가지 않고 물어요. */
+const TASK_SCREENS = ['game', 'surveyQ', 'clock', 'checkin'];
+const QUIT_TEXT = '지금 하던 게임은 처음부터 다시 해요. 앞에서 마친 게임은 저장돼 있어요. 홈에서 ‘이어서 하기’를 누르면 돼요.';
+/* 하던 일을 그만둘지 묻기: 계속하기(기본)·그만두기. 그만두기는 화면마다 원래의 그만두기 길을 따라가요. */
+export function confirmQuit(then) {
+  const sc = S.screen;
+  let title = '게임을 그만둘까요?', text = QUIT_TEXT;
+  if (!then) {
+    if (sc === 'surveyQ') { title = '설문을 그만둘까요?'; text = '지금까지 답한 것은 저장되지 않아요.'; then = () => go(isTrainee() ? 'home' : 'surveys'); }
+    else if (sc === 'clock') { title = '그림 그리기를 그만둘까요?'; text = '지금 그린 그림은 저장되지 않아요.'; then = () => go('pick'); }
+    else if (sc === 'checkin') { title = '생활 체크를 그만둘까요?'; text = '체크한 것은 저장되지 않아요.'; then = () => { S.ciFlow = false; go('home'); }; }
+    else then = () => go('home');
+  }
+  dialog(title, text, [{ label: '계속하기', kind: 'filled' }, { label: '그만두기', kind: 'text', run: then }]);
+}
+function confirmExit() {
+  dialog('앱을 닫을까요?', '‘계속하기’를 누르면 앱에 그대로 있어요.', [{ label: '계속하기', kind: 'filled' }, { label: '닫기', kind: 'text', run: exitApp }], () => rearm(), null, { nopush: true });
+}
+function showFromHistory(name) { name = guard(name); stopSpeech(); closeSheet(); S.screen = name; render(); }
+initNav({
+  isTask: n => TASK_SCREENS.includes(n),
+  isBare: n => BARE(n),
+  isActive: () => S.screen === 'game',
+  confirmQuit: () => confirmQuit(),
+  confirmExit,
+  show: showFromHistory
+});
 
 export function renderChrome() {
   const showNav = navItems().some(n => n[0] === S.screen) && S.screen !== 'chat';

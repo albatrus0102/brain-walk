@@ -11,14 +11,12 @@ import { beginAssessStep, completeAssessment, resumeAssessment, saveAssessLater,
 import { say, stopSpeech } from './sound.js';
 import { S } from './state.js';
 import { ACTS } from './ui/acts.js';
-import { dialog, toast } from './ui/dom.js';
-import { ADMIN_SUBSCREENS, go, render } from './ui/shell.js';
+import { toast } from './ui/dom.js';
+import { ADMIN_SUBSCREENS, confirmQuit, go, render } from './ui/shell.js';
 import { $, LS } from './util.js';
 
 /* ================= 이벤트 ================= */
-function leaveGameConfirm(then) {
-  dialog('잠깐 쉬실래요?', '지금 하던 게임은 처음부터 다시 해요. 앞에서 마친 게임은 저장돼 있어요. 홈에서 ‘이어서 하기’를 누르면 돼요.', [{ label: '계속하기', kind: 'filled' }, { label: '그만하기', kind: 'text', run: then }]);
-}
+const leaveGameConfirm = then => confirmQuit(then);
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
   const a = b.dataset.act;

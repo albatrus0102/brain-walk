@@ -41,7 +41,7 @@ export async function enterApp(opts) {
   opts = opts || {};
   ensureProgram();
   await connectData();
-  try { if (location.search) history.replaceState(null, '', location.pathname); } catch (e) {}
+  try { if (location.search) history.replaceState(history.state, '', location.pathname); } catch (e) {}
   if (!ticking) { ticking = true; setInterval(alarmTick, 60000); }
   alarmTick(true);
   if (Store.mode === 'firebase') initPush();
