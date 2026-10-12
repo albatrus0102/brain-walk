@@ -40,20 +40,22 @@ const msOf = t => (t == null ? null : typeof t === 'number' ? t : (t && typeof t
 
 /* ------------------------------------------------------- plan: normalize */
 /* 아무 값(없음, 옛 문서, 잘못된 값)이 와도 쓸 수 있는 완전한 계획으로 바꿔요. 범위 밖 값은 가장 가까운 값으로 맞춰요. */
-export function normalizeGame(raw) {
+/* defOn: 계획에 이 게임이 아직 없을 때 켜져 있는지 (새 AI 게임은 꺼진 채로 시작해요: catalog 의 defOff) */
+export function normalizeGame(raw, defOn) {
   const g = isObj(raw) ? raw : {};
   let min = clampInt(g.min, LEVEL.min, LEVEL.max, GAME_DEFAULT.min), max = clampInt(g.max, LEVEL.min, LEVEL.max, GAME_DEFAULT.max);
   if (min > max) { const t = min; min = max; max = t; }
-  return { on: g.on !== false, mode: g.mode === 'fixed' ? 'fixed' : 'auto', min, max, level: clampInt(g.level, LEVEL.min, LEVEL.max, GAME_DEFAULT.level) };
+  return { on: g.on === undefined ? defOn !== false : g.on !== false, mode: g.mode === 'fixed' ? 'fixed' : 'auto', min, max, level: clampInt(g.level, LEVEL.min, LEVEL.max, GAME_DEFAULT.level) };
 }
 /* 쉬는 화면 자동 넘김(초): 0·5·10·15 중 가장 가까운 값, 없으면 10 */
 const autoNext = v => { const n = toInt(v); return n == null ? AUTO_NEXT.def : AUTO_NEXT.values.reduce((a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a)); };
 export function normalizePlan(raw, catalog) {
   const p = isObj(raw) ? raw : {}, ids = (catalog || []).map(g => g.id);
   const games = {};
-  ids.forEach(id => { games[id] = normalizeGame(isObj(p.games) ? p.games[id] : null); });
+  const offByDefault = new Set((catalog || []).filter(g => g.defOff).map(g => g.id));
+  ids.forEach(id => { games[id] = normalizeGame(isObj(p.games) ? p.games[id] : null, !offByDefault.has(id)); });
   // 모든 게임을 끄면 아버지 화면이 비어요. 그럴 때는 모두 켠 것으로 봐요 (관리자 화면은 planProblems 로 막아요).
-  if (ids.length && !ids.some(id => games[id].on)) ids.forEach(id => { games[id].on = true; });
+  if (ids.length && !ids.some(id => games[id].on)) ids.forEach(id => { games[id].on = !offByDefault.has(id); });
   const fixedOrder = [];
   (Array.isArray(p.fixedOrder) ? p.fixedOrder : []).forEach(id => { if (ids.includes(id) && !fixedOrder.includes(id)) fixedOrder.push(id); });
   ids.forEach(id => { if (!fixedOrder.includes(id)) fixedOrder.push(id); });      // 빠진 게임(새로 추가된 게임 등)은 끝에
@@ -77,7 +79,8 @@ export function normalizePlan(raw, catalog) {
 /* 관리자 화면에서 저장하기 전에 보여 줄 문제 (빈 배열이면 저장 가능). 원본(raw) 기준으로 봐요. */
 export function planProblems(raw, catalog) {
   const p = isObj(raw) ? raw : {}, out = [], ids = (catalog || []).map(g => g.id);
-  const on = ids.filter(id => !(isObj(p.games) && isObj(p.games[id]) && p.games[id].on === false));
+  const offDef = new Set((catalog || []).filter(g => g.defOff).map(g => g.id));
+  const on = ids.filter(id => (isObj(p.games) && isObj(p.games[id]) && p.games[id].on !== undefined) ? p.games[id].on !== false : !offDef.has(id));
   if (!on.length) out.push('게임을 하나 이상 골라 주세요.');
   if (Array.isArray(p.weekdays) && !p.weekdays.length) out.push('훈련 요일을 하루 이상 골라 주세요.');
   ids.forEach(id => { const g = isObj(p.games) ? p.games[id] : null; if (isObj(g) && g.mode !== 'fixed' && toInt(g.min) != null && toInt(g.max) != null && toInt(g.min) > toInt(g.max)) out.push('가장 쉬운 단계가 가장 어려운 단계보다 높아요.'); });

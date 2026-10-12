@@ -1,4 +1,7 @@
-import { LS, isDocPath } from '../util.js';
+import { DELETE_FIELD, LS, SERVER_TS, isDocPath } from '../util.js';
+
+/* '$TS' → 지금 시각, '$DEL' → 필드 지움 (가족방의 serverTimestamp / deleteField 와 같은 쓰임) */
+const marks = (d, base) => { const o = Object.assign({}, base || {}, d); Object.keys(o).forEach(k => { if (o[k] === SERVER_TS) o[k] = Date.now(); else if (o[k] === DELETE_FIELD) delete o[k]; }); return o; };
 
 export const LocalAdapter = {
   name: 'local', shared: false, _subs: [],
@@ -10,7 +13,7 @@ export const LocalAdapter = {
   _save(o) { LS.set('bw.localdb', o); this._subs.slice().forEach(f => { try { f(); } catch (e) {} }); },
   async getDoc(path) { const o = this._load(); return o[path] ? JSON.parse(JSON.stringify(o[path])) : null; },
   async setDoc(path, data) {
-    const o = this._load(), d = JSON.parse(JSON.stringify(data));
+    const o = this._load(), d = marks(JSON.parse(JSON.stringify(data)));
     if (/^progress\//.test(path)) { delete d.id; if (d.sts == null) d.sts = Date.now(); }       // 가족방(Firestore)과 같은 모양: 서버 도장 대신 지금 시각
     if (/^presence\//.test(path)) { delete d.id; if (d.lastSeen == null) d.lastSeen = Date.now(); }
     o[path] = d; this._save(o);
@@ -23,7 +26,7 @@ export const LocalAdapter = {
   },
   watchFamily(cb) { setTimeout(() => cb({ ownerMemberId: 'local', admins: [], name: '체험 모드', joinCode: null }), 0); return () => {}; },
   onMembers() { return () => {}; },
-  async updateDoc(path, patch) { const o = this._load(); if (!o[path]) throw { code: 'not_found', message: 'no doc' }; o[path] = Object.assign({}, o[path], JSON.parse(JSON.stringify(patch))); this._save(o); },
+  async updateDoc(path, patch) { const o = this._load(); if (!o[path]) throw { code: 'not_found', message: 'no doc' }; o[path] = marks(JSON.parse(JSON.stringify(patch)), o[path]); this._save(o); },
   async deleteDoc(path) { const o = this._load(); delete o[path]; this._save(o); },
   _list(coll, opts) {
     const o = this._load(), pre = coll + '/';

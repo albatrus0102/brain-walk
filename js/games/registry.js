@@ -15,4 +15,4 @@ export const gamesOf = d => GAME_ORDER.filter(id => GAMES[id].domain === d);
  * play(ctx) 는 ctx.finish({ correct: 점수(0~100), total: 100, ok, msg, metrics }) 로 끝내요. 규준이나 기준점은 없고, 본인의 처음 기록과 비교해서만 봐요. */
 export function regTask(g) { g.task = true; GAMES[g.id] = g; }
 /* 훈련 코스에 쓰는 게임 목록 [{ id, domain, rounds }] (program.js 의 catalog). 점검 과제(regTask)는 빠져요. */
-export const catalog = () => GAME_ORDER.map(id => ({ id, domain: GAMES[id].domain, rounds: GAMES[id].rounds }));
+export const catalog = () => GAME_ORDER.map(id => ({ id, domain: GAMES[id].domain, rounds: GAMES[id].rounds, defOff: !!GAMES[id].defOff }));

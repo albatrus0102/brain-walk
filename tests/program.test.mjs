@@ -284,3 +284,22 @@ test('normalizeGame tolerates garbage', () => {
   assert.deepEqual(normalizeGame('x'), { on: true, mode: 'auto', min: 1, max: 5, level: 2 });
   assert.deepEqual(normalizeGame({ on: 0, level: '4', min: '3', max: 'z' }), { on: true, mode: 'auto', min: 3, max: 5, level: 4 });
 });
+
+/* ---- AI 새 게임(catalog 의 defOff): 계획에 없으면 꺼져 있고, 기본 코스는 예전과 똑같아요 ---- */
+test('defOff games stay off by default and do not change the default course', () => {
+  const NEWG = [{ id: 'nstory', domain: 'memory', rounds: 2, defOff: true }, { id: 'nroute', domain: 'executive', rounds: 3, defOff: true }];
+  const WITH = CAT.concat(NEWG);
+  const p = normalizePlan(undefined, WITH);
+  assert.equal(p.games.nstory.on, false); assert.equal(p.games.nroute.on, false);
+  IDS.forEach(id => assert.equal(p.games[id].on, true));
+  assert.deepEqual(p.fixedOrder.slice(-2), ['nstory', 'nroute']);
+  for (let i = 0; i < 730; i++) { const d = new Date(2026, 0, 1 + i); assert.deepEqual(buildCourse(undefined, d, WITH), buildCourse(undefined, d, CAT), 'day ' + i); }
+  // 관리자가 켜면 코스에 들어가요
+  const on = normalizePlan({ games: { nstory: { on: true } }, gamesPerDay: 9 }, WITH);
+  assert.equal(on.games.nstory.on, true);
+  assert.ok(buildCourse(on, new Date(2026, 5, 1), WITH).includes('nstory'));
+  // 모두 끄면 모두 켠 것으로 보되 새 게임은 켜지 않아요
+  const none = normalizePlan({ games: Object.fromEntries(IDS.map(id => [id, { on: false }])) }, WITH);
+  assert.equal(none.games.nstory.on, false); assert.ok(IDS.every(id => none.games[id].on));
+  assert.deepEqual(planProblems({ games: Object.fromEntries(IDS.map(id => [id, { on: false }])) }, WITH), ['게임을 하나 이상 골라 주세요.']);
+});

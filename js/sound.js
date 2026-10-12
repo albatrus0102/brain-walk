@@ -11,18 +11,22 @@ function koVoice() {
 export const effectiveSound = () => (S.eff ? S.eff.voice : S.prefs.sound);
 export const speechRate = () => (S.eff && S.eff.rate) || 0.9;
 export function stopSpeech() { try { if (synth) synth.cancel(); } catch (e) {} }
-/* rate: 미리 듣기처럼 정해진 빠르기로 읽을 때만 */
-export function say(text, force, rate) {
-  if (!synth || !text) return;
-  if (!force && !effectiveSound()) return;
+/* rate: 미리 듣기처럼 정해진 빠르기로 읽을 때만. onEnd: 다 읽었을 때 (읽을 수 있을 때만 불려요). 돌려주는 값: 읽기 시작했는지 */
+export function say(text, force, rate, onEnd) {
+  if (!synth || !text) return false;
+  if (!force && !effectiveSound()) return false;
   try {
     synth.cancel();
     const u = new window.SpeechSynthesisUtterance(text);
     u.lang = 'ko-KR'; u.rate = rate || speechRate(); u.pitch = 1;
     const v = koVoice(); if (v) u.voice = v;
+    if (onEnd) { u.onend = onEnd; u.onerror = onEnd; }
     synth.speak(u);
-  } catch (e) {}
+    return true;
+  } catch (e) { return false; }
 }
+/* 소리 안내로 문제를 읽어 줄 수 있는지 (한국어 목소리가 있어야 '읽기가 끝난 때'를 믿을 수 있어요) */
+export const canSpeakKo = () => !!(synth && effectiveSound() && koVoice());
 /* 읽어 주고 끝나면 cb 를 한 번 불러요. 소리가 꺼져 있거나 못 읽으면 noVoiceMs 뒤에, 끝 신호가 안 오면 maxMs 뒤에 불러요. 돌려주는 함수로 취소해요. */
 export function sayThen(text, cb, noVoiceMs, maxMs) {
   let fired = false, t1 = null, t2 = null;

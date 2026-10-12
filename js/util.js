@@ -33,5 +33,7 @@ export function dedupe(correct, wrongs, n, filler) {
   return shuffle(out);
 }
 
+/* 쓰기 표시: 저장소가 서버 시각(Firestore serverTimestamp) / 필드 지우기(deleteField)로 바꿔요. 체험 모드는 지금 시각 / 키 지우기 */
+export const SERVER_TS = '$TS', DELETE_FIELD = '$DEL';
 export const isDocPath = p => String(p).split('/').length % 2 === 0;
 export const withId = d => Object.assign({}, d.data(), { id: d.id });

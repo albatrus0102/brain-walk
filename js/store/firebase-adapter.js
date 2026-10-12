@@ -1,4 +1,4 @@
-import { LS, isDocPath, withId } from '../util.js';
+import { DELETE_FIELD, LS, SERVER_TS, isDocPath, withId } from '../util.js';
 import { loadSdk } from './firebase-sdk.js';
 
 /* FirebaseAdapter: Store API 를 Firestore 에 연결합니다. (ARCHITECTURE.md §3.2, §5, §6)
@@ -152,10 +152,16 @@ export const FirebaseAdapter = {
     const { F } = this.sdk, s = await F.getDoc(this._ref(path));
     return s.exists() ? this._fromDb(path, s.data()) : null;
   },
+  /* 쓰기 표시('$TS', '$DEL')를 서버 시각·필드 지우기로 바꿔요 (문항 기록 sts, 안내 동의 ackTs·withdrawnTs) */
+  _marks(d) {
+    const { F } = this.sdk, o = Object.assign({}, d);
+    Object.keys(o).forEach(k => { if (o[k] === SERVER_TS) o[k] = F.serverTimestamp(); else if (o[k] === DELETE_FIELD) o[k] = F.deleteField(); });
+    return o;
+  },
   async setDoc(path, data) {
     const { F } = this.sdk;
     if (/^messages\/[^/]+$/.test(path)) return this._setMessage(path, data);
-    let d = Object.assign({}, data);
+    let d = this._marks(data);
     // 진행 상황·접속 기록은 서버 시간으로 도장을 찍어야 규칙을 통과해요 (진행 문서의 id 는 문서 안에 넣지 않아요)
     if (/^progress\//.test(path)) { delete d.id; d.sts = F.serverTimestamp(); }
     if (/^presence\//.test(path)) { delete d.id; d.lastSeen = F.serverTimestamp(); }
@@ -191,7 +197,7 @@ export const FirebaseAdapter = {
       });
       return this._commit(F.updateDoc(this._ref(path), upd));
     }
-    return this._commit(F.updateDoc(this._ref(path), patch));
+    return this._commit(F.updateDoc(this._ref(path), this._marks(patch)));
   },
   async deleteDoc(path) { const { F } = this.sdk; return F.deleteDoc(this._ref(path)); },
   /* 여러 쓰기를 한 번에(규칙도 한꺼번에 확인): ops = [{ set: path, data } | { update: path, data } | { del: path }] */
