@@ -96,3 +96,13 @@ test('template report passes the same check for every mode and light mix', () =>
   const gray = { ...AGG, phase: 'baseline', confidence: 'insufficient', signals: [], domains: [{ domain: 'composite', light: 'gray', metrics: [] }], numbers: {}, confounders: [] };
   assert.deepEqual(checkReport(templateReport(gray), gray).codes, []);
 });
+
+test('report check: Unicode tricks and clinical words added in review are caught', () => {
+  const at = (txt) => codes(mut((r) => { r.summary[0] = txt; }));
+  assert.ok(at('치​매 걱정은 없어요.').includes('banned'));
+  assert.ok(at('치매 걱정은 없어요.').includes('banned'));      // conjoining jamo compose under NFC
+  assert.ok(at('치ㅁㅐ 걱정은 없어요.').includes('charset'));                         // compatibility jamo
+  assert.ok(at('점수가 ٣점 내렸어요.').includes('charset'));                          // other digit scripts
+  assert.ok(at('<b>지켜봐요</b>').includes('charset'));
+  for (const w of ['인지 저하가 보여요.', '기억력 감퇴가 보여요.', '파킨슨 같은 흐름은 아니에요.', '우울증 때문일 수 있어요.', '건망증이 늘었어요.']) assert.ok(at(w).includes('banned'), w);
+});
