@@ -2,9 +2,9 @@ import { Platform } from '../platform.js';
 import { S } from '../state.js';
 import { Store } from '../store/store.js';
 import { FirebaseAdapter } from '../store/firebase-adapter.js';
-import { createFamily, inviteLink, inviteText, joinFamily, normalizeCode, previewJoinCode, redeemTransfer, setTrainee } from '../store/membership.js';
+import { createFamily, inviteLink, inviteText, joinFamily, normalizeCode, previewJoinCode, redeemTransfer } from '../store/membership.js';
 import { enterApp, startFlow, startLocalDemo } from '../boot.js';
-import { LS } from '../util.js';
+import { LS, iga } from '../util.js';
 import { dialog, h, toast } from './dom.js';
 import { installSlot } from './install.js';
 import { SCREENS } from './registry.js';
@@ -161,11 +161,11 @@ SCREENS['ob-role'] = {
         if (o.flow === 'join') {
           const r = await joinFamily({ code: o.code, name: o.name, role });
           Store.becomeMember(); S.roleLocal = role; LS.set('bw.role', role); LS.set('bw.roleAsked', true);
-          if (r.needsConfirm) {
-            dialog('이미 훈련하는 분이 있어요', '이 가족방에는 훈련하는 분이 등록되어 있어요. 내가 훈련하는 분으로 바꿀까요?', [
-              { label: '바꾸기', kind: 'filled', run: async () => { try { await setTrainee(); } catch (e) {} } },
-              { label: '가족으로 쓸게요', kind: 'text', run: async () => { try { await FirebaseAdapter.updateDoc('members/' + FirebaseAdapter.mid, { role: 'family' }); } catch (e) {} S.roleLocal = 'family'; LS.set('bw.role', 'family'); } }
-            ], () => enterApp());
+          if (r.traineeTaken) {
+            // 훈련하는 분은 가족방에 한 명이에요. 바꾸는 것은 관리자가 해요 (새로 들어온 사람이 마음대로 바꾸지 못해요).
+            S.roleLocal = 'family'; LS.set('bw.role', 'family');
+            let label = '아버지'; try { const t = await FirebaseAdapter.getDoc('state/trainee'); if (t && t.displayLabel) label = t.displayLabel; } catch (e) {}
+            dialog('이미 훈련하는 분이 있어요', '이 가족방에는 ' + label + iga(label) + ' 훈련하는 분으로 등록되어 있어요. 우선 가족으로 들어갈게요. 훈련하는 분을 바꾸려면 관리자에게 부탁해 주세요.', [{ label: '확인', kind: 'filled' }], () => enterApp());
           } else await enterApp();
         } else {
           const r = await createFamily({ name: o.name, role });
@@ -210,6 +210,7 @@ SCREENS['ob-invite'] = {
     fill(h('h1', { class: 't-headline', id: 'inv-h', text: '가족방을 만들었어요!' }),
       h('p', { class: 't-body muted', text: '아래 코드나 링크를 가족에게 보내 주세요. 코드는 7일 동안 쓸 수 있고, 설정에서 다시 보거나 새로 만들 수 있어요.' }),
       card('primary', inviteBlock(code, { prefix: 'inv' })),
+      ob().role === 'trainee' ? card('tertiary', h('p', { class: 't-title-m', id: 'inv-admin-tip', text: '가족 중 한 분이 관리를 맡으면 편해요 — 설정 > 관리자 넘기기' }), h('p', { class: 't-small mt', text: '글자 크기, 훈련 분량, 가족 구성원은 관리자가 정해요. 가족이 들어오면 방 주인을 넘길 수 있어요.' })) : null,
       big('시작하기', 'filled', () => { LS.set('bw.roleAsked', true); go('home'); startFlow(); }, 'btn-inv-done'));
   }
 };

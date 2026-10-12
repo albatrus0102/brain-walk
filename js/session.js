@@ -1,23 +1,31 @@
-import { allAssessments, chatAvail, getLevel, remoteSet, saveSession, todayS } from './data.js';
-import { DOMAINS, GAMES, gamesOf } from './games/registry.js';
-import { assessTotal, nextLevel } from './logic.js';
+import { allAssessments, allCheckins, chatAvail, courseStatus, getLevel, getPlan, isTrainee, remoteSet, saveSession, todayProgressDoc, todayS } from './data.js';
+import { DOMAINS, GAMES, catalog } from './games/registry.js';
+import { assessTotal } from './logic.js';
 import { sendMessage } from './messages.js';
+import { buildCourse, effectiveLevel, estimateMinutes, nextLevelFor, roundsFor } from './program.js';
+import { progressGameFinish, progressGameStart, progressMarkDone } from './progress.js';
 import { S } from './state.js';
 import { go } from './ui/shell.js';
-import { LS, dayNum, mean, rnd, ymd } from './util.js';
+import { LS, mean, rnd, ymd } from './util.js';
 
 /* ================= 세션 진행 ================= */
-export const COURSE_N = DOMAINS.length;
+export { catalog };
+/* 오늘 코스의 게임 수: 시작한 코스가 있으면 그 길이(진행 중에는 계획이 바뀌어도 그대로), 아니면 계획대로 */
+export const courseLen = () => (S.course && S.course.date === todayS() && S.course.games ? S.course.games.length : buildCourse(getPlan(), todayS(), catalog()).length);
+/* opts: inCourse(오늘의 코스로 기록), flow(코스 흐름 안: 끝나면 쉬는 화면), assess, level, rounds, key */
 export function startSession(id, opts) {
   opts = opts || {};
-  const g = GAMES[id];
-  S.sess = { g, level: opts.level || getLevel(id), idx: 0, correct: 0, total: 0, t0: Date.now(), inCourse: !!opts.inCourse, assess: !!opts.assess, key: opts.key || null, rounds: opts.rounds || g.rounds, mem: {}, roundSec: [] };
+  const g = GAMES[id], plan = getPlan();
+  S.sess = { g, level: opts.level || effectiveLevel(id, plan, getLevel(id)), idx: 0, correct: 0, total: 0, t0: Date.now(), inCourse: !!opts.inCourse, flow: !!(opts.flow || opts.inCourse), assess: !!opts.assess, key: opts.key || null,
+    rounds: opts.rounds || roundsFor(g, plan), mem: {}, roundSec: [] };
+  if (S.sess.inCourse) progressGameStart(id, 'course'); else if (S.sess.assess) progressGameStart(id, 'check');
   go('game');
 }
 export function finishSession() {
   const s = S.sess, now = new Date();
   const total = Math.max(1, s.total), acc = s.correct / total, dur = Math.max(1, Math.round((Date.now() - s.t0) / 1000));
   if (s.assess) {
+    progressGameFinish(s.g.id, { acc, correct: s.correct, total: s.total, sec: dur, level: s.level });
     if (s.g.task) S.assess.tasks[s.g.id] = { domain: s.g.domain, score: Math.round(acc * 100), m: s.taskMetrics || {} };
     else S.assess.scores[s.key] = Math.round(acc * 100);
     S.assess.idx++;
@@ -28,41 +36,71 @@ export function finishSession() {
   }
   const hist = Array.isArray(S.hist[s.g.id]) ? S.hist[s.g.id] : [];
   const prevAcc = hist.length ? hist[hist.length - 1] : null;
-  const nl = nextLevel(s.level, acc, prevAcc);
+  const nl = nextLevelFor(s.g.id, getPlan(), s.level, acc, prevAcc);
   S.hist[s.g.id] = hist.concat([acc]).slice(-3); LS.set('bw.hist', S.hist);
   const rec = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 8), date: ymd(now), ts: Date.now(), gameId: s.g.id, gameName: s.g.name, domain: s.g.domain,
     level: s.level, correct: s.correct, total: s.total, accuracy: Math.round(acc * 1000) / 1000, durationSec: dur, inCourse: s.inCourse, roundSec: s.roundSec, userId: S.myId || null };
-  saveSession(rec, nl.level);
+  saveSession(rec, nl.level, nl.store);
   S.last = { rec, old: s.level, nl: nl.level, kind: nl.kind, score: Math.round(acc * 100) };
-  if (s.inCourse && S.course) {
-    S.course.results.push({ gameId: s.g.id, correct: s.correct, total: s.total, acc, dur });
-    LS.set('bw.course', { date: S.course.date, results: S.course.results });
+  if (s.flow && S.course) {
+    S.course.results.push({ gameId: s.g.id, correct: s.correct, total: s.total, acc, dur, kind: nl.kind });
+    if (s.inCourse) {
+      LS.set('bw.course', { date: S.course.date, games: S.course.games, results: S.course.results });
+      progressGameFinish(s.g.id, { acc, correct: s.correct, total: s.total, sec: dur, level: s.level });
+    }
+    if (isTrainee()) return S.course.results.length >= S.course.games.length ? finishCourse() : go('courseBreak');
   }
   go('result');
 }
 const PRAISE = ['잘하셨어요!', '아주 좋아요!', '역시 대단하세요!', '정말 훌륭해요!'];
 export const praise = () => PRAISE[rnd(0, PRAISE.length - 1)];
-export function courseGames(d) {
-  const n = dayNum(d), order = DOMAINS.map(x => x.id), k = order.length;
-  const rot = n % k, rotated = order.slice(rot).concat(order.slice(0, rot));
-  return rotated.map(dom => { const gs = gamesOf(dom); return gs[(n + order.indexOf(dom)) % gs.length]; });
+/* 오늘 이어서 할 코스를 정해요. 우선순위: 오늘 진행 문서(시작한 코스) → 이 기기에 저장된 코스 → 옛 형식 저장분 → 새로 */
+function resumeSource(today) {
+  const p = todayProgressDoc();
+  if (p && p.kind === 'course' && p.status === 'started' && Array.isArray(p.planned) && p.planned.length && Array.isArray(p.results)) {
+    return { games: p.planned.slice(), results: p.results.map(r => ({ gameId: r.g, correct: r.c, total: r.t, acc: r.acc, dur: r.sec })) };
+  }
+  const saved = LS.get('bw.course', null);
+  if (saved && saved.date === today && Array.isArray(saved.results)) {
+    if (Array.isArray(saved.games) && saved.games.length) { if (saved.results.length < saved.games.length) return { games: saved.games.slice(), results: saved.results }; }
+    else { const games = buildCourse(getPlan(), today, catalog()); if (saved.results.length < games.length) return { games, results: saved.results }; }
+  }
+  return null;
 }
-export function startCourse() {
-  const now = new Date(), today = ymd(now), saved = LS.get('bw.course', null), games = courseGames(now);
-  let results = [];
-  if (saved && saved.date === today && Array.isArray(saved.results) && saved.results.length < COURSE_N) results = saved.results;
-  S.course = { date: today, games, results };
+/* 홈 화면용 오늘 코스 요약: 끝났는지, 몇 개 중 몇 개 했는지, 예상 시간 */
+export function courseInfo() {
+  const today = todayS(), plan = getPlan(), cat = catalog(), r = resumeSource(today), cs = courseStatus(), p = todayProgressDoc();
+  const N = r ? r.games.length : (p && p.kind === 'course' && Array.isArray(p.planned) && p.planned.length ? p.planned.length : buildCourse(plan, today, cat).length);
+  const n = r ? r.results.length : 0;
+  return { done: cs.done, n, N, started: n > 0, minutes: estimateMinutes(plan, today, cat) };
+}
+/* 오늘의 코스 시작/이어하기. opts.replay: 이미 마친 코스를 한 번 더 (오늘 기록에 더하지 않고, 진행 상황도 쓰지 않아요) */
+export function startCourse(opts) {
+  const today = todayS(), p = todayProgressDoc(), done = !!(p && p.kind === 'course' && p.status === 'done');
+  const replay = !!((opts && opts.replay) || done);
+  let games, results = [];
+  if (replay) games = (p && Array.isArray(p.planned) && p.planned.length ? p.planned.slice() : buildCourse(getPlan(), today, catalog()));
+  else { const r = resumeSource(today); games = r ? r.games : buildCourse(getPlan(), today, catalog()); results = r ? r.results : []; }
+  S.course = { date: today, games, results, replay };
   nextCourseStep();
 }
 export function nextCourseStep() {
-  if (S.course.results.length >= COURSE_N) { S.notifyPending = true; return go('courseDone'); }
-  startSession(S.course.games[S.course.results.length], { inCourse: true });
+  const c = S.course;
+  if (c.results.length >= c.games.length) return finishCourse();
+  startSession(c.games[c.results.length], { inCourse: !c.replay, flow: true });
+}
+/* 코스의 마지막 게임 뒤: (켜져 있고 오늘 아직이면) 생활 체크를 흐름 안에서 묻고, 그다음 축하 화면 */
+export function finishCourse() {
+  const c = S.course;
+  if (!c.replay) S.notifyPending = true;
+  if (!c.replay && isTrainee() && getPlan().checkin && !allCheckins()[todayS()]) { S.ciFlow = true; S.ci = {}; return go('checkin'); }
+  S.ciFlow = false; go('courseDone');
 }
 export function maybeNotify() {
   if (!S.notifyPending) return; S.notifyPending = false;
   if (!S.notifyFamily || !chatAvail() || !S.course) return;
   const res = S.course.results, avg = res.length ? Math.round(mean(res.map(r => r.acc || 0)) * 100) : 0;
-  sendMessage({ kind: 'system', text: '오늘 훈련 ' + COURSE_N + '개를 모두 마쳤어요 (정답률 ' + avg + '%)', record: { type: 'course', ref: todayS(), title: '오늘의 훈련', score: avg } });
+  sendMessage({ kind: 'system', text: '오늘 훈련 ' + S.course.games.length + '개를 모두 마쳤어요 (정답률 ' + avg + '%)', record: { type: 'course', ref: todayS(), title: '오늘의 훈련', score: avg } });
 }
 
 /* ================= 두뇌 건강 점검 (고정 난이도) =================
@@ -111,5 +149,6 @@ export function completeAssessment() {
   remoteSet('assessments/' + ts, rec);
   if (Object.keys(tasks).length) remoteSet('taskRuns/' + ts, { date: rec.date, ts, userId: S.myId || null, v: 1, tasks }, true);
   LS.set('bw.assessDraft', null);
+  progressMarkDone();
   S.lastAssess = { rec, prev }; go('assessDone');
 }

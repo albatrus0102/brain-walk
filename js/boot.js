@@ -1,12 +1,12 @@
 import { alarmTick } from './alarm.js';
-import { allAssessments, connectData, ensureProgram, isTrainee } from './data.js';
+import { allAssessments, connectData, ensureProgram, isTrainee, setPlanRaw } from './data.js';
 import { checkNudgeDialog } from './nudge.js';
 import { startAssessment } from './session.js';
 import { S } from './state.js';
 import { Store } from './store/store.js';
 import { initInstall } from './ui/install.js';
 import { afterInit } from './ui/onboarding.js';
-import { applyPrefs } from './events.js';
+import { applyDisplay } from './display.js';
 import { dialog } from './ui/dom.js';
 import { SCREENS } from './ui/registry.js';
 import { go, render } from './ui/shell.js';
@@ -25,7 +25,7 @@ export async function startFlow() {
   S.firstRunBusy = true;
   try {
     if (!LS.get('bw.seenDisc', false)) await askDialog('처음 오셨네요', DISCLAIMER_LONG, [{ label: '확인', kind: 'filled', run: () => LS.set('bw.seenDisc', true) }]);
-    if (isTrainee() && !allAssessments().length && !LS.get('bw.offered', false)) {
+    if (isTrainee() && S.plan && S.plan.checkEveryWeeks && !allAssessments().length && !LS.get('bw.offered', false)) {
       LS.set('bw.offered', true);
       await askDialog('두뇌 건강 점검을 먼저 해 볼까요?', '지금 상태를 한 번 기록해 두면 나중에 변화를 비교할 수 있어요. 약 15분 걸려요 (두 번에 나눠 해도 돼요). 건너뛰어도 괜찮아요.', [
         { label: '점검 시작하기', kind: 'filled', run: () => { S.firstRunBusy = false; startAssessment(); } }, { label: '나중에 할게요', kind: 'text' }]);
@@ -78,10 +78,11 @@ export async function boot() {
   const q = new URLSearchParams(location.search);
   S.openParam = q.get('open');
   initInstall();
-  applyPrefs();
+  setPlanRaw(null);
+  applyDisplay({ noRender: true });
   S.screen = 'ob-loading'; render();
   registerServiceWorker();
-  if (window.__DEBUG) { window.__S = S; window.__go = go; window.__render = render; }
+  if (window.__DEBUG) { window.__S = S; window.__go = go; window.__render = render; window.__Store = Store; }
   const r = await Store.init();
   await afterInit(r);
 }

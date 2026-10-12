@@ -1,7 +1,8 @@
-import { allAssessments, isTrainee } from '../../data.js';
+import { allAssessments, getPlan, isTrainee } from '../../data.js';
 import { hubHtml } from './hub.js';
 import { DOM, DOMAINS, GAMES } from '../../games/registry.js';
-import { changeWord, nextCheckInfo } from '../../logic.js';
+import { changeWord } from '../../logic.js';
+import { checkDue } from '../../program.js';
 import { mdLabel } from '../../records.js';
 import { ASSESS_STEPS, assessDraft } from '../../session.js';
 import { say } from '../../sound.js';
@@ -17,7 +18,7 @@ function scoreRows(scores, prevScores) {
 }
 function assessMainHtml() {
   {
-    const as = allAssessments(), last = as[0], prev = as[1], today = ymd(new Date()), nc = nextCheckInfo(last && last.date, today);
+    const as = allAssessments(), last = as[0], prev = as[1], today = ymd(new Date()), cd = checkDue(getPlan(), last && last.date, today, true), nc = cd.state === 'due' ? { state: 'due', days: cd.days == null ? 0 : cd.days } : cd.state === 'wait' ? { state: 'wait', days: cd.days, remain: cd.remain } : { state: 'none' };
     let h2 = '<div class="stack"><h1 class="t-headline" id="as-h">두뇌 건강 점검</h1>' +
       '<section class="card elevated"><p class="t-body">다섯 가지 영역(기억력, 집중력, 계산·순서, 날짜·시간 감각, 빠른 반응)을 <b>항상 같은 난이도</b>로 살펴봐요. 약 15분이 걸리고(두 번에 나눠 해도 돼요), 한 달에 한 번 다시 해서 변화를 비교해요.</p>' +
       '<p class="t-small muted mt">진단이 아니라 변화를 살펴보는 참고용이에요. 천천히, 편하게 해 주세요.</p>' +
@@ -59,6 +60,13 @@ SCREENS.assessBreak = {
 SCREENS.assessDone = {
   html() {
     const L = S.lastAssess, r = L.rec, p = L.prev;
+    // 훈련하는 분에게는 점수를 보여 주지 않아요 (관리자가 '점수 보여 주기'를 켠 경우만): 점수 걱정 없이 마치도록
+    if (isTrainee() && !getPlan().showScore) {
+      return '<div class="stack"><h1 class="t-headline" id="ad-h">점검을 모두 마치셨어요!</h1>' +
+        '<section class="card primary center"><p class="t-title">정말 수고 많으셨어요. 결과는 가족이 함께 살펴볼게요.</p></section>' +
+        '<p class="t-small muted">이 결과는 진단이 아니에요. 걱정되는 변화가 있으면 치매안심센터(<span class="nw">1899-9988</span>)나 병원에서 상담받으세요.</p><p class="sync-note" id="sync-note"></p>' +
+        '<div class="cta"><button class="btn filled" id="btn-ad-home" type="button" data-act="home">처음으로</button></div></div>';
+    }
     return '<div class="stack"><h1 class="t-headline" id="ad-h">점검을 마치셨어요</h1>' +
       '<section class="card primary center"><p class="t-label">총점</p><p class="t-display">' + r.total + '점</p>' + (p ? '<p class="t-title-m mt">' + arrowHtml(r.total - p.total) + '</p><p class="t-small">지난번 ' + p.total + '점</p>' : '<p class="t-body mt">처음 점검이에요. 이 점수가 기준이 돼요.</p>') + '</section>' +
       '<section class="card outlined"><h2 class="t-title">영역별 점수</h2><div class="stack mt">' + scoreRows(r.scores, p && p.scores) + '</div></section>' +

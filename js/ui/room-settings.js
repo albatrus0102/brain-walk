@@ -1,9 +1,9 @@
-import { disconnectData } from '../data.js';
+import { disconnectData, isAdmin, isTrainee } from '../data.js';
 import { Platform } from '../platform.js';
 import { disablePush, enablePush, pushIsOn, pushReasonText } from '../push.js';
 import { S } from '../state.js';
 import { FirebaseAdapter } from '../store/firebase-adapter.js';
-import { TRANSFER_MIN, clearLocalData, createTransferCode, deleteFamily, deleteMyRecords, getInviteInfo, isOwner, leaveFamily, listMyDevices, renameSelf, revokeDevice, rotateJoinCode, transferLink } from '../store/membership.js';
+import { TRANSFER_MIN, clearLocalData, createTransferCode, deleteFamily, deleteMyRecords, getInviteInfo, isOwner, leaveFamily, listMyDevices, renameSelf, revokeDevice, rotateJoinCode, transferLink, transferOwnership } from '../store/membership.js';
 import { Store } from '../store/store.js';
 import { LS } from '../util.js';
 import { closeSheet, dialog, h, openSheet, toast } from './dom.js';
@@ -15,7 +15,7 @@ import { switchRow } from './widgets.js';
 /* 설정 > 가족방 / 알림 / 내 정보 / 삭제 */
 const reloadHome = () => { location.replace(location.pathname); };
 const sec = (title, ...kids) => h('section', { class: 'card outlined' }, h('h2', { class: 't-title', text: title }), h('div', { class: 'stack mt' }, ...kids));
-const btn = (label, cls, onclick, id) => h('button', { class: 'btn ' + cls, type: 'button', id, onclick }, label);
+export const btn = (label, cls, onclick, id) => h('button', { class: 'btn ' + cls, type: 'button', id, onclick }, label);
 
 function pushStateText() {
   const st = S.pushState;
@@ -41,21 +41,21 @@ export function pushRow() {
   return wrap;
 }
 
-function openInvite() {
+export function openInvite() {
   openSheet('가족 코드', (body) => {
     body.append(h('p', { class: 't-body muted', id: 'inv-loading', text: '불러오는 중이에요…' }));
     getInviteInfo().then(info => {
       body.textContent = '';
       if (info.code && !info.expired) {
         body.append(inviteBlock(info.code, { prefix: 'set-inv' }), h('p', { class: 't-small muted', text: '코드는 ' + new Date(info.expires).toLocaleDateString('ko-KR') + '까지 쓸 수 있어요.' }));
-      } else body.append(h('p', { class: 't-body', id: 'inv-expired', text: '코드 기간이 지났어요. 새로 만들어 주세요.' }));
-      body.append(btn('새 코드 만들기', 'outlined', () => dialog('새 코드를 만들까요?', '이전 코드는 더 이상 쓸 수 없어요. 가족을 내보낸 뒤라면 새 코드를 만드는 것이 좋아요.', [{ label: '취소', kind: 'text' }, { label: '만들기', kind: 'filled', run: async () => { try { await rotateJoinCode(); toast('새 코드를 만들었어요.'); openInvite(); } catch (e) { toast(Store.explain(e)); } } }]), 'btn-rotate'),
-        btn('닫기', 'text', closeSheet, 'inv-close'));
+      } else body.append(h('p', { class: 't-body', id: 'inv-expired', text: isAdmin() ? '코드 기간이 지났어요. 새로 만들어 주세요.' : '코드 기간이 지났어요. 관리자에게 새 코드를 부탁해 주세요.' }));
+      if (isAdmin()) body.append(btn('새 코드 만들기', 'outlined', () => dialog('새 코드를 만들까요?', '이전 코드는 더 이상 쓸 수 없어요. 가족을 내보낸 뒤라면 새 코드를 만드는 것이 좋아요.', [{ label: '취소', kind: 'text' }, { label: '만들기', kind: 'filled', run: async () => { try { await rotateJoinCode(); toast('새 코드를 만들었어요.'); openInvite(); } catch (e) { toast(Store.explain(e, true)); } } }]), 'btn-rotate'));
+      body.append(btn('닫기', 'text', closeSheet, 'inv-close'));
     }).catch(e => { body.textContent = ''; body.append(h('p', { class: 't-body', text: Store.explain(e) }), btn('닫기', 'text', closeSheet)); });
   });
 }
 /* forMember: 다른 가족의 새 기기용 복구 코드 (예: 아버지가 폰을 잃어버렸을 때) */
-function openTransfer(forMember, forName) {
+export function openTransfer(forMember, forName) {
   openSheet(forMember ? forName + '님의 새 기기 연결 코드' : '다른 기기로 옮기기', (body) => {
     body.append(h('p', { class: 't-body muted', text: (forMember ? forName + '님의 새 기기에서' : '새 기기에서') + ' 앱을 열고 "기기 옮기기 코드가 있어요"를 눌러 아래 코드를 입력하세요. 코드는 약 ' + TRANSFER_MIN + '분 동안, 한 번만 쓸 수 있어요.' + (forMember ? ' 이 코드를 받은 기기는 ' + forName + '님으로 연결되니, 다른 사람에게 보내지 마세요.' : '') }));
     const slot = h('div', { class: 'stack' }, h('p', { class: 't-body', text: '코드를 만드는 중이에요…' })); body.append(slot);
@@ -66,12 +66,12 @@ function openTransfer(forMember, forName) {
         h('input', { class: 'input', id: 'transfer-link', readonly: '', value: link, 'aria-label': '옮기기 링크' }),
         btn('링크 복사', 'tonal', async () => { toast((await Platform.copy(link, document.getElementById('transfer-link'))) ? '복사했어요.' : '길게 눌러 복사해 주세요.'); }, 'transfer-copy'),
         h('p', { class: 't-small muted', text: new Date(expires).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' }) + '까지 쓸 수 있어요.' }));
-    }).catch(e => { slot.textContent = ''; slot.append(h('p', { class: 't-body', id: 'transfer-err', text: forMember && e && e.code === 'permission-denied' ? '다른 가족의 코드는 방을 만든 분이나, 가족방에 들어온 지 하루가 지난 가족만 만들 수 있어요.' : Store.explain(e) })); });
+    }).catch(e => { slot.textContent = ''; slot.append(h('p', { class: 't-body', id: 'transfer-err', text: forMember && e && e.code === 'permission-denied' ? '다른 가족의 새 기기 연결 코드는 관리자만 만들 수 있어요.' : Store.explain(e) })); });
     body.append(btn('닫기', 'text', closeSheet, 'transfer-close'));
   });
 }
 /* 가족 기기 복구 코드: 누구의 새 기기인지 고르기 */
-function openRecover() {
+export function openRecover() {
   openSheet('가족 기기 복구 코드', (body) => {
     const others = Object.entries(FirebaseAdapter.members()).filter(([id, m]) => id !== FirebaseAdapter.mid && m && !m.leftTs);
     body.append(h('p', { class: 't-body muted', text: '폰을 잃어버렸거나 앱을 지운 가족의 새 기기를 연결할 코드를 만들어요. 누구의 새 기기인가요?' }));
@@ -81,7 +81,7 @@ function openRecover() {
   });
 }
 /* 연결된 기기: 내 이름으로 연결된 기기 목록. 잃어버린 기기는 여기서 끊어요. */
-function openDevices() {
+export function openDevices() {
   openSheet('연결된 기기', (body) => {
     const slot = h('div', { class: 'stack' }, h('p', { class: 't-body muted', text: '불러오는 중이에요…' })); body.append(slot);
     const load = () => listMyDevices().then(list => {
@@ -96,7 +96,7 @@ function openDevices() {
     body.append(btn('닫기', 'text', closeSheet, 'devices-close'));
   });
 }
-function openRename() {
+export function openRename() {
   openSheet('내 이름 바꾸기', (body) => {
     const input = h('input', { class: 'input', id: 'rename-input', type: 'text', maxlength: '20', 'aria-label': '새 이름' }); input.value = (FirebaseAdapter.me() || {}).name || '';
     const save = async () => {
@@ -108,7 +108,7 @@ function openRename() {
   });
 }
 
-function confirmLeave() {
+export function confirmLeave() {
   dialog('가족에서 나갈까요?', '이 기기와 가족방의 연결이 끊기고, 내 훈련·점검 기록과 알림 설정이 사라져요. 지난 대화는 "떠난 가족"으로 남아요. 다시 들어오려면 가족 코드가 필요해요.', [
     { label: '취소', kind: 'text' },
     { label: '가족 나가기', kind: 'filled', run: async () => { try { await disablePush().catch(() => {}); await leaveFamily(); disconnectData(); reloadHome(); } catch (e) { toast(Store.explain(e)); } } }]);
@@ -120,10 +120,10 @@ function confirmTyped(title, text, onOk) {
   dialog(title, text, [{ label: '취소', kind: 'text' }, { label: '완전히 삭제', kind: 'filled', run: onOk }], null, h('div', { class: 'field mt' }, h('label', { for: 'del-confirm-input', text: '계속하려면 "삭제"라고 입력해 주세요' }), input));
   const b = document.getElementById('dlg-btn-1'); if (b) b.disabled = true;
 }
-async function confirmDeleteAll() {
+export async function confirmDeleteAll() {
   let owner = false; try { owner = await isOwner(); } catch (e) {}
   if (!owner) {
-    dialog('내 기록을 모두 삭제할까요?', '내 훈련·점검·생활 체크 기록이 지워지고 되돌릴 수 없어요. 가족방의 대화와 다른 가족의 기록은 그대로예요. (가족방 전체 삭제는 방을 만든 분만 할 수 있어요.)', [
+    dialog('내 기록을 모두 삭제할까요?', isTrainee() ? '내 훈련·점검 기록이 지워지고 되돌릴 수 없어요. 설문·잠 기록·시계 그림처럼 가족만 보는 기록은 관리자가 지울 수 있어요.' : '내 훈련·점검·생활 체크 기록이 지워지고 되돌릴 수 없어요. 가족방의 대화와 다른 가족의 기록은 그대로예요. (가족방 전체 삭제는 방을 만든 분만 할 수 있어요.)', [
       { label: '취소', kind: 'text' }, { label: '내 기록 삭제', kind: 'filled', run: async () => { try { await deleteMyRecords(); toast('내 기록을 삭제했어요.'); setTimeout(reloadHome, 600); } catch (e) { toast(Store.explain(e)); } } }]);
     return;
   }
@@ -131,28 +131,28 @@ async function confirmDeleteAll() {
     { label: '취소', kind: 'text' },
     { label: '계속', kind: 'filled', run: () => setTimeout(() => confirmTyped('정말 삭제할까요?', '이 작업은 되돌릴 수 없어요.', async () => { try { await disablePush().catch(() => {}); await deleteFamily(); disconnectData(); reloadHome(); } catch (e) { toast(Store.explain(e)); } }), 50) }]);
 }
-function confirmDeleteLocal() {
+export function confirmDeleteLocal() {
   dialog('이 기기의 기록을 모두 삭제할까요?', '체험 모드로 저장된 훈련·점검·생활 체크 기록과 설정이 지워지고 되돌릴 수 없어요.', [
     { label: '취소', kind: 'text' }, { label: '모두 삭제', kind: 'filled', run: () => { clearLocalData(); try { localStorage.removeItem('bw.localdb'); } catch (e) {} reloadHome(); } }]);
 }
 
-export function buildRoomSection(slot) {
-  if (!slot) return;
-  slot.textContent = '';
-  if (Store.mode === 'firebase') {
-    const me = FirebaseAdapter.me() || {};
-    slot.append(
-      sec('가족방', h('p', { class: 't-body', text: '내 이름: ' + (me.name || '') }),
-        btn('가족 코드 다시 보기 / 새로 만들기', 'tonal', openInvite, 'btn-invite'),
-        btn('다른 기기로 옮기기', 'tonal', () => openTransfer(), 'btn-transfer'),
-        btn('가족 기기 복구 코드 만들기', 'tonal', openRecover, 'btn-recover'),
-        btn('연결된 기기', 'tonal', openDevices, 'btn-devices'),
-        btn('내 이름 바꾸기', 'tonal', openRename, 'btn-rename')),
-      (() => { const c = h('section', { class: 'card outlined' }, h('h2', { class: 't-title', text: '알림' })); const row = pushRow(); row.className = 'mt'; c.append(row); return c; })(),
-      sec('내 정보 정리', btn('가족 나가기', 'outlined', confirmLeave, 'btn-leave'), btn('모든 기록 삭제', 'outlined', confirmDeleteAll, 'btn-delete-all')));
-  } else if (Store.mode === 'local') {
-    slot.append(sec('체험 모드', h('p', { class: 't-body', text: '지금은 체험 모드예요. 기록은 이 기기에만 저장되고, 가족 대화와 알림은 쓸 수 없어요.' }), btn('모든 기록 삭제 (이 기기)', 'outlined', confirmDeleteLocal, 'btn-delete-local')));
-  }
+/* 관리자 넘기기 (가족방 주인 바꾸기): 방 주인만. 가족 역할의 구성원 한 명을 골라요. */
+export function openOwnerTransfer() {
+  openSheet('관리자 넘기기 (가족방 주인 바꾸기)', (body) => {
+    const ms = FirebaseAdapter.members(), me = FirebaseAdapter.mid;
+    const cands = Object.entries(ms).filter(([id, m]) => id !== me && m && !m.leftTs && m.role === 'family');
+    body.append(h('p', { class: 't-body muted', text: '방 주인을 다른 가족에게 넘겨요. 훈련하는 분이 방을 만들었다면, 가족 한 분이 관리를 맡으면 편해요.' }));
+    if (!cands.length) { body.append(h('p', { class: 't-body', id: 'own-none', text: '넘길 수 있는 가족이 아직 없어요. 가족이 들어오면 여기서 넘길 수 있어요.' }), btn('닫기', 'text', closeSheet, 'own-close')); return; }
+    const keepable = (ms[me] || {}).role === 'family';
+    const keep = h('input', { type: 'checkbox', id: 'own-keep', checked: '' }); keep.checked = keepable; keep.disabled = !keepable;
+    cands.forEach(([id, m], i) => body.append(btn(String(m.name || '가족'), 'outlined menuitem', () => {
+      const nm = String(m.name || '가족');
+      dialog(nm + '님에게 넘길까요?', nm + '님이 방 주인이 되면 관리자 지정과 가족방 전체 삭제는 ' + nm + '님만 할 수 있어요.', [{ label: '취소', kind: 'text' }, { label: '넘기기', kind: 'filled', run: async () => {
+        try { await transferOwnership(id, keep.checked); closeSheet(); toast(nm + '님이 방 주인이 되었어요.'); render(true); } catch (e) { toast(Store.explain(e, true)); }
+      } }]);
+    }, 'own-pick-' + i)));
+    body.append(h('label', { class: 'checkrow', for: 'own-keep' }, keep, h('span', { text: keepable ? '나는 관리자로 남기' : '나는 훈련하는 분이라 관리자로 남을 수 없어요' })), btn('닫기', 'text', closeSheet, 'own-close'));
+  });
 }
 
 export function pushPromptCard() {

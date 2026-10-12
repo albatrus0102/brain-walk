@@ -1,81 +1,96 @@
 import { alarmTick } from '../../alarm.js';
-import { allCheckins, allSessions, chatAvail, courseStatus, ensureProfiles, isTrainee, nameOf, streakOf, todayS, traineeLabel } from '../../data.js';
-import { DOM, GAMES } from '../../games/registry.js';
+import { allAssessments, allSessions, chatAvail, ensureProfiles, getPlan, isTrainee, nameOf, todayS, traineeLabel } from '../../data.js';
 import { ic } from '../../icons.js';
-import { nextCheckInfo, programInfo } from '../../logic.js';
-import { sendMessage } from '../../messages.js';
-import { mdLabel, tipHtml } from '../../records.js';
-import { COURSE_N } from '../../session.js';
+import { unreadCount } from '../../messages.js';
+import { checkDue, isTrainingDay, nextTrainingDate } from '../../program.js';
+import { assessDraft, courseInfo, resumeAssessment, startAssessment, startCourse } from '../../session.js';
 import { say } from '../../sound.js';
 import { S } from '../../state.js';
-import { btnEl, h, svgIcon, toast } from '../dom.js';
+import { ACTS } from '../acts.js';
+import { btnEl, dialog, h, svgIcon, toast } from '../dom.js';
 import { cistBannerHtml } from './clinical.js';
+import { dashboardHtml, startDashboardTicker } from '../dashboard.js';
 import { installSlot } from '../install.js';
 import { pushPromptCard } from '../room-settings.js';
 import { SCREENS } from '../registry.js';
 import { go, render } from '../shell.js';
-import { progressBar, slotText, statusChip } from '../widgets.js';
-import { $, LS, WD, ymd } from '../../util.js';
+import { progressBar, slotText } from '../widgets.js';
+import { $, LS, WD, esc, iga, parseYmd, ymd } from '../../util.js';
 
+/* 훈련하는 분의 홈 (DESIGN.md §5 L1): 오늘 할 일 하나(큰 버튼)와 가족 한마디뿐이에요. 하단 메뉴 없음.
+ * 큰 버튼의 상태(첫 번째로 맞는 것): 점검 이어하기 · 점검 하는 날 · 오늘 완료 · 이어서 하기 · 오늘 훈련 시작 · 쉬는 날 */
+export function mainState() {
+  const now = new Date(), today = ymd(now), plan = getPlan(), ci = courseInfo(), trainingDay = isTrainingDay(plan, now);
+  const lastA = allAssessments()[0], dr = assessDraft();
+  const due = checkDue(plan, lastA && lastA.date, today, allSessions().length > 0);
+  const anyToday = ci.done || ci.started || allSessions().some(s => s.date === today);
+  if (dr) return { k: 'resumeCheck', label: '점검 이어서 하기', sub: '어제 하던 두뇌 점검을 마저 해요 · 약 7분', ci };
+  if (due.state === 'due' && trainingDay && LS.get('bw.checkSkip', '') !== today && !anyToday) return { k: 'check', label: '오늘 점검 시작', sub: '한 달에 한 번 하는 두뇌 점검이에요 · 약 15분', ci };
+  if (ci.done) return { k: 'done', label: '오늘 완료 ✓', sub: '내일 또 만나요', ci };
+  if (ci.started) return { k: 'course', label: '이어서 하기', sub: ci.N + '개 중 ' + ci.n + '개 했어요', ci, progress: true };
+  if (trainingDay) return { k: 'course', label: '오늘 훈련 시작', sub: '게임 ' + ci.N + '개 · 약 ' + ci.minutes + '분', ci };
+  const nx = nextTrainingDate(plan, now);
+  return { k: 'rest', label: '가볍게 해 보기', sub: '오늘은 쉬는 날이에요.' + (nx ? ' 다음 훈련은 ' + WD[parseYmd(nx).getDay()] + '요일이에요.' : ''), ci };
+}
+function traineeHtml() {
+  const now = new Date(), hr = now.getHours(), st = mainState(), due = !!S.alarmDue && st.k !== 'done';
+  const greet = hr < 12 ? '좋은 아침이에요' : hr < 18 ? '편안한 오후예요' : '편안한 저녁이에요';
+  const cls = st.k === 'done' ? ' done' : st.k === 'rest' ? ' soft' : '';
+  const card = '<section class="card ' + (due ? 'today due' : 'elevated today') + '" id="today-card" aria-labelledby="today-h"' + (due ? ' role="alert"' : '') + '>' +
+    (due ? '<h2 class="due-title" id="today-h">' + ic('alarm') + '훈련할 시간이에요!</h2><p class="t-body">천천히 하셔도 괜찮아요.</p>' : '<h2 class="sr" id="today-h">오늘의 훈련</h2>') +
+    '<button class="main-btn' + cls + '" id="btn-main" type="button" data-act="main" data-k="' + st.k + '">' + (st.k === 'done' ? '' : ic(st.k === 'rest' ? 'leaf' : 'play')) + '<span>' + st.label + '</span></button>' +
+    '<p class="t-body center main-sub" id="main-sub">' + esc(st.sub) + '</p>' +
+    (st.progress ? '<div>' + progressBar(st.ci.n / st.ci.N * 100, '오늘의 훈련 진행') + '</div>' : '') +
+    (due ? '<button class="btn text snooze" id="banner-snooze" type="button">30분 뒤에 다시 알려 주세요</button>' : '') + '</section>';
+  return '<div class="stack"><header class="hero" aria-labelledby="hello"><p class="greet">' + greet + '</p><h1 class="date" id="hello">' + (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' + WD[now.getDay()] + '요일</h1></header>' + card + '<div id="cheer-slot"></div></div>';
+}
+function bindTrainee(el) {
+  const sn = $('#banner-snooze', el);
+  if (sn) sn.onclick = () => { LS.set('bw.snooze', Date.now() + 30 * 60000); alarmTick(); render(true); toast('30분 뒤에 다시 알려 드릴게요.'); };
+  const slot = $('#cheer-slot', el); if (!slot || !chatAvail()) return;
+  const m = S.messages.filter(x => x.authorId !== S.myId && !x.deleted && x.kind === 'text' && x.text).slice(-1)[0];
+  if (m) ensureProfiles([m.authorId]);
+  const un = unreadCount();
+  const line = m
+    ? h('button', { class: 'cheer-line', id: 'cheer-line', type: 'button', 'aria-label': '응원 메시지 듣기', onclick: () => say(nameOf(m.authorId) + '님이 말씀하셨어요. ' + m.text, true) }, h('b', { text: nameOf(m.authorId) + ': ' }), h('span', { text: m.text }))
+    : h('p', { class: 'cheer-line empty t-body muted', id: 'cheer-line', text: '가족에게 한마디 남겨 보세요.' });
+  slot.append(h('section', { class: 'card primary cheer', id: 'cheer-card', 'aria-label': '가족' }, line,
+    h('button', { class: 'btn tonal big', id: 'btn-family-chat', type: 'button', onclick: () => go('chat') }, '가족 대화', un > 0 ? h('span', { class: 'new-badge', text: '새 글 ' + (un > 99 ? '99+' : un) }) : null)));
+}
+function familyHtml() {
+  const now = new Date(), hr = now.getHours();
+  const hero = '<header class="hero" aria-labelledby="hello"><p class="greet">' + (hr < 12 ? '좋은 아침이에요' : hr < 18 ? '편안한 오후예요' : '편안한 저녁이에요') + '</p><h1 class="date" id="hello">' + (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' + WD[now.getDay()] + '요일</h1><p class="t-body muted" id="fam-hello"><span data-slot="tlabel"></span>의 두뇌 산책을 함께 응원해요.</p></header>';
+  return '<div class="stack"><div id="home-banner"></div>' + hero + dashboardHtml() +
+    '<button class="btn outlined" id="btn-pick" type="button" data-act="nav" data-to="pick">나도 훈련해 보기</button></div>';
+}
 SCREENS.home = {
-  html() {
-    const now = new Date(), list = allSessions(), st = streakOf(list, now), hr = now.getHours(), today = ymd(now);
-    const greet = hr < 12 ? '좋은 아침이에요' : hr < 18 ? '편안한 오후예요' : '편안한 저녁이에요';
-    // 인사말 + 날짜는 카드가 아니라 가벼운 머리글: 화면에서 가장 눈에 띄는 것은 아래 '오늘의 훈련' 카드 하나예요.
-    const hero = '<header class="hero" aria-labelledby="hello"><p class="greet">' + greet + '</p><h1 class="date" id="hello">' + now.getFullYear() + '년 ' + (now.getMonth() + 1) + '월 ' + now.getDate() + '일<br>' + WD[now.getDay()] + '요일</h1>' +
-      (isTrainee() ? (st > 0 ? '<p class="streak">' + ic('leaf') + '연속 ' + st + '일째 훈련 중이에요</p>' : '<p class="t-body muted">오늘도 천천히 두뇌 산책을 시작해 볼까요?</p>') : '<p class="t-body muted" id="fam-hello"><span data-slot="tlabel"></span>의 두뇌 산책을 함께 응원해요.</p>') + '</header>';
-    if (!isTrainee()) {
-      return '<div class="stack"><div id="home-banner"></div>' + hero +
-        '<section class="card elevated" aria-labelledby="ft-h"><h2 class="t-title" id="ft-h"><span data-slot="tlabel"></span>의 오늘</h2><div class="mt" id="fam-status-slot"></div>' +
-        '<div class="stack mt"><button class="btn filled" id="btn-fam-report" type="button" data-act="nav" data-to="family">기록 보기</button>' +
-        '<button class="btn tonal" id="btn-fam-chat" type="button" data-act="nav" data-to="chat">대화방 열기</button>' +
-        '<button class="btn outlined" id="btn-fam-nudge" type="button" data-act="nudgego">훈련 알림 보내기</button></div></section>' +
-        '<button class="btn outlined" id="btn-pick" type="button" data-act="nav" data-to="pick">나도 훈련해 보기</button>' +
-        '</div>';
-    }
-    const saved = LS.get('bw.course', null), doneN = (saved && saved.date === today) ? saved.results.length : 0, cs = courseStatus(), cis = allCheckins();
-    const resume = doneN > 0 && doneN < COURSE_N, shown = cs.done ? COURSE_N : Math.max(doneN, 0);
-    // 훈련하는 분 홈: 다음 할 일은 하나(큰 버튼). 그 아래에는 응원과 생활 체크만. 나머지(프로그램, 월간 점검, 설문)는 '훈련' 탭에 있어요.
-    const label = cs.done ? '오늘 완료 ✓  한 번 더 하기' : resume ? '이어서 하기 (' + doneN + '/' + COURSE_N + ')' : '오늘의 훈련 시작';
-    // 알람이 울렸을 때는 따로 배너를 띄우지 않고, 이 카드가 "훈련할 시간이에요"로 바뀌어요. 큰 버튼은 늘 하나.
-    const due = !!S.alarmDue && !cs.done;
-    const count = cs.done ? '오늘 훈련을 다 마쳤어요. 더 하고 싶으면 한 번 더 해도 좋아요.' : '오늘 ' + shown + '/' + COURSE_N + ' 마쳤어요 · 약 15분';
-    const todayCard = '<section class="card ' + (due ? 'today due' : 'elevated today') + '" id="today-card" aria-labelledby="today-h"' + (due ? ' role="alert"' : '') + '>' +
-      (due ? '<h2 class="due-title" id="today-h">' + ic('alarm') + '훈련할 시간이에요!</h2><p class="t-body">천천히 하셔도 괜찮아요.</p>' : '<h2 class="t-title" id="today-h">오늘의 훈련</h2>') +
-      '<button class="fab-ext' + (cs.done ? ' done' : '') + '" id="btn-start-course" type="button" data-act="course">' + ic('play') + '<span>' + label + '</span></button>' +
-      '<div>' + progressBar(shown / COURSE_N * 100, '오늘의 훈련 진행') + '<p class="t-small mt" id="course-count">' + count + '</p></div>' +
-      (due ? '<button class="btn text snooze" id="banner-snooze" type="button">30분 뒤에 다시 알려 주세요</button>' : '') + '</section>';
-    return '<div class="stack"><div id="home-banner"></div>' + hero + todayCard +
-      '<div id="cheer-slot"></div>' +
-      (cis[today] ? '' : '<section class="card outlined" aria-labelledby="ci-h"><h2 class="t-title" id="ci-h">오늘의 생활 체크</h2><p class="t-body mt">기분, 잠, 운동을 30초 만에 적어요.</p><div class="mt"><button class="btn tonal" id="btn-checkin" type="button" data-act="nav" data-to="checkin">생활 체크 하기</button></div></section>') + '</div>';
-  },
+  html() { return isTrainee() ? traineeHtml() : familyHtml(); },
   bind(el) {
+    if (isTrainee()) return bindTrainee(el);
     slotText(el, 'tlabel', traineeLabel());
     const bn = $('#home-banner', el);
     bn.append(installSlot('home'));
     const pc = pushPromptCard(); if (pc) bn.append(pc);
-    if (!isTrainee()) bn.insertAdjacentHTML('beforeend', cistBannerHtml());
-    const sn = $('#banner-snooze', el);
-    if (sn) sn.onclick = () => { LS.set('bw.snooze', Date.now() + 30 * 60000); alarmTick(); render(true); toast('30분 뒤에 다시 알려 드릴게요.'); };
+    bn.insertAdjacentHTML('beforeend', cistBannerHtml());
     if (S.remDue) {
-      bn.append(h('div', { class: 'banner', role: 'status', id: 'reminder-banner' }, h('div', { class: 't-title' }, svgIcon('alarm'), traineeLabel() + '이(가) 아직 훈련 전이에요'),
+      bn.append(h('div', { class: 'banner', role: 'status', id: 'reminder-banner' }, h('div', { class: 't-title' }, svgIcon('alarm'), traineeLabel() + iga(traineeLabel()) + ' 아직 훈련 전이에요'),
         h('div', { class: 'row' }, btnEl('알림 보내기', 'filled', () => { go('family'); setTimeout(() => { const n = $('#nudge-slot'); if (n) n.scrollIntoView({ block: 'center' }); }, 50); }, 'rem-send'), btnEl('닫기', 'text', () => { LS.set('bw.remDismiss', todayS()); alarmTick(); render(true); }, 'rem-close'))));
     }
-    const fs = $('#fam-status-slot', el); if (fs) fs.append(statusChip());
-    const cheer = $('#cheer-slot', el);
-    if (cheer && chatAvail()) {
-      const msgs = S.messages.filter(m => m.authorId !== S.myId && !m.deleted && m.kind === 'text' && m.text).slice(-3).reverse();
-      ensureProfiles(msgs.map(m => m.authorId));
-      const box = h('section', { class: 'card primary cheer', 'aria-labelledby': 'cheer-h', id: 'cheer-card' }, h('h2', { class: 't-title', id: 'cheer-h', text: '가족 응원' }));
-      if (!msgs.length) box.append(h('p', { class: 't-body', text: '아직 새 응원 메시지가 없어요. 가족이 글을 남기면 여기에 보여요.' }));
-      msgs.forEach((m, i) => box.append(h('div', { class: 'cheer-item', id: 'cheer-' + i }, h('b', { text: nameOf(m.authorId) }), h('span', { class: 't-body', text: m.text }))));
-      if (msgs.length) {
-        box.append(btnEl('소리로 듣기', 'filled', () => say(msgs.map(m => nameOf(m.authorId) + '님이 말씀하셨어요. ' + m.text).join(' '), true), 'cheer-tts', 'vol'));
-        box.append(h('div', { class: 'quick', 'aria-label': '한 번에 답장하기' }, QUICK_REPLIES.map((t, i) => h('button', { class: 'chip', type: 'button', id: 'cheer-reply-' + i, onclick: () => { sendMessage({ kind: 'text', text: t, replyTo: msgs[0].id }).then(ok => { if (ok) toast('답장을 보냈어요.'); }); } }, t))));
-      }
-      box.append(btnEl('대화방 열기', 'tonal', () => go('chat'), 'cheer-open'));
-      cheer.append(box);
-    }
+    startDashboardTicker(render);
   }
 };
 export const QUICK_REPLIES = ['고마워요 ❤️', '오늘도 했어요!', '보고 싶어요'];
+
+/* ---- 훈련하는 분 홈의 동작 ---- */
+ACTS.main = b => {
+  const k = b.dataset.k;
+  if (k === 'resumeCheck') resumeAssessment();
+  else if (k === 'check') go('checkIntro');
+  else if (k === 'done') dialog('오늘 훈련을 다 하셨어요', '한 번 더 해 보시겠어요? 오늘 기록은 그대로 남아요.', [{ label: '아니요, 쉴게요', kind: 'filled' }, { label: '한 번 더', kind: 'text', run: () => startCourse({ replay: true }) }]);
+  else startCourse();
+};
+ACTS['check-start'] = () => startAssessment();
+ACTS.checkskip = () => { LS.set('bw.checkSkip', todayS()); startCourse(); };
+ACTS.cistskip = () => { S.ci = {}; S.ciFlow = false; go('courseDone'); };
+/* 훈련하는 분이 실수로 설정을 열지 않도록: 한 번 더 물어봐요 */
+ACTS.gear = () => dialog('설정을 열까요?', '가족이 도와줄 때만 열어 주세요.', [{ label: '닫기', kind: 'filled' }, { label: '설정 열기', kind: 'text', run: () => go('settings') }]);

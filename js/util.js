@@ -19,6 +19,9 @@ export const daysBetween = (a, b) => dayNum(parseYmd(b)) - dayNum(parseYmd(a));
 export const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
 export const DKEYS = ['memory', 'attention', 'executive', 'orientation', 'speed'];
 
+/* 이름 뒤에 붙는 말: 받침이 있으면 '이', 없으면 '가' (한글이 아니면 '이(가)') */
+export const iga = n => { const c = String(n).slice(-1).charCodeAt(0); return c >= 0xAC00 && c <= 0xD7A3 ? (((c - 0xAC00) % 28) ? '이' : '가') : '이(가)'; };
+
 export const LS = {
   get(k, def) { try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
