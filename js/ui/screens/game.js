@@ -1,4 +1,5 @@
 import { flushItemLog, canLog, pushEntry } from '../../ai/itemlog.js';
+import { codeItemId, codeRole } from '../../ai/itemlog-doc.js';
 import { markSeen, measureFirstPos, measureNext, bumpMeasureDay, draw as bankDraw } from '../../ai/bank.js';
 import { tryBank, hostable } from '../../games/items.js';
 import { DOM } from '../../games/registry.js';
@@ -68,7 +69,7 @@ SCREENS.game = {
       /* 문항 기록 한 줄 (item 이 null 이면 코드가 만든 문항 'proc') */
       logItem(item, o) {
         const r = ctx.rt(), base = item ? { id: item.id, role: item.role === 'reference' || item.role === 'anchor' ? item.role : 'training', fmt: item.format, cd: item.cdomain, lv: item.level }
-          : { id: 'proc:' + g.id + ':L' + s.level + ':' + s.idx, role: 'proc', fmt: g.id, cd: g.cd || '', lv: s.level };
+          : { id: codeItemId(g.id, s.level, s.idx), role: codeRole(g.id), fmt: g.id, cd: g.cd || '', lv: s.level };
         pushEntry(s, Object.assign(base, { rt: r.ms, rtStart: r.start, intr: s.intr, pos: s.idx }, o));
         s.intr = false; ctx.logged = true;
       },
@@ -79,7 +80,8 @@ SCREENS.game = {
         if (!ctx.logged && !s.assess) ctx.logItem(null, { score: r.total ? r.correct / r.total : (r.ok ? 1 : 0), ok: !!r.ok, err: [], pick: ctx.pickIdx || [] });
         beep(r.ok || r.neutral ? 'ok' : 'soft');
         const msg = (r.ok && !r.neutral ? praise() + ' ' : '') + r.msg;
-        $('#fb', el).innerHTML = '<div class="fb ' + (r.ok || r.neutral ? 'good' : 'soft') + '" id="fb-card">' + esc(msg) + '</div>';
+        // 안내 글에는 은행(AI)의 해설·보기 글이 들어갈 수 있어요: 글자로만 넣어요 (innerHTML 금지)
+        const fbBox = $('#fb', el); fbBox.textContent = ''; fbBox.append(h('div', { class: 'fb ' + (r.ok || r.neutral ? 'good' : 'soft'), id: 'fb-card', text: msg }));
         say(msg);
         const nb = $('#btn-next', el); nb.hidden = false; $('#game-cta', el).classList.remove('quiet');
         nb.textContent = s.idx + 1 < s.rounds ? '다음 문제' : (s.assess ? '이 영역 마치기' : s.delayed ? '마치기' : '결과 보기');
