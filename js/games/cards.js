@@ -1,5 +1,6 @@
 import { reg } from './registry.js';
 import { beep } from '../sound.js';
+import { h } from '../ui/dom.js';
 import { $, pick, shuffle } from '../util.js';
 
 /* ---------- 1. 카드 짝 맞추기 ---------- */
@@ -19,7 +20,8 @@ reg({
     ctx.box.innerHTML = '<div class="stack"><div class="status" id="status" aria-live="polite">카드를 눌러 보세요.</div><div class="grid" style="--cols:' + cols + '" id="board">' +
       cards.map((c, i) => '<button type="button" class="cell mcard" id="card-' + i + '" data-i="' + i + '" aria-label="카드 ' + (i + 1) + '번, 뒤집히지 않았어요"><span class="em">?</span></button>').join('') + '</div></div>';
     const st = $('#status', ctx.box);
-    const faceUp = (i, cls) => { const b = $('#card-' + i, ctx.box); b.className = 'cell mcard ' + cls; b.innerHTML = '<span class="em">' + cards[i].e + '</span><span class="nm">' + cards[i].n + '</span>'; b.setAttribute('aria-label', cards[i].n + ' 카드'); };
+    // 카드 그림·이름은 은행(AI)에서 올 수 있어요: 글자로만 넣어요 (innerHTML 금지)
+    const faceUp = (i, cls) => { const b = $('#card-' + i, ctx.box); b.className = 'cell mcard ' + cls; b.textContent = ''; b.append(h('span', { class: 'em', text: cards[i].e }), h('span', { class: 'nm', text: cards[i].n })); b.setAttribute('aria-label', cards[i].n + ' 카드'); };
     const faceDown = i => { const b = $('#card-' + i, ctx.box); b.className = 'cell mcard'; b.innerHTML = '<span class="em">?</span>'; b.setAttribute('aria-label', '카드 ' + (i + 1) + '번, 뒤집히지 않았어요'); };
     ctx.box.addEventListener('click', e => {
       const b = e.target.closest('.mcard'); if (!b || lock || done || ctx.finished) return;

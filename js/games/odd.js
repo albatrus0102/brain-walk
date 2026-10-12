@@ -1,4 +1,5 @@
 import { reg } from './registry.js';
+import { h } from '../ui/dom.js';
 import { $, pick, rnd } from '../util.js';
 
 /* ---------- 3. 다른 그림 찾기 ---------- */
@@ -18,8 +19,10 @@ reg({
     let [a, b] = pick(prs || ODD_PAIRS[tier], 1)[0]; if (Math.random() < 0.5) { const t = a; a = b; b = t; }
     const n = size * size, odd = rnd(0, n - 1);
     ctx.prompt('다른 그림 하나를 찾아 눌러 주세요.');
-    ctx.box.innerHTML = '<div class="grid" style="--cols:' + size + '" id="oddgrid">' + Array.from({ length: n }, (_, i) =>
-      '<button type="button" class="cell" id="cell-' + i + '" data-i="' + i + '" aria-label="그림 ' + (i + 1) + '번">' + (i === odd ? b : a) + '</button>').join('') + '</div>';
+    // 그림(이모지)은 은행(AI)에서 올 수 있어요: 글자로만 넣어요 (innerHTML 금지)
+    ctx.box.textContent = '';
+    ctx.box.append(h('div', { class: 'grid', style: '--cols:' + size, id: 'oddgrid' }, Array.from({ length: n }, (_, i) =>
+      h('button', { type: 'button', class: 'cell', id: 'cell-' + i, 'data-i': String(i), 'aria-label': '그림 ' + (i + 1) + '번', text: i === odd ? b : a }))));
     ctx.box.addEventListener('click', e => {
       const c = e.target.closest('.cell'); if (!c || ctx.finished) return;
       const i = +c.dataset.i, ok = i === odd;
