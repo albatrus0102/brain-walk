@@ -624,8 +624,8 @@ select.input{appearance:auto}
 .ai-table.bank td,.ai-table.bank th{text-align:center}
 .ai-table.bank th[scope=row]{text-align:left}
 /* 문제 은행 표: 숫자·"1단계"·⚠ 가 글자 단위로 쪼개지지 않게 (좁으면 표만 옆으로 밀어 봐요) */
-.ai-table.bank th,.ai-table.bank td{white-space:nowrap;overflow-wrap:normal;text-align:center;padding-inline:4px}
-.ai-table.bank th[scope=row]{text-align:left;white-space:normal;min-width:4.5em}
+.ai-table.bank th,.ai-table.bank td{overflow-wrap:normal;word-break:keep-all;text-align:center;padding-inline:4px}
+.ai-table.bank th[scope=row]{text-align:left}
 .ai-table.bank td[colspan]{white-space:normal}
 .ai-table td.low{font-weight:700;color:var(--md-app-color-orange)}
 .ac-ok.y{font-weight:700;color:var(--md-sys-color-primary)}

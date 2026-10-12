@@ -282,10 +282,10 @@ SCREENS.aiBank = screen('문제 은행', root => {
   const gen = hl && hl.gen;
   root.append(h('p', { class: 't-body', id: 'ai-bank-last', text: '마지막 생성 ' + (gen && gen.lastSubmitTs ? when(msOf(gen.lastSubmitTs)) + (gen.lastRejected != null && gen.lastAccepted != null ? ' (받은 ' + (gen.lastAccepted + gen.lastRejected) + '개 중 ' + gen.lastAccepted + '개 통과)' : '') : '기록 없음') }));
   const tb = h('table', { class: 'ai-table bank', id: 'ai-bank-table' }, h('caption', { class: 'sr', text: '아직 안 쓴 훈련 문항 개수 (목표: 칸마다 20개)' }),
-    h('thead', null, h('tr', null, h('th', { scope: 'col', text: '영역' }), [1, 2, 3, 4, 5].map(l => h('th', { scope: 'col', text: l + '단계' })))),
+    h('thead', null, h('tr', null, h('th', { scope: 'col', text: '영역' }), [1, 2, 3, 4, 5].map(l => h('th', { scope: 'col', 'aria-label': l + '단계', text: String(l) })))),
     h('tbody', null, BANK_ROWS.map(r => h('tr', null, h('th', { scope: 'row', text: r[1] }), [1, 2, 3, 4, 5].map(l => { const n = cells[r[0] + '|' + l]; return h('td', { class: n != null && n < 20 ? 'low' : '' }, n == null ? '–' : String(n) + (n < 20 ? ' ⚠' : '')); }))),
       h('tr', null, h('th', { scope: 'row', text: '날짜' }), h('td', { colSpan: '5', text: totalOrient(cells) }))));
-  root.append(section('아직 안 쓴 훈련 문항 (목표: 칸마다 20개)', h('div', { class: 'ai-tablewrap' }, tb), bk ? null : note(AD.ready.bank ? '아직 문제 은행 기록이 없어요.' : '불러오는 중이에요…')));
+  root.append(section('아직 안 쓴 훈련 문항 (목표: 칸마다 20개)', note('표 위의 1~5는 단계예요. ⚠ 는 20개보다 적은 칸이에요.', 't-small muted'), h('div', { class: 'ai-tablewrap' }, tb), bk ? null : note(AD.ready.bank ? '아직 문제 은행 기록이 없어요.' : '불러오는 중이에요…')));
   if (bk) {
     const an = bk.anchors || {}, rw = bk.reservedWeeks || [];
     root.append(section('기준 문항과 앵커', note('기준 세트: ' + (rw.length ? rw.map(wkLabel).join(', ') + ' 준비됨' : '준비된 주가 없어요'), 't-body'), note('앵커: ' + ['A', 'B', 'C'].map(k => k + (an[k] ? ' 얼림 ✓' : ' 아직')).join(' · '), 't-body')));
