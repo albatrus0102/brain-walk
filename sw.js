@@ -62,6 +62,7 @@ const SHELL_FILES = /*SHELL_START*/ [
   "./js/messages.js",
   "./js/nudge.js",
   "./js/platform.js",
+  "./js/program.js",
   "./js/push.js",
   "./js/records.js",
   "./js/session.js",
