@@ -37,6 +37,17 @@ test('defaults: missing plan → every game on, auto 1–5, 5 a day, rotate, all
   IDS.forEach(id => assert.deepEqual(p.games[id], { on: true, mode: 'auto', min: 1, max: 5, level: 2 }));
   assert.deepEqual(p.fixedOrder, IDS);
   assert.equal(PLAN_DEFAULTS.showScore, false);
+  assert.equal(p.autoNextSec, 10); assert.equal(PLAN_DEFAULTS.autoNextSec, 10);
+});
+test('autoNextSec: 0 / 5 / 10 / 15 only, nearest value, default 10', () => {
+  [0, 5, 10, 15].forEach(v => assert.equal(normalizePlan({ autoNextSec: v }, CAT).autoNextSec, v));
+  assert.equal(normalizePlan({ autoNextSec: 7 }, CAT).autoNextSec, 5);
+  assert.equal(normalizePlan({ autoNextSec: 8 }, CAT).autoNextSec, 10);
+  assert.equal(normalizePlan({ autoNextSec: 99 }, CAT).autoNextSec, 15);
+  assert.equal(normalizePlan({ autoNextSec: -3 }, CAT).autoNextSec, 0);
+  assert.equal(normalizePlan({ autoNextSec: 'abc' }, CAT).autoNextSec, 10);
+  assert.equal(normalizePlan({}, CAT).autoNextSec, 10);
+  assert.equal(planDoc({ autoNextSec: 5 }, CAT, 'm1', 1700000000000).autoNextSec, 5);
 });
 test('normalize clamps ranges and fixes types', () => {
   const p = normalizePlan({ gamesPerDay: 42, roundsPerGame: 1, targetMin: 999, weekdays: [9, -1, '2', 2, 3.5], checkEveryWeeks: 5, order: 'zigzag', showScore: 'yes', checkin: false,

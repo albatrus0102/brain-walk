@@ -572,7 +572,9 @@ service cloud.firestore {
         let d = newData();
         let keys = ['v', 'gamesPerDay', 'roundsPerGame', 'targetMin', 'games', 'order', 'fixedOrder', 'weekdays',
                     'checkEveryWeeks', 'checkin', 'showScore', 'updatedBy', 'updatedTs'];
-        return d.keys().hasOnly(keys) && d.keys().hasAll(keys)
+        // autoNextSec(게임 사이 자동 넘김 초)은 나중에 더한 항목이라 없어도 돼요 (앱은 늘 써요)
+        return d.keys().hasOnly(keys.concat(['autoNextSec'])) && d.keys().hasAll(keys)
+          && (!('autoNextSec' in d) || d.autoNextSec in [0, 5, 10, 15])
           && d.v == 1
           && d.gamesPerDay is int && d.gamesPerDay >= 1 && d.gamesPerDay <= 9
           && (d.roundsPerGame == null || (d.roundsPerGame is int && d.roundsPerGame >= 3 && d.roundsPerGame <= 10))

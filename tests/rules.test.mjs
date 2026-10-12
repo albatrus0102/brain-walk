@@ -292,9 +292,12 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   // ---- plan / display validation (admin m1)
   const badPlan = [['gamesPerDay 10', { gamesPerDay: 10 }], ['gamesPerDay 0', { gamesPerDay: 0 }], ['gamesPerDay 2.5', { gamesPerDay: 2.5 }], ['roundsPerGame 2', { roundsPerGame: 2 }], ['roundsPerGame 11', { roundsPerGame: 11 }],
     ['targetMin 61', { targetMin: 61 }], ['weekdays empty', { weekdays: [] }], ['weekday 7', { weekdays: [7] }], ['checkEveryWeeks 3', { checkEveryWeeks: 3 }], ['order bad', { order: 'random' }],
-    ['showScore string', { showScore: 'yes' }], ['games list', { games: [] }], ['forged updatedBy', { updatedBy: 'm3' }], ['future updatedTs', { updatedTs: Date.now() + 3600e3 }], ['extra key', { secret: 1 }], ['v 2', { v: 2 }]];
+    ['showScore string', { showScore: 'yes' }], ['games list', { games: [] }], ['forged updatedBy', { updatedBy: 'm3' }], ['future updatedTs', { updatedTs: Date.now() + 3600e3 }], ['extra key', { secret: 1 }], ['v 2', { v: 2 }],
+    ['autoNextSec 7', { autoNextSec: 7 }], ['autoNextSec string', { autoNextSec: '10' }], ['autoNextSec 20', { autoNextSec: 20 }]];
   for (const [name, o] of badPlan) await t('F2: plan ' + name + ' denied', setDoc(doc(d1, `${P}/state/plan`), plan('m1', o)), false);
   await t('F2: plan missing key denied', (async () => { const x = plan('m1'); delete x.checkin; await setDoc(doc(d1, `${P}/state/plan`), x); })(), false);
+  for (const v of [0, 5, 10, 15]) await t('F2: plan autoNextSec ' + v + ' ok', setDoc(doc(d1, `${P}/state/plan`), plan('m1', { autoNextSec: v })));
+  await t('F2: plan without autoNextSec (older writer) ok', (async () => { const x = plan('m1'); delete x.autoNextSec; await setDoc(doc(d1, `${P}/state/plan`), x); })());
   await t('F2: plan roundsPerGame null ok', setDoc(doc(d1, `${P}/state/plan`), plan('m1', { roundsPerGame: null })));
   await t('F2: plan roundsPerGame 10 + 9 games + off check ok', setDoc(doc(d1, `${P}/state/plan`), plan('m1', { roundsPerGame: 10, gamesPerDay: 9, checkEveryWeeks: 0, order: 'fixed' })));
   const badDisp = [['font', { font: 'comic' }], ['size', { size: 'huge' }], ['rate high', { rate: 3 }], ['rate low', { rate: 0.1 }], ['contrast str', { contrast: 'on' }], ['forged by', { updatedBy: 'm3' }], ['extra', { theme: 'dark' }]];

@@ -15,13 +15,14 @@ export const GAMES_PER_DAY = { min: 1, max: 9, def: 5 };
 export const ROUNDS = { min: 3, max: 10, base: 5 };          // null = 게임마다 정해진 기본 분량
 export const TARGET_MIN = { min: 5, max: 60, step: 5, def: 15 };
 export const CHECK_WEEKS = [0, 2, 4, 8];                       // 0 = 월간 점검 끔
+export const AUTO_NEXT = { values: [0, 5, 10, 15], def: 10 };   // 게임 사이 쉬는 화면에서 저절로 다음으로 넘어가는 초 (0 = 끔)
 export const LEVEL = { min: 1, max: 5 };
 export const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];                 // 0 = 일요일 (Date.getDay)
 export const MIN_PER_GAME = 3;                                  // 기본 분량 게임 하나 ≈ 3분 (5개 ≈ 15분)
 
 export const PLAN_DEFAULTS = Object.freeze({
   v: PLAN_V, gamesPerDay: GAMES_PER_DAY.def, roundsPerGame: null, targetMin: TARGET_MIN.def,
-  games: {}, order: 'rotate', fixedOrder: [], weekdays: ALL_DAYS, checkEveryWeeks: 4, checkin: true, showScore: false
+  games: {}, order: 'rotate', fixedOrder: [], weekdays: ALL_DAYS, checkEveryWeeks: 4, checkin: true, showScore: false, autoNextSec: AUTO_NEXT.def
 });
 export const GAME_DEFAULT = Object.freeze({ on: true, mode: 'auto', min: 1, max: 5, level: 2 });
 
@@ -45,6 +46,8 @@ export function normalizeGame(raw) {
   if (min > max) { const t = min; min = max; max = t; }
   return { on: g.on !== false, mode: g.mode === 'fixed' ? 'fixed' : 'auto', min, max, level: clampInt(g.level, LEVEL.min, LEVEL.max, GAME_DEFAULT.level) };
 }
+/* 쉬는 화면 자동 넘김(초): 0·5·10·15 중 가장 가까운 값, 없으면 10 */
+const autoNext = v => { const n = toInt(v); return n == null ? AUTO_NEXT.def : AUTO_NEXT.values.reduce((a, b) => (Math.abs(b - n) < Math.abs(a - n) ? b : a)); };
 export function normalizePlan(raw, catalog) {
   const p = isObj(raw) ? raw : {}, ids = (catalog || []).map(g => g.id);
   const games = {};
@@ -67,7 +70,8 @@ export function normalizePlan(raw, catalog) {
     games, order: p.order === 'fixed' ? 'fixed' : 'rotate', fixedOrder, weekdays,
     checkEveryWeeks: CHECK_WEEKS.includes(cw) ? cw : (cw == null ? PLAN_DEFAULTS.checkEveryWeeks : CHECK_WEEKS.reduce((a, b) => (Math.abs(b - cw) < Math.abs(a - cw) ? b : a))),
     checkin: p.checkin == null ? PLAN_DEFAULTS.checkin : p.checkin === true,
-    showScore: p.showScore === true
+    showScore: p.showScore === true,
+    autoNextSec: autoNext(p.autoNextSec)
   };
 }
 /* 관리자 화면에서 저장하기 전에 보여 줄 문제 (빈 배열이면 저장 가능). 원본(raw) 기준으로 봐요. */
