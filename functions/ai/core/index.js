@@ -1,6 +1,6 @@
 'use strict';
 /** Pure core (no Firebase): validator, statistics, signals, aggregate, report. Vendored into the routine repo. */
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 module.exports = {
   VERSION,
   ...require('./item.js'),

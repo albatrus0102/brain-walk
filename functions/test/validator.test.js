@@ -234,3 +234,54 @@ test('checkItems stops at maxItems and marks the rest as quota', () => {
 test('checkItems rejects a malformed envelope', () => {
   assert.equal(checkItems({ schema: 'bw.items.v1', runId: 'now', items: [] }, CTX).schemaOk, false);
 });
+
+// ---- review hardening: a compromised generator cannot smuggle fields, markup or deep nesting; answer keys are recomputed right
+const { qa } = require('./fixtures/items.js');
+bad('markup in an unknown body key', 'lang_complete', (it) => { it.body.html = '<img src=x onerror=alert(1)>'; }, 'charset');
+bad('markup in a choice extra key', 'lang_complete', (it) => { it.choices[1].note = '<script>'; }, 'charset');
+bad('ampersand entity in qa.risk', 'lang_complete', (it) => { it.qa.risk = '&lt;b&gt;'; }, 'charset');
+bad('own __proto__ key', 'lang_complete', (it) => { Object.defineProperty(it.body, '__proto__', { value: { polluted: 1 }, enumerable: true, configurable: true, writable: true }); }, 'field');
+bad('deeply nested features', 'lang_complete', (it) => { let d = it.features = {}; for (let i = 0; i < 50; i++) { d.x = {}; d = d.x; } }, 'field');
+
+test('unknown top-level, body and choice keys are dropped from the stored item', () => {
+  const it = clone(good.lang_complete); it.extra = '아무 말'; it.body.note = '메모'; it.choices[1].note = '메모';
+  const r = run(it);
+  assert.equal(r.ok, true, String(r.codes));
+  assert.deepEqual(Object.keys(r.item.body).sort(), ['answer', 'sentence']);
+  assert.equal(r.item.extra, undefined);
+  for (const c of r.item.choices) assert.deepEqual(Object.keys(c).sort(), c.ok ? ['ok', 't'] : ['err', 't']);
+  assert.equal(({}).polluted, undefined);
+});
+test('every good fixture keeps its format fields after whitelisting', () => {
+  for (const [k, it] of Object.entries(good)) {
+    const r = run(it);
+    for (const key of Object.keys(it.body)) assert.ok(key in r.item.body || (k === 'route' && key === 'text'), `${k}.body.${key} dropped`);
+  }
+});
+
+const setItem = (choices, answer) => Object.assign(clone(good.logic), {
+  role: 'training', prompt: '참새는 모두 새예요. 새는 물고기가 아니에요. 짹짹이는 물고기예요. 짹짹이는 참새일까요?',
+  body: { type: 'set', facts: [['all', '참새', '새'], ['none', '새', '물고기'], ['is', '짹짹이', '물고기']], ask: ['is', '짹짹이', '참새'] },
+  features: { people: 0, facts: 3 }, choices, qa: qa(answer),
+});
+test('logic set: disjointness through a superset gives 아니요, not 알 수 없어요', () => {
+  assert.equal(run(setItem([{ t: '아니요', ok: true }, { t: '네', err: 'LOGIC_REVERSE' }, { t: '알 수 없어요', err: 'LOGIC_PARTIAL' }], '아니요')).ok, true);
+  const wrong = run(setItem([{ t: '알 수 없어요', ok: true }, { t: '네', err: 'LOGIC_PARTIAL' }, { t: '아니요', err: 'LOGIC_PARTIAL' }], '알 수 없어요'));
+  assert.equal(wrong.ok, false); assert.ok(wrong.codes.includes('recompute'));
+});
+test('logic set: contradictory facts are rejected', () => {
+  const it = setItem([{ t: '네', ok: true }, { t: '아니요', err: 'LOGIC_REVERSE' }, { t: '알 수 없어요', err: 'LOGIC_PARTIAL' }], '네');
+  it.body.facts = [['all', '참새', '새'], ['none', '참새', '새'], ['is', '짹짹이', '참새']]; it.prompt = '참새는 모두 새예요. 참새는 새가 아니에요. 짹짹이는 참새예요. 짹짹이는 참새일까요?';
+  const r = run(it); assert.equal(r.ok, false); assert.ok(r.codes.includes('unique'));
+});
+test('grid_pattern alternate (A, B, A → B) is accepted; alternate combined with another rule is not', () => {
+  const A = [['🔵', '⬜', '⬜'], ['⬜', '⬜', '⬜'], ['⬜', '⬜', '⬜']], B = [['⬜', '⬜', '⬜'], ['⬜', '⬜', '🔵'], ['⬜', '⬜', '⬜']];
+  const it = clone(good.grid_pattern);
+  Object.assign(it, { role: 'training', features: { size: 3, frames: 3, rules: 1, cells: 1 }, qa: qa('⬜⬜⬜/⬜⬜🔵/⬜⬜⬜'),
+    options: [{ grid: 'SERVER' }, { grid: 'SERVER', err: 'MIRROR' }, { grid: 'SERVER', err: 'STEP_SKIP' }] });
+  it.body = { size: 3, frames: [A, B, A], rule: { op: 'alternate' } };
+  const r = run(it); assert.equal(r.ok, true, String(r.codes));
+  assert.deepEqual(r.item.options.find((o) => o.ok).grid, B);
+  it.body.rule = [{ op: 'alternate' }, { op: 'rotate90' }]; it.features.rules = 2;
+  assert.equal(run(it).ok, false);
+});

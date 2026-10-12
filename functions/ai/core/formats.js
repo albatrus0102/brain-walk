@@ -547,10 +547,14 @@ function logicSolve(b) {
       if (f[0] === 'all') all.push([f[1], f[2]]); else if (f[0] === 'none') none.push([f[1], f[2]]);
       else if (f[0] === 'is') { if (!isA.has(f[1])) isA.set(f[1], new Set()); isA.get(f[1]).add(f[2]); } else return { n: 0 };
     }
-    const [, x, C] = b.ask; const cats = new Set(isA.get(x) || []);
-    for (let changed = true; changed;) { changed = false; for (const [A, B] of all) if (cats.has(A) && !cats.has(B)) { cats.add(B); changed = true; } }
+    const [, x, C] = b.ask;
+    const up = (start) => { const s = new Set(start); for (let changed = true; changed;) { changed = false; for (const [A, B] of all) if (s.has(A) && !s.has(B)) { s.add(B); changed = true; } } return s; };
+    const cats = up(isA.get(x) || []);
+    const disjoint = (P, Q) => none.some(([A, B]) => (P.has(A) && Q.has(B)) || (P.has(B) && Q.has(A)));
+    if (disjoint(cats, cats)) return { n: 0 };                         // the facts contradict each other
     if (cats.has(C)) return { n: 1, answer: '네', reverse: '아니요' };
-    if (none.some(([A, B]) => (cats.has(A) && B === C) || (cats.has(B) && A === C))) return { n: 1, answer: '아니요', reverse: '네' };
+    // x cannot be a C when something x is (or a superset of it) is disjoint from C or from any superset of C
+    if (disjoint(cats, up([C]))) return { n: 1, answer: '아니요', reverse: '네' };
     return { n: 1, answer: '알 수 없어요', reverse: null };
   }
   return { n: 0 };
@@ -696,7 +700,9 @@ F.grid_pattern = {
     if (!b.frames.every((g) => validGrid(lx, g, n))) return r.fail('grid');
     const rules = Array.isArray(b.rule) ? b.rule : [b.rule];
     if (rules.length < 1 || rules.length > 2) return r.fail('field');
-    for (let i = 1; i < b.frames.length; i++) {
+    const alt = rules.some((x) => x && x.op === 'alternate');
+    if (alt && (rules.length !== 1 || b.frames.length < 3)) return r.fail('field');   // alternate: A, B, A, … only on its own
+    for (let i = alt ? 2 : 1; i < b.frames.length; i++) {
       const want = applyRules(lx, b.frames[i - 1], rules, b.frames.slice(0, i));
       if (!want || gridKey(want) !== gridKey(b.frames[i])) return r.fail('recompute');
     }

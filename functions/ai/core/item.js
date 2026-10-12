@@ -27,6 +27,57 @@ const REASONS = [
 ];
 
 const tokenize = (v) => (v == null ? null : Array.isArray(v) ? v.join(',') : String(v));
+
+// ---- structure limits: a compromised generator must not smuggle markup, odd keys or deep nesting into the bank
+const MAX_DEPTH = 8, MAX_NODES = 4000;
+const BAD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+/** null when ok, else a reason code. No string anywhere may open markup ('<' or '&'); the logic op '<' is allowed as a whole string. */
+function structureError(v) {
+  let nodes = 0;
+  const walk = (x, depth) => {
+    if (++nodes > MAX_NODES || depth > MAX_DEPTH) return 'field';
+    if (typeof x === 'string') return x !== '<' && /[<&]/.test(x) ? 'charset' : null;
+    if (x == null || typeof x !== 'object') return null;
+    for (const k of Object.keys(x)) {
+      if (BAD_KEYS.has(k)) return 'field';
+      const e = walk(x[k], depth + 1); if (e) return e;
+    }
+    return null;
+  };
+  return walk(v, 0);
+}
+const pick = (o, keys) => {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return o;
+  const out = {}; for (const k of keys) if (Object.prototype.hasOwnProperty.call(o, k) && o[k] !== undefined) out[k] = o[k]; return out;
+};
+const pickAll = (a, keys) => (Array.isArray(a) ? a.map((x) => pick(x, keys)) : a);
+const choiceOf = (c) => (c && c.ok === true ? { t: c.t, ok: true } : { t: c && c.t, err: c && c.err });
+/** Stored body = only the fields the format defines (unknown keys are dropped, never shown to the app). */
+const BODY = {
+  word_recog: (b) => ({ ...pick(b, ['targets', 'theme']), foils: pickAll(b.foils, ['t', 'err']) }),
+  card_theme: (b) => pick(b, ['theme', 'cards', 'similar']),
+  emoji_set: (b) => pick(b, ['pairs', 'category']),
+  date_q: (b) => ({ query: pick(b.query, ['type', 'ref', 'weekday', 'name', 'date', 'year']) }),
+  lang_complete: (b) => pick(b, ['sentence', 'answer']),
+  lang_relation: (b) => pick(b, ['word', 'rel', 'answer']),
+  lang_category: (b) => pick(b, ['category', 'mode', 'members', 'odd', 'answer']),
+  word_find: (b) => pick(b, ['desc', 'answer']),
+  analogy: (b) => pick(b, ['a', 'b', 'c', 'answer', 'rel']),
+  shop_calc: (b) => ({ ...pick(b, ['scene', 'pay', 'ask']), shops: b.shops.map((sh) => ({ ...pick(sh, ['name']), lines: pickAll(sh.lines, ['item', 'price', 'qty', 'unit']), ...(sh.deal != null ? { deal: pick(sh.deal, ['type', 'pct', 'item']) } : {}) })) }),
+  sequence: (b) => pick(b, ['kind', 'title', 'steps', 'before', 'intruder']),
+  schedule: (b) => ({ ...pick(b, ['ask', 'travelMin', 'bufferMin', 'departAt', 'from', 'to', 'needMin']), events: pickAll(b.events, ['what', 'at', 'durMin']), ...(b.newEvent != null ? { newEvent: pick(b.newEvent, ['what', 'at', 'durMin']) } : {}) }),
+  logic: (b) => pick(b, ['type', 'attr', 'entities', 'facts', 'ask']),
+  letter_search: (b) => pick(b, ['line', 'target']),
+  story_recall: (b) => ({ story: b.story, facts: pickAll(b.facts, ['slot', 'v']), questions: b.questions.map((q) => ({ ...pick(q, ['q', 'slot', 'delayed']), choices: q.choices.map(choiceOf) })) }),
+  prospective: (b) => pick(b, ['cue', 'event', 'instruction', 'reminderMid']),
+  grid_pattern: (b) => ({ ...pick(b, ['size', 'empty', 'frames']), rule: Array.isArray(b.rule) ? pickAll(b.rule, ['op', 'dx', 'dy', 'wrap', 'fill']) : pick(b.rule, ['op', 'dx', 'dy', 'wrap', 'fill']) }),
+  grid_rotate: (b) => pick(b, ['size', 'src', 'op']),
+  grid_memory: (b) => pick(b, ['size', 'cells', 'showMs', 'fill']),
+  route: (b) => ({ ...pick(b, ['size', 'map', 'start', 'frame', 'heading', 'text']), steps: pickAll(b.steps, ['dir', 'turn', 'go']) }),
+  reminiscence: (b) => pick(b, ['topic', 'answer', 'talk']),
+};
+const ITEM_KEYS = ['schema', 'format', 'cdomain', 'level', 'role', 'specVer', 'theme', 'features', 'prompt', 'speak', 'explain', 'validFrom', 'validTo', 'body', 'choices', 'qa'];
+const QA_STORE = ['solve1', 'solve2', 'scores', 'risk', 'basis'];
 const sameToken = (a, b) => a != null && b != null && stripVS(NFC(a)).replace(/\s+/g, '') === stripVS(NFC(b)).replace(/\s+/g, '');
 
 /**
@@ -53,6 +104,8 @@ function checkItem(item, ctx = {}) {
   if (!ROLES.includes(it.role)) r.fail('role');
   if (it.features == null || typeof it.features !== 'object') r.fail('features');
   if (codes.length) return done();
+  const se = structureError(it);
+  if (se) { r.fail(se); return done(); }
 
   if (it.theme != null) {
     if (typeof it.theme !== 'string' || (Array.isArray(ctx.themes) && !ctx.themes.includes(it.theme))) r.fail('theme');
@@ -115,12 +168,16 @@ function checkItem(item, ctx = {}) {
   if (codes.length) return done();
 
   // ---- normalized stored item (fixed presentation order, seeded by the content hash)
-  const out = JSON.parse(JSON.stringify(it));
-  delete out.tempId;
+  // only known fields are stored (unknown top-level, body and choice keys are dropped)
+  const out = JSON.parse(JSON.stringify(pick(it, ITEM_KEYS)));
   if (r.fill.prompt) out.prompt = r.fill.prompt;
   if (r.fill.body) out.body = r.fill.body;
+  out.body = JSON.parse(JSON.stringify(BODY[it.format](out.body || {})));
   if (r.fill.choices) out.choices = r.fill.choices;
+  else if (Array.isArray(out.choices)) out.choices = out.choices.map(choiceOf);
+  else delete out.choices;
   if (r.fill.options) out.options = r.fill.options;
+  if (out.qa && typeof out.qa === 'object') out.qa = pick(out.qa, QA_STORE);
   if (Array.isArray(out.choices)) out.choices = shuffleSeeded(out.choices, hash + ':c');
   if (Array.isArray(out.options)) out.options = shuffleSeeded(out.options, hash + ':o');
   if (it.format === 'story_recall') out.body.questions.forEach((q, i) => { q.choices = shuffleSeeded(q.choices, hash + ':q' + i); });
