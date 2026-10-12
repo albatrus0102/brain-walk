@@ -51,7 +51,10 @@ must((await text(admin, '#dash')).includes('아직 훈련하는 분이 없어요
 const learner = await open('learner');
 await learner.goto(BASE + '?join=' + code); await learner.waitForSelector('#btn-join-next');
 await learner.click('#btn-join-next'); await learner.fill('#ob-name-input', '아버지'); await learner.click('#btn-name-next');
-await learner.click('#role-trainee'); await learner.waitForSelector('#btn-main', { timeout: 20000 });
+await learner.click('#role-trainee');
+/* AI 리포트 안내(처음 한 번, DESIGN-AI §8.6): 훈련하는 분 기기에만 나와요. "알겠어요" → consents/{id} (서버 시각) */
+must(await learner.waitForSelector('#btn-consent-ok', { timeout: 20000 }).then(() => true).catch(() => false) && (await text(learner, '#cons-h')) === '가족이 함께 살펴볼게요', '훈련하는 분 기기: 처음 한 번 AI 리포트 안내가 나와요');
+await learner.click('#btn-consent-ok'); await learner.waitForSelector('#btn-main', { timeout: 20000 });
 must(!(await learner.locator('#navbar').isVisible()) && (await text(learner, '#btn-main')) === '오늘 훈련 시작', '훈련하는 분 기기: 큰 버튼 하나, 하단 메뉴 없음');
 must(await until(admin, () => document.querySelector('#dash-status') && document.querySelector('#dash-status').innerText.includes('아직 시작 전')), '관리자 홈에 아버지의 현황이 나타나요 (시작 전)');
 must(await until(admin, () => /지금 앱을 보고 계세요/.test((document.querySelector('#dash-presence') || {}).innerText || '')), '접속 기록(하트비트): ● 지금 앱을 보고 계세요');
@@ -90,6 +93,36 @@ await learner.evaluate(async () => { for (let i = 0; i < 12; i++) { const c = wi
 await learner.waitForSelector('#ci-h'); await learner.click('#btn-ci-skip'); await learner.waitForSelector('#done-h');
 must(await until(admin, () => /^오늘 완료 ✓/.test((document.querySelector('#dash-status') || {}).innerText || '')), '끝나면 관리자 홈: 오늘 완료 ✓');
 must(await until(admin, () => [...document.querySelectorAll('#dash-week li')].pop().dataset.state === 'done'), '7일 띠: 오늘 완료');
+
+/* 5-1) AI: 실제 앱이 쓴 문항 기록·안내 동의가 실제 규칙을 통과했고, 서버 정리 함수가 하나도 버리지 않아요 */
+{
+  const dadId = await learner.evaluate(() => window.__S.myId);
+  const got = await admin.evaluate(async () => { const l = await window.__Store.query('itemLogs', { limit: 50 }); return l.map(d => Object.assign({}, d, { sts: d.sts && typeof d.sts.toMillis === 'function' ? 'server-ts' : String(d.sts) })); });
+  must(got.length === 2 && got.every(d => d.userId === dadId && d.sts === 'server-ts' && d.inCourse === true && d.items.length >= 1), '훈련하는 분 기기가 게임마다 itemLogs 문서를 썼고 규칙이 받아들였어요 (' + got.length + '개, 서버 시각)');
+  const KEYS = ['id', 'v', 'userId', 'date', 'ts', 'sts', 'gameId', 'inCourse', 'level', 'speechOn', 'size', 'device', 'hour', 'abandoned', 'items'];
+  must(got.every(d => Object.keys(d).every(k => KEYS.includes(k))), 'itemLogs 문서 키는 계약 안에서');
+  const { createRequire } = await import('node:module');
+  const SR = createRequire(path.join(ROOT, 'functions/package.json'))('./ai/core/series.js');
+  const san = got.map(d => SR.sanitizeLog(d, d.id));
+  must(san.every((x, i) => x && x.items.length === got[i].items.length && x.items.every((it, j) => it.role === got[i].items[j].role && JSON.stringify(it.err) === JSON.stringify(got[i].items[j].err))), '서버(aiOnItemLog·집계)의 sanitizeLog 가 문서·문항을 하나도 버리지 않아요');
+  const cons = await admin.evaluate(async id => { const d = await window.__Store.getDoc('consents/' + id); return d && { kind: d.kind, version: d.version, server: !!(d.ackTs && d.ackTs.toMillis), withdrawn: 'withdrawnTs' in d }; }, dadId);
+  must(cons && cons.kind === 'ai-report-notice' && cons.version === '2026-11-v1' && cons.server && !cons.withdrawn, '안내 동의: consents/{아버지} 에 서버 시각으로 기록 (관리자가 읽어요)');
+  await learner.reload(); await learner.waitForSelector('#btn-main', { timeout: 20000 }); await learner.waitForTimeout(1500);
+  must(!(await learner.locator('#cons-h').count()), '다시 열어도 안내는 또 나오지 않아요 (한 번만)');
+  // 훈련하는 분 기기는 AI 리포트 화면에 못 가고, 직접 읽어도 규칙이 막아요
+  await learner.evaluate(() => window.__go('aiReports'));
+  must((await learner.evaluate(() => window.__S.screen)) === 'home', '훈련하는 분 기기: AI 리포트 화면으로 가면 홈으로 돌아와요');
+  must(await learner.evaluate(async () => { try { await window.__Store.query('aiReports', { limit: 1 }); return false; } catch (e) { return e.code === 'permission-denied'; } }), '훈련하는 분이 AI 리포트를 직접 읽으면 규칙이 거부해요');
+  // 관리자: 루틴 상태에 안내 확인, 메모 저장(화면에서)
+  await admin.evaluate(() => window.__go('aiOps')); await admin.waitForSelector('#ai-st-cons');
+  must(await until(admin, () => /확인하셨어요/.test(document.querySelector('#ai-st-cons').innerText)) && !(await admin.locator('#ai-denied, #ai-blocked').count()), '관리자 루틴 상태: 아버지 안내 확인 시각이 보여요 (읽기 거부 없음)');
+  await admin.evaluate(() => window.__go('aiNotes')); await admin.waitForSelector('#ai-n-save');
+  await admin.click('#ai-n-c-illness'); await admin.fill('#ai-n-text', '기침약'); await admin.click('#ai-n-save');
+  must(await until(admin, () => /메모를 저장했어요/.test((document.querySelector('#snackbar') || {}).innerText || '')), '관리자 메모: 화면에서 저장하면 규칙이 받아들여요');
+  const notes = await admin.evaluate(async () => (await window.__Store.query('aiNotes', { limit: 5 })).map(n => ({ codes: n.codes, to: n.to, text: n.text })));
+  must(notes.length === 1 && notes[0].codes.join() === 'illness' && notes[0].text === '기침약', '메모 문서: 분류·날짜·글');
+  await admin.evaluate(() => window.__go('home')); await admin.waitForSelector('#dash');
+}
 
 /* 6) 관리자가 아닌 가족: 읽기 전용 */
 const fam = await open('family');

@@ -30,8 +30,11 @@ const openCourse = async (page) => { await startDemo(page); await page.waitForSe
   must((await readDb(p2))['consents/local'].withFamily === true, '안내: "가족과 함께 봤어요" 는 withFamily:true');
   await p2.evaluate(async () => { const m = await import(location.origin + '/brain-walk/js/ai/consent.js'); await m.withdraw(); });
   must(!!(await readDb(p2))['consents/local'].withdrawnTs, '철회: withdrawnTs 만 더해요 (문서는 남아요)');
-  await p2.reload(); await p2.waitForSelector('#cons-h', { timeout: 8000 });
-  must(true, '철회한 뒤에는 안내를 다시 보여요');
+  await p2.reload(); await p2.waitForSelector('#btn-main', { timeout: 8000 }); await p2.waitForTimeout(800);
+  must(!(await vis(p2, '#cons-h')), '철회한 뒤에는 열 때마다 다시 묻지 않아요');
+  await p2.evaluate(() => window.__go('settings')); await p2.waitForSelector('#btn-ai-again');
+  must((await p2.innerText('#aic-state')).includes('멈춰 있어요') && !(await vis(p2, '#btn-ai-withdraw')), '설정: 멈춰 있다고 보이고 "다시 살펴봐도 돼요" 버튼');
+  await p2.click('#btn-ai-again'); await p2.waitForSelector('#cons-h');
   await p2.click('#btn-consent-ok'); await p2.waitForSelector('#btn-main');
   const c2 = (await readDb(p2))['consents/local'];
   must(!c2.withdrawnTs && c2.version === '2026-11-v1', '다시 알겠어요: 철회 표시를 지우고 다시 기록');
@@ -87,7 +90,7 @@ const openCourse = async (page) => { await startDemo(page); await page.waitForSe
   must(it[1].role === 'anchor' && it[1].pos === 1 && it[1].err.join() === 'CALC_NOQTY' && it[1].pick.join() === '0' && it[1].ok === false && it[1].score === 0 && it[1].fmt === 'shop_calc' && it[1].cd === 'executive', '앵커 기록: role anchor, 고른 보기의 err(CALC_NOQTY)·pick [0]');
   must(it[2].role === 'reference' && it[2].pos === 2 && it[2].err.join() === 'CALC_NEAR' && it[2].pick.join() === '0', '기준 기록: role reference, err CALC_NEAR');
   must(it[0].role === 'training' && it[0].ok === true && it[0].score === 1 && it[0].lv === 1, '훈련 기록: ok, lv 1');
-  must(it.length === 5 && it[3].role === 'training' && it[4].role === 'proc' && /^proc:shop:/.test(it[4].id) && it[4].fmt === 'shop' && it[4].cd === 'executive', '묶음이 바닥나면 코드가 만든 문항(role proc, fmt=게임 id)으로 이어져요');
+  must(it.length === 5 && it[3].role === 'training' && it[4].role === 'training' && /^code:shop:L\d:4$/.test(it[4].id) && it[4].fmt === 'shop' && it[4].cd === 'executive', '묶음이 바닥나면 코드가 만든 문항(role training, id code:…, fmt=게임 id)으로 이어져요');
   await page.close();
 }
 
@@ -97,7 +100,7 @@ const openCourse = async (page) => { await startDemo(page); await page.waitForSe
   await openCourse(page);
   await playGame(page);
   const L = (await logsOf(page))[0];
-  must(L.items.length === 3 && L.items.every(i => i.role === 'proc' && i.fmt === 'words' && i.cd === 'memory' && /^proc:words:L\d:\d$/.test(i.id)), '묶음이 비어 있으면 코드 문항: 모두 role proc');
+  must(L.items.length === 3 && L.items.every(i => i.role === 'training' && i.fmt === 'words' && i.cd === 'memory' && /^code:words:L\d:\d$/.test(i.id)), '묶음이 비어 있으면 코드 문항: role training, id code:words:… (속도 과제만 proc)');
   must(L.items.every(i => typeof i.score === 'number' && typeof i.ok === 'boolean' && Array.isArray(i.err) && Array.isArray(i.pick)), '코드 문항도 같은 모양으로 기록');
   await page.close();
   const bad = bk({ format: 'word_recog', cdomain: 'memory', level: 1, body: {} });
@@ -105,7 +108,7 @@ const openCourse = async (page) => { await startDemo(page); await page.waitForSe
   await openCourse(p2);
   const k = await playGame(p2);
   const L2 = (await logsOf(p2))[0];
-  must(k.length === 3 && L2.items[0].role === 'proc', '깨진 문항: 그리지 못하면 코드 문항으로 이어져요 (게임이 멈추지 않아요)');
+  must(k.length === 3 && L2.items[0].role === 'training' && /^code:words:/.test(L2.items[0].id), '깨진 문항: 그리지 못하면 코드 문항으로 이어져요 (게임이 멈추지 않아요)');
   await p2.close();
   // 이웃 단계: 게임 1단계인데 1단계 칸이 비어 있고 2단계에 있으면 2단계 문항을 써요 (정확한 단계를 기록)
   const w2 = bk({ format: 'word_recog', cdomain: 'memory', level: 2, prompt: null, body: { targets: ['감자', '당근', '오이', '호박'], foils: [{ t: '의자', err: 'INTR_UNREL' }, { t: '기차', err: 'INTR_UNREL' }, { t: '우산', err: 'INTR_UNREL' }, { t: '시계', err: 'INTR_UNREL' }] }, present: { grid: ['의자', '감자', '기차', '당근', '우산', '오이', '시계', '호박'] } });
@@ -159,14 +162,14 @@ const NEW = [
   { id: 'letters', name: '글자 찾기', fmts: ['letter_search'] },
   { id: 'olden', name: '옛날 이야기', fmts: ['reminiscence'] }
 ];
-for (const g of NEW) {
-  const { page } = await newPage(browser, { tag: g.id, w: 360, seed: Object.assign(planOf(g.id), { 'bw.size': 'max' }) });
+for (const g of NEW.flatMap(x => [x, Object.assign({}, x, { dark: true })])) {
+  const { page } = await newPage(browser, { tag: g.id + (g.dark ? '-dark' : ''), w: 360, dark: !!g.dark, seed: Object.assign(planOf(g.id), { 'bw.size': 'max' }) });
   await startDemo(page); await page.waitForSelector('#btn-main');
   must((await page.innerText('#main-sub')).includes('게임 1개'), g.name + ': 계획에서 켜면 코스에 들어가요');
   await page.click('#btn-main'); await page.waitForSelector('#g-title'); if (await vis(page, '.dialog')) await page.click('#dlg-btn-0');
   must((await page.innerText('#g-title')) === g.name, g.name + ': 게임 이름');
-  await noHScroll(page, g.name + ' 첫 화면(360px 최대 글자)');
-  await page.screenshot({ path: SHOTS + '/ai-game-' + g.id + '.png' });
+  await noHScroll(page, g.name + ' 첫 화면(360px 최대 글자' + (g.dark ? '·다크' : '') + ')');
+  await page.screenshot({ path: SHOTS + '/ai-game-' + g.id + (g.dark ? '-dark' : '') + '.png' });
   const kinds = [];
   await playGame(page, { onRound: async (i, k) => { kinds.push(k); await noHScroll(page, g.name + ' ' + (i + 1) + '번째 문제 뒤'); } });
   const logs = await logsOf(page), L = logs.find(l => l.gameId === g.id);
@@ -270,6 +273,66 @@ for (const g of NEW) {
   const w = await p2.$$eval('#shown .chip', els => els.map(e => e.textContent)); must(w.some(x => x.includes('<img')) && (await p2.locator('#shown img').count()) === 0, '단어 기억: 낱말 칩에도 글자로');
   await p2.click('#btn-memorized'); must((await p2.locator('#pool img').count()) === 0 && await p2.evaluate(() => window.__xss === undefined), '단어 기억: 확인 화면에서도 실행되지 않아요');
   await p2.close();
+}
+
+/* ---------- 9-1) XSS: 은행의 주제 카드(card_theme)·이모지 묶음(emoji_set)도 글자로만 (카드 짝 맞추기·다른 그림 찾기·번쩍 찾기) ---------- */
+{
+  const evil = n => '<img src=x onerror="window.__xss=' + n + '">';
+  const cardT = bk({ format: 'card_theme', cdomain: 'memory', level: 1, body: { theme: '과일', cards: [[evil(2), '사과' + evil(3)], ['🍌', '바나나'], ['🍇', '포도']] } });
+  const { page } = await newPage(browser, { tag: 'xss-cards', seed: planOf('cards', Object.assign({}, noSeed(), pack('memory', 1, [cardT]))) });
+  await openCourse(page);
+  for (let i = 0; i < 6; i++) await page.click('#card-' + i).catch(() => {});
+  await page.waitForTimeout(300);
+  const t = await page.evaluate(() => [...document.querySelectorAll('#board .mcard')].map(b => b.textContent).join(' '));
+  must(t.includes('<img') && (await page.locator('#board img').count()) === 0 && await page.evaluate(() => window.__xss === undefined), '카드 짝 맞추기: 은행 카드의 그림·이름은 글자로 (실행 안 됨)');
+  await page.close();
+  const emo = bk({ format: 'emoji_set', cdomain: 'attention', level: 1, body: { pairs: [[evil(4), '🙂']] } });
+  for (const gid of ['odd', 'flash']) {
+    const { page: p2 } = await newPage(browser, { tag: 'xss-' + gid, seed: planOf(gid, Object.assign({}, noSeed(), pack('attention', 1, [emo]))) });
+    await openCourse(p2);
+    if (gid === 'flash') { await p2.click('#btn-ready'); await p2.waitForSelector('#fc-0', { timeout: 5000 }); }
+    const txt = await p2.evaluate(() => document.querySelector('#box').textContent);
+    must(txt.includes('<img') && (await p2.locator('#box img').count()) === 0 && await p2.evaluate(() => window.__xss === undefined), (gid === 'odd' ? '다른 그림 찾기' : '번쩍 찾기') + ': 은행 이모지 묶음은 글자로 (실행 안 됨)');
+    await p2.close();
+  }
+}
+
+/* ---------- 9-2) 앵커는 12주마다 같은 문항을 다시 풀어요: 예전에 봤어도 이번 주에 안 풀었으면 나와요 ---------- */
+{
+  const shopQ = (o = {}) => bk(Object.assign({ format: 'shop_calc', cdomain: 'executive', level: 1, prompt: '합계는 얼마일까요?', body: { scene: '시장', shops: [{ name: '채소 가게', lines: [{ item: '두부', price: 2000, qty: 1, unit: '모' }] }], ask: 'total' }, choices: [{ t: '2,000원', ok: true }, { t: '3,000원', err: 'CALC_NEAR' }] }, o));
+  const anchor = shopQ({ role: 'anchor', noFeedback: true, level: 3 }), train = shopQ(), train2 = shopQ();
+  const run = async (tag, seenMs) => {
+    const { page } = await newPage(browser, { tag, seed: Object.assign(planOf('shop', Object.assign({}, noSeed(), pack('executive', 1, [train, train2]), measure([], [anchor]))), { 'bw.aiSeen': { [anchor.id]: seenMs } }) });
+    await openCourse(page); await playGame(page);
+    const L = (await logsOf(page))[0]; await page.close(); return L.items;
+  };
+  let it = await run('anchor-again', Date.now() - 21 * 864e5);
+  must(it[1] && it[1].role === 'anchor' && it[1].id === anchor.id, '예전 주에 푼 앵커 문항(기기에 "본 문항"으로 남아 있어도): 이번 주에 다시 나와요 (role anchor)');
+  it = await run('anchor-thisweek', Date.now());
+  must(!it.some(x => x.role === 'anchor'), '이번 주에 이미 푼 앵커 문항은 같은 주에 되풀이되지 않아요');
+  const old = Date.now() - 61 * 864e5;
+  const { page } = await newPage(browser, { tag: 'reactivated', seed: Object.assign(planOf('shop', Object.assign({}, noSeed(), pack('executive', 1, [train]))), { 'bw.aiSeen': { [train.id]: old } }) });
+  await openCourse(page); await playGame(page);
+  must((await logsOf(page))[0].items[0].id === train.id, '60일 넘게 안 나온 훈련 문항을 서버가 묶음에 다시 넣으면 다시 써요');
+  await page.close();
+}
+
+/* ---------- 9-3) 🌼 단추는 위쪽 바 안에 있고 답 고르는 곳·제목·뒤로 버튼과 겹치지 않아요 (360px·최대 글자·밝은/어두운) ---------- */
+for (const dark of [false, true]) {
+  const pm = bk({ format: 'prospective', cdomain: 'memory', level: 5, body: { cue: '🌼', event: 'after_last_item', instruction: '오늘 마지막 문제가 끝나면 화면 아래 🌼 단추를 눌러 주세요.', reminderMid: false } });
+  const { page } = await newPage(browser, { tag: 'pm-layout' + (dark ? '-dark' : ''), w: 360, dark, seed: Object.assign(planOf('shop', Object.assign({}, noSeed(), pack('memory', 5, [pm]))), { 'bw.size': 'max' }) });
+  await startDemo(page); await page.click('#btn-main'); await page.waitForSelector('.dialog'); await page.click('#dlg-btn-0'); await page.waitForSelector('.choice');
+  const r = await page.evaluate(() => {
+    const box = s => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; };
+    const hit = (a, b) => !!(a && b && a.l < b.r - 1 && b.l < a.r - 1 && a.t < b.b - 1 && b.t < a.b - 1);
+    const pmb = [box('#btn-pm-cue'), box('#btn-pm-other')], bar = box('.appbar'), title = box('#appbar-title'), back = box('#btn-back');
+    const answers = [...document.querySelectorAll('.choice, #prompt, #btn-replay')].map(e => { const b = e.getBoundingClientRect(); return { l: b.left, r: b.right, t: b.top, b: b.bottom }; });
+    return { inBar: pmb.every(p => p && p.t >= bar.t - 1 && p.b <= bar.b + 1 && p.l >= 0 && p.r <= innerWidth - 15), overlap: pmb.some(p => hit(p, title) || hit(p, back) || answers.some(a => hit(p, a))), w: innerWidth };
+  });
+  must(r.inBar && !r.overlap, '🌼·🌻 단추: 위쪽 바 안, 제목·뒤로·문제·보기와 안 겹쳐요 (360px 최대' + (dark ? '·다크' : '') + ')');
+  await noHScroll(page, '🌼 단추가 있는 게임 화면');
+  await page.screenshot({ path: SHOTS + '/ai-pm-360-max' + (dark ? '-dark' : '') + '.png' });
+  await page.close();
 }
 
 /* ---------- 10) 가장 큰 글자(최대)·360px: 기존 게임에서도 가로 스크롤이 없어요 ---------- */

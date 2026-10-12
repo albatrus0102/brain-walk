@@ -303,3 +303,16 @@ test('defOff games stay off by default and do not change the default course', ()
   assert.equal(none.games.nstory.on, false); assert.ok(IDS.every(id => none.games[id].on));
   assert.deepEqual(planProblems({ games: Object.fromEntries(IDS.map(id => [id, { on: false }])) }, WITH), ['게임을 하나 이상 골라 주세요.']);
 });
+
+/* 실제 새 게임 여섯 개(js/games/ai-games.js 와 같은 id·영역·문제 수)를 붙여도 기본 코스는 2년 동안 하루도 다르지 않아요 */
+test('the six real AI games (off by default) leave the default course unchanged for 730 days', () => {
+  const REAL = [['story', 'memory', 2], ['shapes', 'attention', 3], ['route', 'executive', 3], ['think', 'executive', 3], ['letters', 'attention', 3], ['olden', 'orientation', 3]].map(([id, domain, rounds]) => ({ id, domain, rounds, defOff: true }));
+  const WITH = CAT.concat(REAL);
+  const saved = { gamesPerDay: 5, games: Object.fromEntries(IDS.map(id => [id, { on: true }])) };     // 예전 앱이 저장한 계획 (새 게임 칸 없음)
+  for (let i = 0; i < 730; i++) {
+    const d = new Date(2026, 9, 1 + i);
+    assert.deepEqual(buildCourse(undefined, d, WITH), buildCourse(undefined, d, CAT), 'default day ' + i);
+    assert.deepEqual(buildCourse(normalizePlan(saved, WITH), d, WITH), buildCourse(normalizePlan(saved, CAT), d, CAT), 'saved plan day ' + i);
+  }
+});
+

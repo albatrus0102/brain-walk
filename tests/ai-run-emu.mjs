@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Runs tests/ai-emulator.test.mjs inside `firebase emulators:exec --only functions,firestore` and then
+ * Runs tests/ai-emulator.test.mjs and then tests/ai-client-contract.test.mjs (app-built docs → rules → functions) inside `firebase emulators:exec --only functions,firestore` and then
  * scans EVERYTHING printed (emulator, function logs, test output) for leaks: the routine key, its hash,
  * Telegram/fire tokens, item text, names and formatted scores must never appear.
  *
@@ -28,7 +28,7 @@ for (const [f, body] of Object.entries(files)) { if (fs.existsSync(fn(f))) backu
 const restore = () => { for (const f of Object.keys(files)) { if (backup[f]) fs.writeFileSync(fn(f), backup[f]); else fs.rmSync(fn(f), { force: true }); } };
 
 const bin = path.join(root, 'tests/node_modules/.bin/firebase');
-const child = spawn(bin, ['emulators:exec', '--only', 'functions,firestore', '--project', 'demo-bw', 'node tests/ai-emulator.test.mjs'], {
+const child = spawn(bin, ['emulators:exec', '--only', 'functions,firestore', '--project', 'demo-bw', 'node tests/ai-emulator.test.mjs && node tests/ai-client-contract.test.mjs'], {
   cwd: root, env: { ...process.env, AI_TEST_KEY: KEY, AI_TEST_PORT: String(PORT), AI_TEST_SECRETS: JSON.stringify(SECRETS) },
 });
 let out = '';
@@ -41,7 +41,7 @@ child.on('close', (code) => {
   const forbidden = [KEY, keyHash, SECRETS.TELEGRAM_BOT_TOKEN, SECRETS.ROUTINE_REPORTER_TOKEN,
     '토요일 아침', '손녀와 함께', '고등어', '연탄집게', '택배 보내기', '배추', '시험아버지', '시험아들', '%p', '주당 ', '평소 범위', '느림'];
   const leaks = forbidden.filter((s) => out.includes(s)).map((s) => (s === KEY ? '<routine key>' : s === keyHash ? '<key hash>' : s.includes('SECRET') ? '<secret>' : s));
-  const pass = /AI EMULATOR: ALL PASSED/.test(out);
+  const pass = /AI EMULATOR: ALL PASSED/.test(out) && /AI CLIENT CONTRACT: ALL PASSED/.test(out);   // + the app ↔ backend contract test (ai-client-contract.test.mjs)
   console.log(`\nlog scan: ${leaks.length ? 'LEAKS ' + JSON.stringify(leaks) : 'no key, secret, item text, name or score in any output'}`);
   process.exit(code === 0 && pass && !leaks.length ? 0 : 1);
 });
