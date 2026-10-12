@@ -212,3 +212,19 @@
   --md-sys-color-outline:#FFFFFF;--md-sys-color-outline-variant:#B5BBAA;
   --md-sys-color-inverse-surface:#FFFFFF;--md-sys-color-inverse-on-surface:#000000;
 }
+
+/* ---- AI 리포트 신호등용 색 (파랑·주황): M3 토큰 이름 규칙을 따라요. 빨강은 쓰지 않아요 (주황이 가장 센 신호). ---- */
+:root{
+  --md-app-color-blue:#2C628B;--md-app-color-blue-container:#CDE5FF;--md-app-color-on-blue-container:#001D32;
+  --md-app-color-orange:#A04F00;--md-app-color-on-orange:#FFFFFF;--md-app-color-orange-container:#FFDCC1;--md-app-color-on-orange-container:#321300;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --md-app-color-blue:#9ACBFB;--md-app-color-blue-container:#0F4A72;--md-app-color-on-blue-container:#CDE5FF;
+    --md-app-color-orange:#FFB77C;--md-app-color-on-orange:#321300;--md-app-color-orange-container:#7A3C00;--md-app-color-on-orange-container:#FFDCC1;
+  }
+}
+:root[data-theme="dark"]{
+  --md-app-color-blue:#9ACBFB;--md-app-color-blue-container:#0F4A72;--md-app-color-on-blue-container:#CDE5FF;
+  --md-app-color-orange:#FFB77C;--md-app-color-on-orange:#321300;--md-app-color-orange-container:#7A3C00;--md-app-color-on-orange-container:#FFDCC1;
+}

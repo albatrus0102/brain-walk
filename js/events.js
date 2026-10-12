@@ -12,6 +12,7 @@ import { say, stopSpeech } from './sound.js';
 import { S } from './state.js';
 import { ACTS } from './ui/acts.js';
 import { toast } from './ui/dom.js';
+import { AI_BACK } from './ui/screens/ai-admin.js';
 import { ADMIN_SUBSCREENS, confirmQuit, go, render } from './ui/shell.js';
 import { $, LS } from './util.js';
 
@@ -25,6 +26,7 @@ document.addEventListener('click', e => {
   else if (a === 'back' || a === 'home') {
     if (S.screen === 'game') leaveGameConfirm(() => go('home'));
     else if (a === 'back' && ADMIN_SUBSCREENS.includes(S.screen)) ACTS.adminback();
+    else if (a === 'back' && AI_BACK[S.screen]) go(AI_BACK[S.screen]);
     else { S.ciFlow = false; go('home'); }
   }
   else if (a === 'quit') leaveGameConfirm(() => go('home'));
