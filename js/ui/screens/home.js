@@ -47,7 +47,14 @@ function traineeHtml() {
 function bindTrainee(el) {
   const sn = $('#banner-snooze', el);
   if (sn) sn.onclick = () => { LS.set('bw.snooze', Date.now() + 30 * 60000); alarmTick(); render(true); toast('30분 뒤에 다시 알려 드릴게요.'); };
-  const slot = $('#cheer-slot', el); if (!slot || !chatAvail()) return;
+  const slot = $('#cheer-slot', el); if (!slot) return;
+  // '가족 대화'는 늘 홈에 있어요. 가족방이 아직 없으면(체험 모드) 대화 화면이 가족방 만드는 법을 알려 줘요.
+  if (!chatAvail()) {
+    slot.append(h('section', { class: 'card primary cheer', id: 'cheer-card', 'aria-label': '가족' },
+      h('p', { class: 'cheer-line empty t-body muted', id: 'cheer-line', text: '가족방에 들어오면 가족의 응원 메시지가 여기에 보여요.' }),
+      h('button', { class: 'btn tonal big', id: 'btn-family-chat', type: 'button', onclick: () => go('chat') }, '가족 대화')));
+    return;
+  }
   const m = S.messages.filter(x => x.authorId !== S.myId && !x.deleted && x.kind === 'text' && x.text).slice(-1)[0];
   if (m) ensureProfiles([m.authorId]);
   const un = unreadCount();
