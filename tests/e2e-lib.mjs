@@ -15,7 +15,7 @@ export async function newPage(browser, o = {}) {
   await ctx.addInitScript(s => {
     window.__DEBUG = true;
     try { if (!sessionStorage.getItem('__seeded')) { sessionStorage.setItem('__seeded', '1'); Object.keys(s).forEach(k => localStorage.setItem(k, JSON.stringify(s[k]))); } } catch (e) {}
-  }, Object.assign({ 'bw.seenDisc': true, 'bw.offered': true, 'bw.alarm': { time: '23:59', days: [0, 1, 2, 3, 4, 5, 6] } }, o.seed || {}));
+  }, Object.assign({ 'bw.seenDisc': true, 'bw.offered': true, 'bw.aiDemo': false, 'bw.alarm': { time: '23:59', days: [0, 1, 2, 3, 4, 5, 6] } }, o.seed || {}));
   const page = await ctx.newPage();
   const tag = o.tag || 'page';
   page.on('console', m => { if (m.type() === 'error') errors.push(tag + ' console: ' + m.text()); });

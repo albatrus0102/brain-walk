@@ -6,6 +6,7 @@
     "test": "cd .. && firebase emulators:exec --only firestore --project demo-bw \"node tests/rules.test.mjs\"",
     "test:smoke": "cd .. && firebase emulators:exec --only firestore,auth --project demo-bw \"node tests/adapter-smoke.mjs\"",
     "test:e2e": "node e2e-demo.mjs && node e2e-learner.mjs && node e2e-admin.mjs",
+    "test:e2e:ai": "node e2e-ai.mjs && node e2e-ai-admin.mjs",
     "test:unit": "node --test program.test.mjs",
     "check": "node --check ../sw.js && node ../tools/shell-list.mjs",
     "test:live": "cd .. && firebase emulators:exec --only firestore,auth --project demo-bw \"node tests/e2e-live.mjs\"",

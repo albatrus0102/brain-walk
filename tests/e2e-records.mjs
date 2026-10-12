@@ -6,7 +6,7 @@ const BASE = process.env.BASE || 'http://localhost:8765/brain-walk/';
 const SHOTS = process.env.SHOT_DIR || '/tmp';
 const browser = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium' });
 const errors = [], out = (...a) => console.log(...a);
-const ctx0 = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true }); await ctx0.addInitScript(() => { window.__DEBUG = true; });
+const ctx0 = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true }); await ctx0.addInitScript(() => { window.__DEBUG = true; try { localStorage.setItem('bw.aiDemo', 'false'); } catch (e) {} });
 const page = await ctx0.newPage();
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));

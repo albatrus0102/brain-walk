@@ -17,6 +17,7 @@ const FILLED = 'self.BW_CONFIG={firebase:{apiKey:"k",authDomain:"x.firebaseapp.c
 async function dismissDisc(pg) { await pg.waitForSelector('.dialog', { timeout: 8000 }); await pg.click('#dlg-btn-0'); await pg.waitForTimeout(150); if (await pg.locator('.dialog').count() && await pg.locator('.dialog').first().isVisible()) await pg.click('#dlg-btn-1'); }
 async function open(ua, o = {}) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent: ua, colorScheme: o.dark ? 'dark' : 'light' });
+  await ctx.addInitScript(() => { try { localStorage.setItem('bw.aiDemo', 'false'); } catch (e) {} });   // 체험 모드의 AI 예시 자료·안내는 AI 시험(e2e-ai*.mjs)에서만 켜요
   const page = await ctx.newPage();
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errors.push('console: ' + m.text()); });

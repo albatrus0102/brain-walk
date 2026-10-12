@@ -6,7 +6,9 @@ const BASE = process.env.BASE || 'http://localhost:8765/brain-walk/';
 const SHOTS = process.env.SHOT_DIR || '/tmp';
 const browser = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium' });
 const errors = [], out = (...a) => console.log(...a);
-const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+const ctx0 = await browser.newContext({ viewport: { width: 390, height: 844 } });
+await ctx0.addInitScript(() => { try { localStorage.setItem('bw.aiDemo', 'false'); } catch (e) {} });   // 체험 모드의 AI 예시 자료·안내는 AI 시험(e2e-ai*.mjs)에서만 켜요
+const page = await ctx0.newPage();
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 const vis = sel => page.locator(sel).first().isVisible().catch(() => false);

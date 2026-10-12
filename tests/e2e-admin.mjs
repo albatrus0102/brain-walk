@@ -26,7 +26,8 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   must((await page.innerText('#plan-gpd')) === '9' && await page.isDisabled('#gpd-plus'), '게임 수는 9에서 멈춰요');
   // 켠 게임 수보다 많게 정하면 안내
   await openCard(page, 'p3');
-  const ids = await page.evaluate(() => [...document.querySelectorAll('#plan-games .grow')].map(x => x.dataset.g));
+  const ids = (await page.evaluate(() => [...document.querySelectorAll('#plan-games .grow')].map(x => x.dataset.g))).filter(id => !['story', 'shapes', 'route', 'think', 'letters', 'olden'].includes(id));   // 새 AI 게임 여섯 개는 처음부터 꺼져 있어요
+  must((await page.locator('#plan-on-story[aria-checked=false], #plan-on-shapes[aria-checked=false], #plan-on-route[aria-checked=false], #plan-on-think[aria-checked=false], #plan-on-letters[aria-checked=false], #plan-on-olden[aria-checked=false]').count()) === 6 && (await page.locator('#plan-games .aipill').count()) === 6, '계획 화면: 새 AI 게임 여섯 개가 꺼진 채로 목록에 있어요 (관리자가 켜요)');
   for (const id of ids.slice(0, 5)) await page.click('#plan-on-' + id);
   must((await text(page, '#plan-cap')).includes('켠 게임이 4개라 하루 최대 4개예요.'), '켠 게임 수 안내');
   for (const id of ids.slice(5)) await page.click('#plan-on-' + id);

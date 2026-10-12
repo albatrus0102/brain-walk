@@ -89,7 +89,7 @@ const hs = page => page.evaluate(() => ({ len: history.length, st: history.state
 /* 5) 터치 첫 누름: 지킴이 칸은 사용자 활성화(sticky activation) 뒤에 쌓아야 Chrome 이 Back 으로 건너뛰지 않아요 */
 {
   const tctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
-  await tctx.addInitScript(() => { window.__DEBUG = true; try { localStorage.setItem('bw.seenDisc', 'true'); localStorage.setItem('bw.offered', 'true'); localStorage.setItem('bw.role', '"family"'); } catch (e) {} });
+  await tctx.addInitScript(() => { window.__DEBUG = true; try { localStorage.setItem('bw.seenDisc', 'true'); localStorage.setItem('bw.offered', 'true'); localStorage.setItem('bw.aiDemo', 'false'); localStorage.setItem('bw.role', '"family"'); } catch (e) {} });
   const page = await tctx.newPage();
   await page.addInitScript(() => { const p = history.pushState.bind(history); window.__pushAct = []; history.pushState = function (...a) { window.__pushAct.push(navigator.userActivation.hasBeenActive); return p(...a); }; });
   await page.goto(BASE); await page.waitForSelector('#btn-demo');
