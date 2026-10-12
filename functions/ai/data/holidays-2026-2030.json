@@ -1,0 +1,1348 @@
+{
+ "v": 1,
+ "about": "한국 명절·공휴일·24절기 표 (2026~2030). 음력 명절(설날·추석·부처님오신날·정월대보름·단오·칠석)은 천문 계산(astronomy-engine)으로 구한 날짜를 한국천문연구원(KASI) 음양력 변환 API(astro.kasi.re.kr/life/solc)로 하나씩 대조해 모두 일치했어요. 2026~2028 공휴일·대체공휴일·절기 시각은 KASI 달력자료(astro.kasi.re.kr/kor/life/post/calendarData)와 같아요. 2029~2030은 KASI 자료가 아직 없어서 공휴일은 현행 법(대체공휴일 포함, 노동절 2027년부터)을 그대로 적용한 값이고, 절기는 천문 계산값(KASI와 2026~2028에서 ±1분 안으로 일치)이에요. 자정 ±3분 안의 절기는 uncertain=true 로 표시했고 검사기는 그 절기를 쓰는 문항을 받지 않아요. 선거일은 KASI 가 발표한 것만 넣었어요.",
+ "verified": "2026-10-12",
+ "years": {
+  "2026": {
+   "official": true,
+   "holidays": [
+    {
+     "date": "2026-01-01",
+     "name": "신정",
+     "kind": "solar"
+    },
+    {
+     "date": "2026-02-16",
+     "name": "설날 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2026-02-17",
+     "name": "설날",
+     "kind": "lunar"
+    },
+    {
+     "date": "2026-02-18",
+     "name": "설날 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2026-03-01",
+     "name": "삼일절",
+     "kind": "solar"
+    },
+    {
+     "date": "2026-03-02",
+     "name": "대체공휴일(삼일절)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2026-05-05",
+     "name": "어린이날",
+     "kind": "solar"
+    },
+    {
+     "date": "2026-05-24",
+     "name": "부처님오신날",
+     "kind": "lunar"
+    },
+    {
+     "date": "2026-05-25",
+     "name": "대체공휴일(부처님오신날)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2026-06-03",
+     "name": "지방선거일",
+     "kind": "election"
+    },
+    {
+     "date": "2026-06-06",
+     "name": "현충일",
+     "kind": "solar"
+    },
+    {
+     "date": "2026-07-17",
+     "name": "제헌절",
+     "kind": "solar"
+    },
+    {
+     "date": "2026-08-15",
+     "name": "광복절",
+     "kind": "solar"
+    },
+    {
+     "date": "2026-08-17",
+     "name": "대체공휴일(광복절)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2026-09-24",
+     "name": "추석 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2026-09-25",
+     "name": "추석",
+     "kind": "lunar"
+    },
+    {
+     "date": "2026-09-26",
+     "name": "추석 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2026-10-03",
+     "name": "개천절",
+     "kind": "solar"
+    },
+    {
+     "date": "2026-10-05",
+     "name": "대체공휴일(개천절)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2026-10-09",
+     "name": "한글날",
+     "kind": "solar"
+    },
+    {
+     "date": "2026-12-25",
+     "name": "성탄절",
+     "kind": "solar"
+    }
+   ],
+   "festivals": [
+    {
+     "name": "정월대보름",
+     "date": "2026-03-03"
+    },
+    {
+     "name": "단오",
+     "date": "2026-06-19"
+    },
+    {
+     "name": "칠석",
+     "date": "2026-08-19"
+    }
+   ],
+   "terms": [
+    {
+     "name": "소한",
+     "date": "2026-01-05",
+     "time": "17:23",
+     "src": "kasi"
+    },
+    {
+     "name": "대한",
+     "date": "2026-01-20",
+     "time": "10:45",
+     "src": "kasi"
+    },
+    {
+     "name": "입춘",
+     "date": "2026-02-04",
+     "time": "05:02",
+     "src": "kasi"
+    },
+    {
+     "name": "우수",
+     "date": "2026-02-19",
+     "time": "00:52",
+     "src": "kasi"
+    },
+    {
+     "name": "경칩",
+     "date": "2026-03-05",
+     "time": "22:59",
+     "src": "kasi"
+    },
+    {
+     "name": "춘분",
+     "date": "2026-03-20",
+     "time": "23:46",
+     "src": "kasi"
+    },
+    {
+     "name": "청명",
+     "date": "2026-04-05",
+     "time": "03:40",
+     "src": "kasi"
+    },
+    {
+     "name": "곡우",
+     "date": "2026-04-20",
+     "time": "10:39",
+     "src": "kasi"
+    },
+    {
+     "name": "입하",
+     "date": "2026-05-05",
+     "time": "20:49",
+     "src": "kasi"
+    },
+    {
+     "name": "소만",
+     "date": "2026-05-21",
+     "time": "09:37",
+     "src": "kasi"
+    },
+    {
+     "name": "망종",
+     "date": "2026-06-06",
+     "time": "00:48",
+     "src": "kasi"
+    },
+    {
+     "name": "하지",
+     "date": "2026-06-21",
+     "time": "17:25",
+     "src": "kasi"
+    },
+    {
+     "name": "소서",
+     "date": "2026-07-07",
+     "time": "10:57",
+     "src": "kasi"
+    },
+    {
+     "name": "대서",
+     "date": "2026-07-23",
+     "time": "04:13",
+     "src": "kasi"
+    },
+    {
+     "name": "입추",
+     "date": "2026-08-07",
+     "time": "20:43",
+     "src": "kasi"
+    },
+    {
+     "name": "처서",
+     "date": "2026-08-23",
+     "time": "11:19",
+     "src": "kasi"
+    },
+    {
+     "name": "백로",
+     "date": "2026-09-07",
+     "time": "23:41",
+     "src": "kasi"
+    },
+    {
+     "name": "추분",
+     "date": "2026-09-23",
+     "time": "09:05",
+     "src": "kasi"
+    },
+    {
+     "name": "한로",
+     "date": "2026-10-08",
+     "time": "15:29",
+     "src": "kasi"
+    },
+    {
+     "name": "상강",
+     "date": "2026-10-23",
+     "time": "18:38",
+     "src": "kasi"
+    },
+    {
+     "name": "입동",
+     "date": "2026-11-07",
+     "time": "18:52",
+     "src": "kasi"
+    },
+    {
+     "name": "소설",
+     "date": "2026-11-22",
+     "time": "16:23",
+     "src": "kasi"
+    },
+    {
+     "name": "대설",
+     "date": "2026-12-07",
+     "time": "11:53",
+     "src": "kasi"
+    },
+    {
+     "name": "동지",
+     "date": "2026-12-22",
+     "time": "05:50",
+     "src": "kasi"
+    }
+   ]
+  },
+  "2027": {
+   "official": true,
+   "holidays": [
+    {
+     "date": "2027-01-01",
+     "name": "신정",
+     "kind": "solar"
+    },
+    {
+     "date": "2027-02-06",
+     "name": "설날 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2027-02-07",
+     "name": "설날",
+     "kind": "lunar"
+    },
+    {
+     "date": "2027-02-08",
+     "name": "설날 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2027-02-09",
+     "name": "대체공휴일(설날)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2027-03-01",
+     "name": "삼일절",
+     "kind": "solar"
+    },
+    {
+     "date": "2027-05-01",
+     "name": "노동절",
+     "kind": "solar"
+    },
+    {
+     "date": "2027-05-03",
+     "name": "대체공휴일(노동절)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2027-05-05",
+     "name": "어린이날",
+     "kind": "solar"
+    },
+    {
+     "date": "2027-05-13",
+     "name": "부처님오신날",
+     "kind": "lunar"
+    },
+    {
+     "date": "2027-06-06",
+     "name": "현충일",
+     "kind": "solar"
+    },
+    {
+     "date": "2027-07-17",
+     "name": "제헌절",
+     "kind": "solar"
+    },
+    {
+     "date": "2027-07-19",
+     "name": "대체공휴일(제헌절)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2027-08-15",
+     "name": "광복절",
+     "kind": "solar"
+    },
+    {
+     "date": "2027-08-16",
+     "name": "대체공휴일(광복절)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2027-09-14",
+     "name": "추석 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2027-09-15",
+     "name": "추석",
+     "kind": "lunar"
+    },
+    {
+     "date": "2027-09-16",
+     "name": "추석 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2027-10-03",
+     "name": "개천절",
+     "kind": "solar"
+    },
+    {
+     "date": "2027-10-04",
+     "name": "대체공휴일(개천절)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2027-10-09",
+     "name": "한글날",
+     "kind": "solar"
+    },
+    {
+     "date": "2027-10-11",
+     "name": "대체공휴일(한글날)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2027-12-25",
+     "name": "성탄절",
+     "kind": "solar"
+    },
+    {
+     "date": "2027-12-27",
+     "name": "대체공휴일(성탄절)",
+     "kind": "substitute"
+    }
+   ],
+   "festivals": [
+    {
+     "name": "정월대보름",
+     "date": "2027-02-21"
+    },
+    {
+     "name": "단오",
+     "date": "2027-06-09"
+    },
+    {
+     "name": "칠석",
+     "date": "2027-08-08"
+    }
+   ],
+   "terms": [
+    {
+     "name": "소한",
+     "date": "2027-01-05",
+     "time": "23:10",
+     "src": "kasi"
+    },
+    {
+     "name": "대한",
+     "date": "2027-01-20",
+     "time": "16:30",
+     "src": "kasi"
+    },
+    {
+     "name": "입춘",
+     "date": "2027-02-04",
+     "time": "10:46",
+     "src": "kasi"
+    },
+    {
+     "name": "우수",
+     "date": "2027-02-19",
+     "time": "06:33",
+     "src": "kasi"
+    },
+    {
+     "name": "경칩",
+     "date": "2027-03-06",
+     "time": "04:40",
+     "src": "kasi"
+    },
+    {
+     "name": "춘분",
+     "date": "2027-03-21",
+     "time": "05:25",
+     "src": "kasi"
+    },
+    {
+     "name": "청명",
+     "date": "2027-04-05",
+     "time": "09:17",
+     "src": "kasi"
+    },
+    {
+     "name": "곡우",
+     "date": "2027-04-20",
+     "time": "16:18",
+     "src": "kasi"
+    },
+    {
+     "name": "입하",
+     "date": "2027-05-06",
+     "time": "02:25",
+     "src": "kasi"
+    },
+    {
+     "name": "소만",
+     "date": "2027-05-21",
+     "time": "15:18",
+     "src": "kasi"
+    },
+    {
+     "name": "망종",
+     "date": "2027-06-06",
+     "time": "06:26",
+     "src": "kasi"
+    },
+    {
+     "name": "하지",
+     "date": "2027-06-21",
+     "time": "23:11",
+     "src": "kasi"
+    },
+    {
+     "name": "소서",
+     "date": "2027-07-07",
+     "time": "16:37",
+     "src": "kasi"
+    },
+    {
+     "name": "대서",
+     "date": "2027-07-23",
+     "time": "10:05",
+     "src": "kasi"
+    },
+    {
+     "name": "입추",
+     "date": "2027-08-08",
+     "time": "02:27",
+     "src": "kasi"
+    },
+    {
+     "name": "처서",
+     "date": "2027-08-23",
+     "time": "17:14",
+     "src": "kasi"
+    },
+    {
+     "name": "백로",
+     "date": "2027-09-08",
+     "time": "05:28",
+     "src": "kasi"
+    },
+    {
+     "name": "추분",
+     "date": "2027-09-23",
+     "time": "15:02",
+     "src": "kasi"
+    },
+    {
+     "name": "한로",
+     "date": "2027-10-08",
+     "time": "21:17",
+     "src": "kasi"
+    },
+    {
+     "name": "상강",
+     "date": "2027-10-24",
+     "time": "00:33",
+     "src": "kasi"
+    },
+    {
+     "name": "입동",
+     "date": "2027-11-08",
+     "time": "00:39",
+     "src": "kasi"
+    },
+    {
+     "name": "소설",
+     "date": "2027-11-22",
+     "time": "22:16",
+     "src": "kasi"
+    },
+    {
+     "name": "대설",
+     "date": "2027-12-07",
+     "time": "17:38",
+     "src": "kasi"
+    },
+    {
+     "name": "동지",
+     "date": "2027-12-22",
+     "time": "11:42",
+     "src": "kasi"
+    }
+   ]
+  },
+  "2028": {
+   "official": true,
+   "holidays": [
+    {
+     "date": "2028-01-01",
+     "name": "신정",
+     "kind": "solar"
+    },
+    {
+     "date": "2028-01-26",
+     "name": "설날 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2028-01-27",
+     "name": "설날",
+     "kind": "lunar"
+    },
+    {
+     "date": "2028-01-28",
+     "name": "설날 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2028-03-01",
+     "name": "삼일절",
+     "kind": "solar"
+    },
+    {
+     "date": "2028-04-12",
+     "name": "국회의원 선거일",
+     "kind": "election"
+    },
+    {
+     "date": "2028-05-01",
+     "name": "노동절",
+     "kind": "solar"
+    },
+    {
+     "date": "2028-05-02",
+     "name": "부처님오신날",
+     "kind": "lunar"
+    },
+    {
+     "date": "2028-05-05",
+     "name": "어린이날",
+     "kind": "solar"
+    },
+    {
+     "date": "2028-06-06",
+     "name": "현충일",
+     "kind": "solar"
+    },
+    {
+     "date": "2028-07-17",
+     "name": "제헌절",
+     "kind": "solar"
+    },
+    {
+     "date": "2028-08-15",
+     "name": "광복절",
+     "kind": "solar"
+    },
+    {
+     "date": "2028-10-02",
+     "name": "추석 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2028-10-03",
+     "name": "추석",
+     "kind": "lunar"
+    },
+    {
+     "date": "2028-10-03",
+     "name": "개천절",
+     "kind": "solar"
+    },
+    {
+     "date": "2028-10-04",
+     "name": "추석 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2028-10-05",
+     "name": "대체공휴일(추석)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2028-10-09",
+     "name": "한글날",
+     "kind": "solar"
+    },
+    {
+     "date": "2028-12-25",
+     "name": "성탄절",
+     "kind": "solar"
+    }
+   ],
+   "festivals": [
+    {
+     "name": "정월대보름",
+     "date": "2028-02-10"
+    },
+    {
+     "name": "단오",
+     "date": "2028-05-28"
+    },
+    {
+     "name": "칠석",
+     "date": "2028-08-26"
+    }
+   ],
+   "terms": [
+    {
+     "name": "소한",
+     "date": "2028-01-06",
+     "time": "04:55",
+     "src": "kasi"
+    },
+    {
+     "name": "대한",
+     "date": "2028-01-20",
+     "time": "22:22",
+     "src": "kasi"
+    },
+    {
+     "name": "입춘",
+     "date": "2028-02-04",
+     "time": "16:31",
+     "src": "kasi"
+    },
+    {
+     "name": "우수",
+     "date": "2028-02-19",
+     "time": "12:26",
+     "src": "kasi"
+    },
+    {
+     "name": "경칩",
+     "date": "2028-03-05",
+     "time": "10:25",
+     "src": "kasi"
+    },
+    {
+     "name": "춘분",
+     "date": "2028-03-20",
+     "time": "11:17",
+     "src": "kasi"
+    },
+    {
+     "name": "청명",
+     "date": "2028-04-04",
+     "time": "15:03",
+     "src": "kasi"
+    },
+    {
+     "name": "곡우",
+     "date": "2028-04-19",
+     "time": "22:09",
+     "src": "kasi"
+    },
+    {
+     "name": "입하",
+     "date": "2028-05-05",
+     "time": "08:12",
+     "src": "kasi"
+    },
+    {
+     "name": "소만",
+     "date": "2028-05-20",
+     "time": "21:10",
+     "src": "kasi"
+    },
+    {
+     "name": "망종",
+     "date": "2028-06-05",
+     "time": "12:16",
+     "src": "kasi"
+    },
+    {
+     "name": "하지",
+     "date": "2028-06-21",
+     "time": "05:02",
+     "src": "kasi"
+    },
+    {
+     "name": "소서",
+     "date": "2028-07-06",
+     "time": "22:30",
+     "src": "kasi"
+    },
+    {
+     "name": "대서",
+     "date": "2028-07-22",
+     "time": "15:54",
+     "src": "kasi"
+    },
+    {
+     "name": "입추",
+     "date": "2028-08-07",
+     "time": "08:21",
+     "src": "kasi"
+    },
+    {
+     "name": "처서",
+     "date": "2028-08-22",
+     "time": "23:01",
+     "src": "kasi"
+    },
+    {
+     "name": "백로",
+     "date": "2028-09-07",
+     "time": "11:22",
+     "src": "kasi"
+    },
+    {
+     "name": "추분",
+     "date": "2028-09-22",
+     "time": "20:45",
+     "src": "kasi"
+    },
+    {
+     "name": "한로",
+     "date": "2028-10-08",
+     "time": "03:09",
+     "src": "kasi"
+    },
+    {
+     "name": "상강",
+     "date": "2028-10-23",
+     "time": "06:13",
+     "src": "kasi"
+    },
+    {
+     "name": "입동",
+     "date": "2028-11-07",
+     "time": "06:27",
+     "src": "kasi"
+    },
+    {
+     "name": "소설",
+     "date": "2028-11-22",
+     "time": "03:54",
+     "src": "kasi"
+    },
+    {
+     "name": "대설",
+     "date": "2028-12-06",
+     "time": "23:25",
+     "src": "kasi"
+    },
+    {
+     "name": "동지",
+     "date": "2028-12-21",
+     "time": "17:20",
+     "src": "kasi"
+    }
+   ]
+  },
+  "2029": {
+   "official": false,
+   "holidays": [
+    {
+     "date": "2029-01-01",
+     "name": "신정",
+     "kind": "solar"
+    },
+    {
+     "date": "2029-02-12",
+     "name": "설날 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2029-02-13",
+     "name": "설날",
+     "kind": "lunar"
+    },
+    {
+     "date": "2029-02-14",
+     "name": "설날 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2029-03-01",
+     "name": "삼일절",
+     "kind": "solar"
+    },
+    {
+     "date": "2029-05-01",
+     "name": "노동절",
+     "kind": "solar"
+    },
+    {
+     "date": "2029-05-05",
+     "name": "어린이날",
+     "kind": "solar"
+    },
+    {
+     "date": "2029-05-07",
+     "name": "대체공휴일(어린이날)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2029-05-20",
+     "name": "부처님오신날",
+     "kind": "lunar"
+    },
+    {
+     "date": "2029-05-21",
+     "name": "대체공휴일(부처님오신날)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2029-06-06",
+     "name": "현충일",
+     "kind": "solar"
+    },
+    {
+     "date": "2029-07-17",
+     "name": "제헌절",
+     "kind": "solar"
+    },
+    {
+     "date": "2029-08-15",
+     "name": "광복절",
+     "kind": "solar"
+    },
+    {
+     "date": "2029-09-21",
+     "name": "추석 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2029-09-22",
+     "name": "추석",
+     "kind": "lunar"
+    },
+    {
+     "date": "2029-09-23",
+     "name": "추석 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2029-09-24",
+     "name": "대체공휴일(추석)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2029-10-03",
+     "name": "개천절",
+     "kind": "solar"
+    },
+    {
+     "date": "2029-10-09",
+     "name": "한글날",
+     "kind": "solar"
+    },
+    {
+     "date": "2029-12-25",
+     "name": "성탄절",
+     "kind": "solar"
+    }
+   ],
+   "festivals": [
+    {
+     "name": "정월대보름",
+     "date": "2029-02-27"
+    },
+    {
+     "name": "단오",
+     "date": "2029-06-16"
+    },
+    {
+     "name": "칠석",
+     "date": "2029-08-16"
+    }
+   ],
+   "terms": [
+    {
+     "name": "소한",
+     "date": "2029-01-05",
+     "time": "10:42",
+     "src": "computed"
+    },
+    {
+     "name": "대한",
+     "date": "2029-01-20",
+     "time": "04:01",
+     "src": "computed"
+    },
+    {
+     "name": "입춘",
+     "date": "2029-02-03",
+     "time": "22:20",
+     "src": "computed"
+    },
+    {
+     "name": "우수",
+     "date": "2029-02-18",
+     "time": "18:07",
+     "src": "computed"
+    },
+    {
+     "name": "경칩",
+     "date": "2029-03-05",
+     "time": "16:17",
+     "src": "computed"
+    },
+    {
+     "name": "춘분",
+     "date": "2029-03-20",
+     "time": "17:01",
+     "src": "computed"
+    },
+    {
+     "name": "청명",
+     "date": "2029-04-04",
+     "time": "20:58",
+     "src": "computed"
+    },
+    {
+     "name": "곡우",
+     "date": "2029-04-20",
+     "time": "03:55",
+     "src": "computed"
+    },
+    {
+     "name": "입하",
+     "date": "2029-05-05",
+     "time": "14:07",
+     "src": "computed"
+    },
+    {
+     "name": "소만",
+     "date": "2029-05-21",
+     "time": "02:55",
+     "src": "computed"
+    },
+    {
+     "name": "망종",
+     "date": "2029-06-05",
+     "time": "18:10",
+     "src": "computed"
+    },
+    {
+     "name": "하지",
+     "date": "2029-06-21",
+     "time": "10:48",
+     "src": "computed"
+    },
+    {
+     "name": "소서",
+     "date": "2029-07-07",
+     "time": "04:22",
+     "src": "computed"
+    },
+    {
+     "name": "대서",
+     "date": "2029-07-22",
+     "time": "21:41",
+     "src": "computed"
+    },
+    {
+     "name": "입추",
+     "date": "2029-08-07",
+     "time": "14:11",
+     "src": "computed"
+    },
+    {
+     "name": "처서",
+     "date": "2029-08-23",
+     "time": "04:51",
+     "src": "computed"
+    },
+    {
+     "name": "백로",
+     "date": "2029-09-07",
+     "time": "17:11",
+     "src": "computed"
+    },
+    {
+     "name": "추분",
+     "date": "2029-09-23",
+     "time": "02:37",
+     "src": "computed"
+    },
+    {
+     "name": "한로",
+     "date": "2029-10-08",
+     "time": "08:57",
+     "src": "computed"
+    },
+    {
+     "name": "상강",
+     "date": "2029-10-23",
+     "time": "12:07",
+     "src": "computed"
+    },
+    {
+     "name": "입동",
+     "date": "2029-11-07",
+     "time": "12:16",
+     "src": "computed"
+    },
+    {
+     "name": "소설",
+     "date": "2029-11-22",
+     "time": "09:49",
+     "src": "computed"
+    },
+    {
+     "name": "대설",
+     "date": "2029-12-07",
+     "time": "05:13",
+     "src": "computed"
+    },
+    {
+     "name": "동지",
+     "date": "2029-12-21",
+     "time": "23:14",
+     "src": "computed"
+    }
+   ]
+  },
+  "2030": {
+   "official": false,
+   "holidays": [
+    {
+     "date": "2030-01-01",
+     "name": "신정",
+     "kind": "solar"
+    },
+    {
+     "date": "2030-02-02",
+     "name": "설날 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2030-02-03",
+     "name": "설날",
+     "kind": "lunar"
+    },
+    {
+     "date": "2030-02-04",
+     "name": "설날 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2030-02-05",
+     "name": "대체공휴일(설날)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2030-03-01",
+     "name": "삼일절",
+     "kind": "solar"
+    },
+    {
+     "date": "2030-05-01",
+     "name": "노동절",
+     "kind": "solar"
+    },
+    {
+     "date": "2030-05-05",
+     "name": "어린이날",
+     "kind": "solar"
+    },
+    {
+     "date": "2030-05-06",
+     "name": "대체공휴일(어린이날)",
+     "kind": "substitute"
+    },
+    {
+     "date": "2030-05-09",
+     "name": "부처님오신날",
+     "kind": "lunar"
+    },
+    {
+     "date": "2030-06-06",
+     "name": "현충일",
+     "kind": "solar"
+    },
+    {
+     "date": "2030-07-17",
+     "name": "제헌절",
+     "kind": "solar"
+    },
+    {
+     "date": "2030-08-15",
+     "name": "광복절",
+     "kind": "solar"
+    },
+    {
+     "date": "2030-09-11",
+     "name": "추석 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2030-09-12",
+     "name": "추석",
+     "kind": "lunar"
+    },
+    {
+     "date": "2030-09-13",
+     "name": "추석 연휴",
+     "kind": "lunar"
+    },
+    {
+     "date": "2030-10-03",
+     "name": "개천절",
+     "kind": "solar"
+    },
+    {
+     "date": "2030-10-09",
+     "name": "한글날",
+     "kind": "solar"
+    },
+    {
+     "date": "2030-12-25",
+     "name": "성탄절",
+     "kind": "solar"
+    }
+   ],
+   "festivals": [
+    {
+     "name": "정월대보름",
+     "date": "2030-02-17"
+    },
+    {
+     "name": "단오",
+     "date": "2030-06-05"
+    },
+    {
+     "name": "칠석",
+     "date": "2030-08-05"
+    }
+   ],
+   "terms": [
+    {
+     "name": "소한",
+     "date": "2030-01-05",
+     "time": "16:30",
+     "src": "computed"
+    },
+    {
+     "name": "대한",
+     "date": "2030-01-20",
+     "time": "09:54",
+     "src": "computed"
+    },
+    {
+     "name": "입춘",
+     "date": "2030-02-04",
+     "time": "04:08",
+     "src": "computed"
+    },
+    {
+     "name": "우수",
+     "date": "2030-02-18",
+     "time": "23:59",
+     "src": "computed",
+     "uncertain": true
+    },
+    {
+     "name": "경칩",
+     "date": "2030-03-05",
+     "time": "22:02",
+     "src": "computed"
+    },
+    {
+     "name": "춘분",
+     "date": "2030-03-20",
+     "time": "22:51",
+     "src": "computed"
+    },
+    {
+     "name": "청명",
+     "date": "2030-04-05",
+     "time": "02:40",
+     "src": "computed"
+    },
+    {
+     "name": "곡우",
+     "date": "2030-04-20",
+     "time": "09:43",
+     "src": "computed"
+    },
+    {
+     "name": "입하",
+     "date": "2030-05-05",
+     "time": "19:45",
+     "src": "computed"
+    },
+    {
+     "name": "소만",
+     "date": "2030-05-21",
+     "time": "08:40",
+     "src": "computed"
+    },
+    {
+     "name": "망종",
+     "date": "2030-06-05",
+     "time": "23:44",
+     "src": "computed"
+    },
+    {
+     "name": "하지",
+     "date": "2030-06-21",
+     "time": "16:31",
+     "src": "computed"
+    },
+    {
+     "name": "소서",
+     "date": "2030-07-07",
+     "time": "09:55",
+     "src": "computed"
+    },
+    {
+     "name": "대서",
+     "date": "2030-07-23",
+     "time": "03:25",
+     "src": "computed"
+    },
+    {
+     "name": "입추",
+     "date": "2030-08-07",
+     "time": "19:47",
+     "src": "computed"
+    },
+    {
+     "name": "처서",
+     "date": "2030-08-23",
+     "time": "10:36",
+     "src": "computed"
+    },
+    {
+     "name": "백로",
+     "date": "2030-09-07",
+     "time": "22:53",
+     "src": "computed"
+    },
+    {
+     "name": "추분",
+     "date": "2030-09-23",
+     "time": "08:27",
+     "src": "computed"
+    },
+    {
+     "name": "한로",
+     "date": "2030-10-08",
+     "time": "14:45",
+     "src": "computed"
+    },
+    {
+     "name": "상강",
+     "date": "2030-10-23",
+     "time": "18:00",
+     "src": "computed"
+    },
+    {
+     "name": "입동",
+     "date": "2030-11-07",
+     "time": "18:08",
+     "src": "computed"
+    },
+    {
+     "name": "소설",
+     "date": "2030-11-22",
+     "time": "15:44",
+     "src": "computed"
+    },
+    {
+     "name": "대설",
+     "date": "2030-12-07",
+     "time": "11:07",
+     "src": "computed"
+    },
+    {
+     "name": "동지",
+     "date": "2030-12-22",
+     "time": "05:09",
+     "src": "computed"
+    }
+   ]
+  }
+ }
+}

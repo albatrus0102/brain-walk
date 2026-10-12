@@ -1,0 +1,24 @@
+{
+  "specVer": "ref-v1",
+  "about": "기준 설계도 (DESIGN-AI 부록 A.23). 한 주 30문항 = 5개 영역 × 6문항. story_recall 1개는 질문 3개라 3문항으로 세요. 앵커 세트는 같은 비율의 2/3 (영역마다 4문항, 모두 20문항). 단계는 aiState/plan.refLevels(기본 3). 버전을 바꾸면 2주 동안 옛·새 설계도 문항을 반씩 내요(이음 기간).",
+  "weekly": {
+    "memory": { "word_recog": 3, "story_recall": 1 },
+    "attention": { "letter_search": 6 },
+    "executive": { "shop_calc": 2, "schedule": 2, "logic": 1, "sequence": 1 },
+    "language": { "lang_category": 3, "word_find": 2, "analogy": 1 },
+    "visuospatial": { "grid_rotate": 2, "grid_memory": 2, "route": 1, "grid_pattern": 1 }
+  },
+  "anchor": {
+    "memory": { "word_recog": 1, "story_recall": 1 },
+    "attention": { "letter_search": 4 },
+    "executive": { "shop_calc": 1, "schedule": 1, "logic": 1, "sequence": 1 },
+    "language": { "lang_category": 2, "word_find": 1, "analogy": 1 },
+    "visuospatial": { "grid_rotate": 1, "grid_memory": 1, "route": 1, "grid_pattern": 1 }
+  },
+  "measuredPerItem": { "story_recall": 3 },
+  "speedTasks": { "about": "코드가 만드는 고정 속도 과제 (앱이 role 'proc' 로 기록)", "trail": 1, "flash": 5, "odd": 4 },
+  "defaultLevel": 3,
+  "reserveWeeksAhead": 3,
+  "spareWeeks": 8,
+  "perDay": 5
+}

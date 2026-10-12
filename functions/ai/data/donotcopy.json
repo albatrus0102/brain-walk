@@ -1,0 +1,85 @@
+{
+ "v": 1,
+ "about": "베끼면 안 되는 목록의 지문만 둬요 (원문 없음). wordSets: 낱말마다 sha256('bw-dnc-v1|w|'+정규화 낱말) 앞 16자. stories: 글자 3-그램 해시. 목표 낱말이 한 묶음과 3개 이상 겹치면(묶음이 3개보다 작으면 모두 겹치면), 이야기 3-그램 자카드가 0.5 이상이면, patterns 정규식이 맞으면 버려요(copy_risk). 늘리는 방법: tools/make-donotcopy.mjs (원문 파일은 저장소 밖에 두세요). 앱의 월간 점검 자체 낱말(js/games/task-words.js)도 넣어서, AI 문항이 점검 낱말을 미리 연습시키지 않게 해요.",
+ "extendable": true,
+ "patterns": [
+  "100\\s*에서\\s*7",
+  "백\\s*에서\\s*칠",
+  "7\\s*씩\\s*빼",
+  "거꾸로\\s*(말|읽|불러)",
+  "오각형",
+  "겹친\\s*도형",
+  "시계.*11\\s*시\\s*10\\s*분",
+  "열한\\s*시\\s*십\\s*분",
+  "세\\s*가지\\s*물건\\s*이름",
+  "따라\\s*말해\\s*보세요",
+  "지금\\s*(몇|무슨)\\s*(년|계절|월)",
+  "여기는\\s*(어디|무슨\\s*곳)",
+  "주먹.*손날.*손바닥",
+  "동물\\s*이름을\\s*(최대한|많이)"
+ ],
+ "wordSets": [
+  {
+   "label": "mmse-ds-recall",
+   "h": [
+    "7b0648905ecd2e76",
+    "0228c3bc26d6834f",
+    "b77805d32d34c295"
+   ]
+  },
+  {
+   "label": "k-mmse-recall",
+   "h": [
+    "9fcddb459b0b48db",
+    "605125a4d7c18194",
+    "d455284149e50f43"
+   ]
+  },
+  {
+   "label": "app-monthly-1",
+   "h": [
+    "fd1a4db952adbef6",
+    "8db2a0837cf125cc",
+    "82afe2047326c1a7",
+    "fba848d290cfd15b",
+    "8f0c5cb81e56c68e",
+    "d127d271d7310bd1",
+    "29a1f1cbd6da8c6f",
+    "1c7a658485a69d0b",
+    "605125a4d7c18194",
+    "ae33bb6ee6876ff0"
+   ]
+  },
+  {
+   "label": "app-monthly-2",
+   "h": [
+    "dc13ac0c5ff858d8",
+    "36de27eb564e17ca",
+    "5361f3c4dac7338c",
+    "263a5a3cd062bb69",
+    "4c4fabe66eb080b7",
+    "090c2c91fc46155a",
+    "b77805d32d34c295",
+    "230c93e8b470fdf6",
+    "ed5c30f3e8e65d8f",
+    "edc0bf2781877e33"
+   ]
+  },
+  {
+   "label": "app-monthly-3",
+   "h": [
+    "32032e7878743009",
+    "fd5095f8efeab997",
+    "9fcddb459b0b48db",
+    "2ea2ded12e5e88bf",
+    "da06ac2740dce2a0",
+    "14fdeed61df739b0",
+    "041ce274fd7ae047",
+    "4a8bd84b0fc0f68d",
+    "d3d9bfba9b6c511d",
+    "143d6f23d0f0a576"
+   ]
+  }
+ ],
+ "stories": []
+}
