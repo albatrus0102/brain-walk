@@ -23,7 +23,7 @@ if (configured) {
 const VERSION = '__BUILD__';
 // 비교 문자열을 둘로 나눠 써요: pages.yml 의 sed 가 이 줄까지 바꾸면 배포본도 늘 DEV 가 돼요.
 const DEV = VERSION === '__' + 'BUILD__';   // 배포 전(개발) 상태면 항상 네트워크 우선
-const SHELL = 'bw-shell-' + VERSION, CDN = 'bw-cdn-' + FB_VERSION;
+const SHELL = 'bw-shell-' + VERSION, CDN = 'bw-cdn-' + FB_VERSION, FONTS = 'bw-fonts-1';
 // 파일을 더하거나 지웠다면: node tools/shell-list.mjs --write
 const SHELL_FILES = /*SHELL_START*/ [
   "./",
@@ -38,6 +38,7 @@ const SHELL_FILES = /*SHELL_START*/ [
   "./js/boot.js",
   "./js/clinical/tests.js",
   "./js/data.js",
+  "./js/display.js",
   "./js/events.js",
   "./js/games/cards.js",
   "./js/games/flash.js",
@@ -63,6 +64,7 @@ const SHELL_FILES = /*SHELL_START*/ [
   "./js/nudge.js",
   "./js/platform.js",
   "./js/program.js",
+  "./js/progress.js",
   "./js/push.js",
   "./js/records.js",
   "./js/session.js",
@@ -75,22 +77,29 @@ const SHELL_FILES = /*SHELL_START*/ [
   "./js/store/store.js",
   "./js/surveys/content.js",
   "./js/surveys/engine.js",
+  "./js/ui/acts.js",
   "./js/ui/chat.js",
+  "./js/ui/dashboard.js",
   "./js/ui/dom.js",
   "./js/ui/install.js",
   "./js/ui/onboarding.js",
+  "./js/ui/plan-text.js",
   "./js/ui/registry.js",
   "./js/ui/room-settings.js",
+  "./js/ui/screens/admin-display.js",
+  "./js/ui/screens/admin-plan.js",
   "./js/ui/screens/assess.js",
   "./js/ui/screens/checkin.js",
   "./js/ui/screens/clinical.js",
   "./js/ui/screens/clock.js",
+  "./js/ui/screens/course-break.js",
   "./js/ui/screens/course-done.js",
   "./js/ui/screens/family.js",
   "./js/ui/screens/game.js",
   "./js/ui/screens/home.js",
   "./js/ui/screens/hub.js",
   "./js/ui/screens/index.js",
+  "./js/ui/screens/members.js",
   "./js/ui/screens/pick.js",
   "./js/ui/screens/result.js",
   "./js/ui/screens/settings.js",
@@ -106,7 +115,7 @@ const SHELL_FILES = /*SHELL_START*/ [
 
 self.addEventListener('install', e => e.waitUntil(caches.open(SHELL).then(c => c.addAll(SHELL_FILES))));
 self.addEventListener('activate', e => e.waitUntil((async () => {
-  for (const k of await caches.keys()) if (k.startsWith('bw-shell-') && k !== SHELL) await caches.delete(k);
+  for (const k of await caches.keys()) if (k.startsWith('bw-shell-') && k !== SHELL) await caches.delete(k);   // 글꼴 캐시(bw-fonts-)는 버전이 주소에 있어서 지우지 않아요
   await self.clients.claim();
 })()));
 self.addEventListener('message', e => { if (e.data === 'SKIP_WAITING') self.skipWaiting(); });   // "새 버전이 있어요 · 업데이트"
@@ -117,6 +126,17 @@ self.addEventListener('fetch', e => {
   if (url.origin === 'https://www.gstatic.com' && url.pathname.startsWith('/firebasejs/' + FB_VERSION + '/')) {
     // 버전이 박힌 주소는 바뀌지 않으니 캐시 우선
     e.respondWith(caches.open(CDN).then(async c => (await c.match(req)) || fetch(req).then(r => { if (r.ok) c.put(req, r.clone()); return r; })));
+    return;
+  }
+  if (url.origin === 'https://cdn.jsdelivr.net' && /\.(css|woff2?)$/.test(url.pathname)) {
+    // 글꼴(프리텐다드 CSS 와 woff2 조각): 주소에 버전이 박혀 있어서 캐시 우선 → 한 번 쓴 뒤에는 오프라인에서도 같은 글꼴이에요.
+    // 처음 받을 때 네트워크가 안 되면 그냥 실패해서 휴대폰 글꼴로 보여요 (글꼴 스택의 뒤쪽).
+    e.respondWith(caches.open(FONTS).then(async c => {
+      const hit = await c.match(req); if (hit) return hit;
+      const r = await fetch(req);
+      if (r && (r.ok || r.type === 'opaque')) c.put(req, r.clone());
+      return r;
+    }));
     return;
   }
   if (url.origin !== location.origin) return;            // Firestore/Auth/FCM 통신은 가로채지 않아요

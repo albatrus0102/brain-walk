@@ -8,9 +8,9 @@
       라이트: primary=T40, on-primary=T100, container≈T88, on-container=T10, surface≈T98 (살짝 크림빛)
       다크  : primary=T80, on-primary=T20, container=T30, on-container=T90, surface≈T6
     시드를 바꾸려면 :root(라이트), @media dark 블록, :root[data-theme="dark"] 세 곳의 색 토큰만 바꾸면 앱 전체가 따라옵니다.
-  - 글꼴: 본문·버튼은 Noto Sans KR, 큰 제목(display·headline)만 Noto Serif KR(명조)입니다.
-    어르신께 익숙한 책·신문 글꼴이라 따뜻하고 믿음직하게 보이고, 28px 이상 굵게만 써서 읽기에도 무리가 없습니다.
-  - 글자 크기: --md-sys-typescale-* 는 모두 calc(기본px * var(--text-scale)). 설정(보통/크게/아주 크게)이 --text-scale 을 1 / 1.2 / 1.4 로 바꿉니다.
+  - 글꼴: 기본은 Pretendard(프리텐다드)이고, 설정에서 Noto Sans KR(제목은 Noto Serif KR 명조) 또는 휴대폰 기본 글꼴로 바꿀 수 있습니다.
+    --md-ref-typeface / --md-ref-typeface-brand 두 토큰만 바뀌고(html[data-font]), 나머지 모든 글자는 이 토큰을 따라가요.
+  - 글자 크기: --md-sys-typescale-* 는 모두 calc(기본px * var(--text-scale)). 설정(보통/크게/아주 크게/최대)이 --text-scale 을 1 / 1.2 / 1.4 / 1.6 으로 바꿉니다.
     훈련하는 분이 보는 글은 가장 작은 본문(body-small)도 20px 이상입니다. label-small(17px)은 배지·작은 꼬리표에만 씁니다.
   - 모양(--md-sys-shape-corner-*), 높이(--md-sys-elevation-level0~5), 모션(--md-sys-motion-*)도 토큰입니다.
   - 상태 레이어: hover 8%, focus/pressed 10% (버튼의 ::before 에 currentColor 로 덧입힘).
@@ -67,8 +67,8 @@
   --md-sys-typescale-label-large-size:calc(21px * var(--text-scale));    --md-sys-typescale-label-large-line:1.3;    --md-sys-typescale-label-large-weight:700;
   --md-sys-typescale-label-medium-size:calc(20px * var(--text-scale));   --md-sys-typescale-label-medium-line:1.3;   --md-sys-typescale-label-medium-weight:700;
   --md-sys-typescale-label-small-size:calc(17px * var(--text-scale));    --md-sys-typescale-label-small-line:1.3;    --md-sys-typescale-label-small-weight:700;
-  --md-ref-typeface:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Segoe UI",Roboto,sans-serif;
-  --md-ref-typeface-brand:"Noto Serif KR","Apple SD Gothic Neo","Nanum Myeongjo","Batang",serif;
+  --md-ref-typeface:"Pretendard Variable",Pretendard,"Noto Sans KR",system-ui,"Apple SD Gothic Neo",sans-serif;
+  --md-ref-typeface-brand:var(--md-ref-typeface);
 
   --md-sys-shape-corner-extra-small:4px;
   --md-sys-shape-corner-small:8px;
@@ -95,6 +95,10 @@
 }
 :root[data-size="large"]{--text-scale:1.2}
 :root[data-size="xlarge"]{--text-scale:1.4}
+:root[data-size="max"]{--text-scale:1.6}
+/* 글꼴은 타이포 토큰 하나로 바뀌어요: 설정(프리텐다드 / 노토 산스 / 휴대폰 기본)이 data-font 를 정해요 */
+:root[data-font="noto"]{--md-ref-typeface:"Noto Sans KR",system-ui,"Apple SD Gothic Neo",sans-serif;--md-ref-typeface-brand:"Noto Serif KR","Apple SD Gothic Neo","Nanum Myeongjo","Batang",serif}
+:root[data-font="system"]{--md-ref-typeface:system-ui,"Apple SD Gothic Neo",sans-serif;--md-ref-typeface-brand:var(--md-ref-typeface)}
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --md-sys-color-primary:#9CD67D;
