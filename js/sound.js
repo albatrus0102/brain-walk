@@ -7,21 +7,40 @@ function koVoice() {
   try { const vs = synth.getVoices() || []; S.voice = vs.find(v => /^ko[-_]KR/i.test(v.lang)) || vs.find(v => /^ko/i.test(v.lang)) || null; } catch (e) {}
   return S.voice;
 }
+/* 실제로 쓰는 화면·소리 설정은 display.js 의 applyDisplay 가 S.eff 에 넣어요 (훈련하는 분 기기는 관리자가 정한 값) */
+export const effectiveSound = () => (S.eff ? S.eff.voice : S.prefs.sound);
+export const speechRate = () => (S.eff && S.eff.rate) || 0.9;
 export function stopSpeech() { try { if (synth) synth.cancel(); } catch (e) {} }
-export function say(text, force) {
+/* rate: 미리 듣기처럼 정해진 빠르기로 읽을 때만 */
+export function say(text, force, rate) {
   if (!synth || !text) return;
-  if (!force && !S.prefs.sound) return;
+  if (!force && !effectiveSound()) return;
   try {
     synth.cancel();
     const u = new window.SpeechSynthesisUtterance(text);
-    u.lang = 'ko-KR'; u.rate = 0.9; u.pitch = 1;
+    u.lang = 'ko-KR'; u.rate = rate || speechRate(); u.pitch = 1;
     const v = koVoice(); if (v) u.voice = v;
     synth.speak(u);
   } catch (e) {}
 }
+/* 읽어 주고 끝나면 cb 를 한 번 불러요. 소리가 꺼져 있거나 못 읽으면 noVoiceMs 뒤에, 끝 신호가 안 오면 maxMs 뒤에 불러요. 돌려주는 함수로 취소해요. */
+export function sayThen(text, cb, noVoiceMs, maxMs) {
+  let fired = false, t1 = null, t2 = null;
+  const fire = () => { if (fired) return; fired = true; clearTimeout(t1); clearTimeout(t2); cb(); };
+  if (!synth || !text || !effectiveSound()) { t1 = setTimeout(fire, noVoiceMs == null ? 3000 : noVoiceMs); return () => { fired = true; clearTimeout(t1); }; }
+  try {
+    synth.cancel();
+    const u = new window.SpeechSynthesisUtterance(text);
+    u.lang = 'ko-KR'; u.rate = speechRate(); u.pitch = 1; u.onend = fire; u.onerror = fire;
+    const v = koVoice(); if (v) u.voice = v;
+    synth.speak(u);
+  } catch (e) { t1 = setTimeout(fire, noVoiceMs == null ? 3000 : noVoiceMs); }
+  t2 = setTimeout(fire, maxMs || 9000);
+  return () => { fired = true; clearTimeout(t1); clearTimeout(t2); };
+}
 let actx = null;
 export function beep(kind) {
-  if (!S.prefs.sound) return;
+  if (!effectiveSound()) return;
   try {
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     if (!actx) actx = new AC();

@@ -1,8 +1,11 @@
 import { alarmTick } from './alarm.js';
-import { GAMES } from './games/registry.js';
+import { applyDisplay } from './display.js';
+import { GAMES, catalog } from './games/registry.js';
 import { checkNudgeDialog } from './nudge.js';
 import { Platform } from './platform.js';
-import { COURSE_N } from './session.js';
+import { normalizePlan, progressId } from './program.js';
+import { startHeartbeat, stopHeartbeat } from './progress.js';
+import { courseLen } from './session.js';
 import { S } from './state.js';
 import { FirebaseAdapter } from './store/firebase-adapter.js';
 import { Store } from './store/store.js';
@@ -15,12 +18,32 @@ import { LS, clampLv, ymd } from './util.js';
 export const getLevel = id => clampLv(S.levels[id] || 1);
 export const todayS = () => ymd(new Date());
 export const traineeId = () => (S.trainee && S.trainee.userId) || null;
+/* 가족 화면(진행 현황)이 보는 사람: 가족방은 지정된 훈련하는 분, 체험 모드는 이 기기의 '나' */
+export const dashTraineeId = () => traineeId() || (Store.mode === 'local' ? 'local' : null);
+/* 관리자 설정 (훈련 계획): 문서가 없어도 기본값으로 완전한 계획이 나와요 */
+export function setPlanRaw(raw) { S.planRaw = raw || null; S.plan = normalizePlan(S.planRaw, catalog()); }
+export const getPlan = () => S.plan || (S.plan = normalizePlan(S.planRaw, catalog()));
 const forTrainee = list => { const t = traineeId(); return t ? list.filter(x => !x.userId || x.userId === t) : list; };
 export function role() {
   if (S.trainee && S.trainee.userId && S.myId) return S.trainee.userId === S.myId ? 'trainee' : 'family';
   return S.roleLocal === 'family' ? 'family' : 'trainee';
 }
 export const isTrainee = () => role() === 'trainee';
+/* 방 주인 / 관리자. 체험 모드는 한 사람이 관리자이자 훈련하는 분이라 늘 관리자예요. */
+export function isOwnerNow() { return Store.mode !== 'firebase' || (!!S.myId && S.family.ownerMemberId === S.myId); }
+export function isAdmin() {
+  if (S.debugNonAdmin) return false;            // 시험용(window.__DEBUG): 관리자가 아닌 사람 화면을 체험 모드에서 확인해요
+  if (Store.mode !== 'firebase') return true;
+  const me = S.myId; if (!me) return false;
+  if (S.family.ownerMemberId === me) return true;
+  return (S.family.admins || []).includes(me) && myMemberRole() === 'family';
+}
+/* 관리자 이름들 ("관리자만 바꿀 수 있어요. 관리자: ○○, ○○" 에 써요) */
+export function adminNames() {
+  if (Store.mode !== 'firebase') return [];
+  const ms = FirebaseAdapter.members(), ids = [S.family.ownerMemberId].concat(S.family.admins || []).filter(Boolean);
+  return Array.from(new Set(ids)).filter(id => ms[id] && !ms[id].leftTs && (id === S.family.ownerMemberId || ms[id].role === 'family')).map(id => String(ms[id].name || '가족'));
+}
 export const chatAvail = () => !!(Store.shared && S.myId);
 export const traineeLabel = () => (S.trainee && S.trainee.displayLabel) || '아버지';
 export function nameOf(id) { if (!id) return '가족'; const p = S.profiles[id]; return (p && p.name) || (id === S.myId && S.me && S.me.name) || '가족'; }
@@ -64,10 +87,21 @@ export function streakOf(list, today) {
   return n;
 }
 export const dateSet = list => new Set(list.map(s => s.date));
+/* 연속 훈련일: 훈련 기록이 있는 날 + 두뇌 점검을 한 날 */
+export const streakNow = now => streakOf(allSessions().concat(allAssessments()), now || new Date());
+/* 오늘의 코스 상태: 진행 문서(progress)를 먼저 보고, 없으면(옛 앱) 세션 기록으로 짐작해요 */
+export function todayProgressDoc() {
+  const tid = dashTraineeId(); if (!tid) return null;
+  const id = progressId(todayS(), tid), srv = (S.progressList || []).find(p => p.id === id) || null;
+  const loc = S._progLocal && S._progLocal.date === todayS() && S._progLocal.userId === tid ? S._progLocal : null;
+  return srv && loc ? ((loc.updatedTs || 0) > (srv.updatedTs || 0) ? loc : srv) : (srv || loc);
+}
 export function courseStatus() {
-  const t = todayS(), ss = allSessions().filter(s => s.date === t && s.inCourse);
+  const t = todayS(), N = courseLen(), p = todayProgressDoc(), ss = allSessions().filter(s => s.date === t && s.inCourse);
   const ids = new Set(ss.map(s => s.gameId));
-  return { done: ids.size >= COURSE_N, ts: ss.length ? Math.max.apply(null, ss.map(s => s.ts)) : 0, any: allSessions().some(s => s.date === t), count: Math.min(ids.size, COURSE_N) };
+  const pn = p ? (p.results || []).length : 0, pdone = !!(p && p.status === 'done');
+  const ts = Math.max(p ? (Number(p.doneTs) || Number(p.updatedTs) || 0) : 0, ss.length ? Math.max.apply(null, ss.map(s => s.ts)) : 0);
+  return { done: pdone || ids.size >= N, ts, any: !!p || allSessions().some(s => s.date === t), count: Math.min(Math.max(pn, ids.size), N) };
 }
 function syncNoteText() {
   if (S.dbState === 'pending') return '';
@@ -78,7 +112,7 @@ function syncNoteText() {
 export function updateSyncNote() { document.querySelectorAll('.sync-note').forEach(el => { el.textContent = syncNoteText(); }); }
 export const NO_WRITE_MSG = '지금은 저장하지 못했어요. 인터넷 연결을 확인하고 다시 해 보세요.';
 /* 저장 실패 문구: 어댑터가 오류 종류를 보고 알맞은 말로 바꿔 줘요 */
-export const writeErrMsg = e => (Store.mode === 'firebase' ? Store.explain(e) : NO_WRITE_MSG);
+export const writeErrMsg = (e, admin) => (Store.mode === 'firebase' ? Store.explain(e, admin) : NO_WRITE_MSG);
 
 /* ================= 저장 ================= */
 export function remoteSet(path, data, quiet) {
@@ -89,12 +123,14 @@ export function remoteSet(path, data, quiet) {
     catch (e) { S.writeFailed = true; updateSyncNote(); if (!quiet) toast(Store.shared ? writeErrMsg(e) : '기록은 이 기기에만 저장돼요.'); return false; }
   });
 }
-export function saveSession(rec, newLevel) {
+/* store=false: 관리자가 난이도를 고정한 게임이라 적응 기록(state/levels)을 바꾸지 않아요.
+ * state/levels 는 규칙상 훈련하는 분 기기(또는 관리자)만 써요. 가족이 '나도 훈련해 보기'를 해도 아버지 단계는 그대로예요. */
+export function saveSession(rec, newLevel, store) {
   S.local.push(rec); if (S.local.length > 400) S.local = S.local.slice(-400);
   LS.set('bw.sessions', S.local);
-  S.levels[rec.gameId] = newLevel; LS.set('bw.levels', S.levels);
+  if (store !== false) { S.levels[rec.gameId] = newLevel; LS.set('bw.levels', S.levels); }
   const doc = Object.assign({}, rec); delete doc.id;
-  remoteSet('sessions/' + rec.id, doc).then(ok => { if (ok) remoteSet('state/levels', { levels: S.levels, updatedTs: Date.now() }, true); });
+  remoteSet('sessions/' + rec.id, doc).then(ok => { if (ok && store !== false && isTrainee()) remoteSet('state/levels', { levels: S.levels, updatedTs: Date.now() }, true); });
 }
 export function ensureProgram() {
   if (!S.program || !S.program.startDate) { S.program = { startDate: todayS() }; LS.set('bw.program', S.program); }
@@ -141,8 +177,17 @@ export async function connectData() {
       else if (S.program && S.canWrite !== false) remoteSet('state/program', { startDate: S.program.startDate }, true);
     } catch (e) {}
     try { S.trainee = await Store.getDoc('state/trainee'); } catch (e) {}
+    // 처음 화면부터 관리자가 정한 계획·화면 설정으로 그려요 (구독이 오기 전에도)
+    try { setPlanRaw(await Store.getDoc('state/plan')); } catch (e) {}
+    try { S.displayRemote = await Store.getDoc('state/display'); } catch (e) {}
     subscribe('state/trainee', {}, d => { S.trainee = d; onData(); });
     subscribe('state/alarm', {}, d => { S.alarm = d; alarmTick(); if (S.screen === 'settings') render(true); });
+    // 관리자가 정하는 훈련 계획·화면 설정, 오늘의 진행 상황: 각각 구독 하나씩 (화면을 다시 그려도 늘지 않아요)
+    subscribe('state/plan', {}, d => { setPlanRaw(d); onData(); });
+    subscribe('state/display', {}, d => { S.displayRemote = d; applyDisplay(); });
+    subscribe('progress', { orderBy: ['date', 'desc'], limit: 14 }, list => { S.progressList = list; onData(); });
+    subscribe('state/levels', {}, d => { if (!isTrainee() && d && d.levels && typeof d.levels === 'object') { Object.keys(GAMES).forEach(k => { if (d.levels[k] != null) S.levels[k] = clampLv(d.levels[k]); }); if (['family', 'adminPlan'].includes(S.screen)) onData(); } });
+    try { dbUnsubs.push(Store.watchFamily(f => { S.family = f; applyDisplay(); onData(); })); } catch (e) {}
     subscribe('sessions', { orderBy: ['ts', 'desc'], limit: 300 }, list => { S.dbSessions = list; onData(); });
     subscribe('assessments', { orderBy: ['ts', 'desc'], limit: 60 }, list => { S.dbAssess = list; onData(); });
     subscribe('checkins', { orderBy: ['date', 'desc'], limit: 120 }, list => { S.dbCheckins = list; onData(); });
@@ -152,7 +197,7 @@ export async function connectData() {
       try { const d = await Store.getDoc('reminders/' + S.myId); if (d) { S.myReminder = d; LS.set('bw.reminder', d); } } catch (e) {}
     }
     connectFamilyOnly();
-    updateSyncNote(); onData();
+    updateSyncNote(); applyDisplay({ noRender: true }); onData();
   } catch (e) { S.dbState = 'none'; try { console.warn('저장소 초기화 실패', e); } catch (x) {} }
   resolveReady();
 }
@@ -177,10 +222,24 @@ export function disconnectData() {
   famUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} });
   dbUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} });
   if (S.msgUnsub) { try { S.msgUnsub(); } catch (e) {} S.msgUnsub = null; }
+  if (presUnsub) { try { presUnsub(); } catch (e) {} presUnsub = null; } presId = null; stopHeartbeat();
 }
+/* 훈련하는 분의 접속 기록(presence): 훈련하는 분이 바뀌면 구독도 새로 해요 (구독은 늘 하나) */
+let presId = null, presUnsub = null;
+function syncPresence() {
+  const t = dashTraineeId(); if (t === presId) return;
+  if (presUnsub) { try { presUnsub(); } catch (e) {} presUnsub = null; }
+  presId = t; S.presence = {}; if (!t) return;
+  try { presUnsub = Store.subscribe('presence/' + t, { onError: () => {} }, d => { S.presence[t] = d; if (S.screen === 'home') onData(); }); } catch (e) {}
+}
+/* 훈련하는 분 기기: 앱이 보이는 동안 접속 기록을 보내요 */
+function syncHeartbeat() { if (Store.adapter && isTrainee() && (S.myId || Store.mode === 'local')) startHeartbeat(); else stopHeartbeat(); }
+/* 역할이 바뀌었을 때(체험 모드의 미리보기 전환, 훈련하는 분 지정): 화면 설정·구독을 다시 맞춰요 */
+export function refreshRole() { applyDisplay({ noRender: true }); syncHeartbeat(); syncPresence(); }
 function onData() {
+  syncHeartbeat(); syncPresence();
   alarmTick(true);
-  if (['home', 'pick', 'family', 'assess', 'settings'].includes(S.screen)) { const keep = document.activeElement; if (!(keep && /^(INPUT|TEXTAREA)$/.test(keep.tagName))) render(true); }
+  if (['home', 'pick', 'family', 'assess', 'settings', 'members'].includes(S.screen)) { const keep = document.activeElement; if (!(keep && /^(INPUT|TEXTAREA)$/.test(keep.tagName))) render(true); }
   else if (S.screen === 'chat') refreshChat();
   else renderChrome();
   checkNudgeDialog();

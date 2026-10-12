@@ -42,12 +42,14 @@ export const Store = {
   retry() { this.ready = null; return this.init(); },
   me() { return this.adapter ? this.adapter.me() : null; },
   canWrite() { return this.adapter ? this.adapter.canWrite() : null; },
-  explain(e) { return this.adapter && this.adapter.explain ? this.adapter.explain(e) : '저장하지 못했어요'; },
+  explain(e, admin) { return this.adapter && this.adapter.explain ? this.adapter.explain(e, admin) : '저장하지 못했어요'; },
   profiles(ids) { return this.adapter.profiles(ids); },
   getDoc(p) { return this.adapter.getDoc(p); },
   setDoc(p, d) { return this.adapter.setDoc(p, d); },
   updateDoc(p, d) { return this.adapter.updateDoc(p, d); },
   deleteDoc(p) { return this.adapter.deleteDoc(p); },
+  batch(ops) { return this.adapter.batch(ops); },
+  watchFamily(cb) { return this.adapter.watchFamily(cb); },
   query(c, o) { return this.adapter.query(c, o); },
   subscribe(t, o, cb) { return this.adapter.subscribe(t, o, cb); }
 };

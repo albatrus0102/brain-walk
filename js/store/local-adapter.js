@@ -9,7 +9,20 @@ export const LocalAdapter = {
   _load() { const o = LS.get('bw.localdb', {}); return o && typeof o === 'object' ? o : {}; },
   _save(o) { LS.set('bw.localdb', o); this._subs.slice().forEach(f => { try { f(); } catch (e) {} }); },
   async getDoc(path) { const o = this._load(); return o[path] ? JSON.parse(JSON.stringify(o[path])) : null; },
-  async setDoc(path, data) { const o = this._load(); o[path] = JSON.parse(JSON.stringify(data)); this._save(o); },
+  async setDoc(path, data) {
+    const o = this._load(), d = JSON.parse(JSON.stringify(data));
+    if (/^progress\//.test(path)) { delete d.id; if (d.sts == null) d.sts = Date.now(); }       // 가족방(Firestore)과 같은 모양: 서버 도장 대신 지금 시각
+    if (/^presence\//.test(path)) { delete d.id; if (d.lastSeen == null) d.lastSeen = Date.now(); }
+    o[path] = d; this._save(o);
+  },
+  /* ops = [{ set: path, data } | { update: path, data } | { del: path }] — 저장은 한 번에 */
+  async batch(ops) {
+    const o = this._load();
+    ops.forEach(x => { if (x.set) o[x.set] = JSON.parse(JSON.stringify(x.data)); else if (x.update) o[x.update] = Object.assign({}, o[x.update] || {}, JSON.parse(JSON.stringify(x.data))); else if (x.del) delete o[x.del]; });
+    this._save(o);
+  },
+  watchFamily(cb) { setTimeout(() => cb({ ownerMemberId: 'local', admins: [], name: '체험 모드', joinCode: null }), 0); return () => {}; },
+  onMembers() { return () => {}; },
   async updateDoc(path, patch) { const o = this._load(); if (!o[path]) throw { code: 'not_found', message: 'no doc' }; o[path] = Object.assign({}, o[path], JSON.parse(JSON.stringify(patch))); this._save(o); },
   async deleteDoc(path) { const o = this._load(); delete o[path]; this._save(o); },
   _list(coll, opts) {

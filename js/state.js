@@ -2,13 +2,14 @@ import { LS } from './util.js';
 
 /* ================= 상태 ================= */
 export const S = {
-  prefs: { size: LS.get('bw.size', 'normal'), sound: LS.get('bw.sound', true) !== false },
+  prefs: { size: LS.get('bw.size', 'normal'), sound: LS.get('bw.sound', true) !== false, font: LS.get('bw.font', 'pretendard') },
   levels: LS.get('bw.levels', {}) || {},
   local: Array.isArray(LS.get('bw.sessions', [])) ? LS.get('bw.sessions', []) : [],
   db: null, dbState: 'pending', dbSessions: null, canWrite: null, writeFailed: false, dbError: false,
   screen: 'home', sess: null, course: null, last: null, voice: null
 };
-if (!['normal', 'large', 'xlarge'].includes(S.prefs.size)) S.prefs.size = 'normal';
+if (!['normal', 'large', 'xlarge', 'max'].includes(S.prefs.size)) S.prefs.size = 'normal';
+if (!['pretendard', 'noto', 'system'].includes(S.prefs.font)) S.prefs.font = 'pretendard';
 
 /* ================= 추가 상태 ================= */
 S.prefs.contrast = LS.get('bw.contrast', false) === true;
@@ -19,7 +20,10 @@ Object.assign(S, {
   dbAssess: null, dbCheckins: null, dbMsgs: [], pendingMsgs: {}, messages: [], msgsReady: false, msgLimit: 100, msgHasMore: false,
   reads: {}, ci: {}, notifyFamily: true, notifyPending: false, interacted: false, hist: LS.get('bw.hist', {}),
   surveys: [], iadl: [], clocks: [], clinical: [], taskRuns: [], sleeplogs: [], sv: null, cl: null,
-  reply: null, attach: null, alarmDue: false, remDue: false, nudgeShown: {}, icsText: ''
+  reply: null, attach: null, alarmDue: false, remDue: false, nudgeShown: {}, icsText: '',
+  /* 관리자·원격 설정·실시간 진행 (DESIGN.md §4.2) */
+  planRaw: null, plan: null, displayRemote: null, eff: null, family: { ownerMemberId: null, admins: [] },
+  progressList: [], presence: {}, ciFlow: false, planDraft: null, dispDraft: null, xpOpen: {}, _progLocal: null
 });
 if (!Array.isArray(S.assessLocal)) S.assessLocal = [];
 if (!S.ciLocal || typeof S.ciLocal !== 'object') S.ciLocal = {};

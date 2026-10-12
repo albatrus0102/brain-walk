@@ -22,7 +22,7 @@ export const myEmojiList = (uiMap, me) => Object.keys(uiMap || {}).filter(e => (
 
 export const FirebaseAdapter = {
   name: 'firebase', shared: true,
-  sdk: null, fid: null, mid: null, uid: null, _me: null, _members: {}, _membersReady: null, _membersUnsub: null,
+  sdk: null, fid: null, mid: null, uid: null, _me: null, _members: {}, _membersReady: null, _membersUnsub: null, _famUnsub: null, _memberListeners: [],
 
   config() { return (self.BW_CONFIG && self.BW_CONFIG.firebase) || null; },
 
@@ -86,7 +86,21 @@ export const FirebaseAdapter = {
     await Promise.race([this._membersReady, new Promise(r => setTimeout(r, 2500))]);
     if (this._members[mid]) this._me.name = this._members[mid].name;
   },
-  clearMembership() { this.fid = null; this.mid = null; this._me = null; LS.set(CACHE_KEY, null); this._unwatchMembers(); },
+  clearMembership() { this.fid = null; this.mid = null; this._me = null; LS.set(CACHE_KEY, null); this._unwatchMembers(); this._unwatchFamily(); },
+
+  /* 가족 문서(방 주인·관리자 목록·이름·코드)를 실시간으로. cb({ownerMemberId, admins, name, joinCode}). 한 번에 하나만 구독해요. */
+  watchFamily(cb) {
+    this._unwatchFamily();
+    const { db, F } = this.sdk;
+    this._famUnsub = F.onSnapshot(F.doc(db, 'families', this.fid), s => {
+      const d = s.exists() ? s.data() : null;
+      if (d) cb({ ownerMemberId: d.ownerMemberId || null, admins: Array.isArray(d.admins) ? d.admins.slice() : [], name: d.name || '', joinCode: d.joinCode || null });
+    }, () => {});
+    return () => this._unwatchFamily();
+  },
+  _unwatchFamily() { if (this._famUnsub) { try { this._famUnsub(); } catch (e) {} } this._famUnsub = null; },
+  /* 구성원 목록이 바뀔 때마다 부르는 함수를 등록해요 (해제 함수를 돌려줘요) */
+  onMembers(f) { this._memberListeners.push(f); return () => { this._memberListeners = this._memberListeners.filter(x => x !== f); }; },
 
   _watchMembers() {
     this._unwatchMembers();
@@ -96,6 +110,7 @@ export const FirebaseAdapter = {
         const m = {}; s.docs.forEach(d => { m[d.id] = d.data(); });
         this._members = m; if (this._me && m[this.mid]) this._me.name = m[this.mid].name;
         res();
+        this._memberListeners.slice().forEach(f => { try { f(m); } catch (e) {} });
       }, () => res());
     });
   },
@@ -141,6 +156,9 @@ export const FirebaseAdapter = {
     const { F } = this.sdk;
     if (/^messages\/[^/]+$/.test(path)) return this._setMessage(path, data);
     let d = Object.assign({}, data);
+    // 진행 상황·접속 기록은 서버 시간으로 도장을 찍어야 규칙을 통과해요 (진행 문서의 id 는 문서 안에 넣지 않아요)
+    if (/^progress\//.test(path)) { delete d.id; d.sts = F.serverTimestamp(); }
+    if (/^presence\//.test(path)) { delete d.id; d.lastSeen = F.serverTimestamp(); }
     if (/^sessions\//.test(path) && Array.isArray(d.roundSec)) {
       const xs = d.roundSec.map(Number).filter(x => isFinite(x));
       d.roundSec = xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length * 10) / 10 : 0;
@@ -176,6 +194,12 @@ export const FirebaseAdapter = {
     return this._commit(F.updateDoc(this._ref(path), patch));
   },
   async deleteDoc(path) { const { F } = this.sdk; return F.deleteDoc(this._ref(path)); },
+  /* 여러 쓰기를 한 번에(규칙도 한꺼번에 확인): ops = [{ set: path, data } | { update: path, data } | { del: path }] */
+  async batch(ops) {
+    const { F, db } = this.sdk, b = F.writeBatch(db);
+    ops.forEach(o => { if (o.set) b.set(this._ref(o.set), o.data); else if (o.update) b.update(this._ref(o.update), o.data); else if (o.del) b.delete(this._ref(o.del)); });
+    return this._commit(b.commit());
+  },
   _q(coll, o) {
     const { F } = this.sdk, cs = [];
     (o.where || []).forEach(w => cs.push(F.where(w[0], w[1], w[2])));
@@ -191,8 +215,10 @@ export const FirebaseAdapter = {
   },
 
   /* ---- 오류 해석: 화면에 보여 줄 한국어 문구 ---- */
-  explain(e) {
+  /* admin=true: 관리자만 할 수 있는 일(계획·화면·구성원)이면 거부 이유를 "관리자만"으로 말해 줘요 */
+  explain(e, admin) {
     const k = e && e.code;
+    if (admin && k === 'permission-denied') return '관리자만 바꿀 수 있어요';
     if (k === 'offline-nudge') return '알림은 인터넷이 연결되어야 보낼 수 있어요';
     if (k === 'no-trainee') return '훈련하는 분이 아직 정해지지 않았어요';
     if (k === 'unavailable') return '인터넷 연결이 약해요. 연결되면 자동으로 보낼게요';
