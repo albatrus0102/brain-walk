@@ -661,6 +661,40 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('F4: nobody writes the Telegram outbox', setDoc(doc(dAd, 'tgOutbox/x'), { kind: 'test', n: 0 }), false);
   await t('F4: unauthenticated cannot read aiConfig', getDoc(doc(anon, 'aiConfig/main')), false);
 }
+
+// =============================================================================
+// AI: 방 주인이 훈련하는 분이어도(아버지가 가족방을 만든 경우) 숫자·신호·리포트·운영 기록·메모를 못 읽어요.
+// F4b: o 방 주인 = 훈련하는 분(role trainee, 지정됨) / a 관리자(가족)
+// =============================================================================
+{
+  const F = 'fam4b', C = 'FBK234', P = `families/${F}`;
+  const dO = db('u4bo'), dA = db('u4ba');
+  {
+    const b = writeBatch(dO);
+    b.set(doc(dO, 'families', F), { createdBy: 'u4bo', createdTs: serverTimestamp(), ownerMemberId: 'o', joinCode: C });
+    b.set(doc(dO, 'joinCodes', C), { familyId: F, createdBy: 'o', createdTs: serverTimestamp(), expiresTs: in7d() });
+    b.set(doc(dO, `${P}/uids/u4bo`), { memberId: 'o', via: 'create', addedTs: serverTimestamp() });
+    b.set(doc(dO, `${P}/members/o`), { name: '아버지', role: 'trainee', joinedTs: serverTimestamp() });
+    await t('F4b: trainee founds the family', b.commit());
+  }
+  await t('F4b: trainee-owner claims the trainee slot', setDoc(doc(dO, `${P}/state/trainee`), { userId: 'o', displayLabel: '아버지' }));
+  await t('F4b: family member joins', (async () => { const b = writeBatch(dA); b.set(doc(dA, `${P}/uids/u4ba`), { memberId: 'a', via: 'join', code: C, addedTs: serverTimestamp() }); b.set(doc(dA, `${P}/members/a`), { name: '딸', role: 'family', joinedTs: serverTimestamp() }); await b.commit(); })());
+  await t('F4b: owner grants a', updateDoc(doc(dO, 'families', F), { admins: ['a'] }));
+  await env.withSecurityRulesDisabled(async c => {
+    const x = c.firestore();
+    await setDoc(doc(x, `${P}/aiStats/summary`), { v: 1 });
+    await setDoc(doc(x, `${P}/aiSignals/S1-composite-2027-01-01`), { key: 'S1:composite', on: true });
+    await setDoc(doc(x, `${P}/aiReports/r-a-1`), { v: 1 });
+    await setDoc(doc(x, `${P}/aiOps/health`), { server: {} });
+    await setDoc(doc(x, `${P}/aiNotes/n1`), { from: '2027-01-01', codes: ['sleep'], text: '메모', by: 'a', ts: Date.now() });
+  });
+  for (const [name, path] of [['aiStats', `${P}/aiStats/summary`], ['aiSignals', `${P}/aiSignals/S1-composite-2027-01-01`], ['aiReports', `${P}/aiReports/r-a-1`], ['aiOps', `${P}/aiOps/health`], ['aiNotes', `${P}/aiNotes/n1`]]) {
+    await t(`F4b: trainee-owner cannot read ${name}`, getDoc(doc(dO, path)), false);
+    await t(`F4b: family admin reads ${name}`, getDoc(doc(dA, path)));
+  }
+  await t('F4b: trainee-owner cannot list reports', getDocs(collection(dO, `${P}/aiReports`)), false);
+  await t('F4b: trainee-owner cannot write notes', setDoc(doc(dO, `${P}/aiNotes/n2`), { from: '2027-01-01', codes: ['sleep'], by: 'o', ts: Date.now() }), false);
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 await env.cleanup();
 process.exit(fail ? 1 : 0);

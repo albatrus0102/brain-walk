@@ -709,20 +709,22 @@ service cloud.firestore {
       }
 
       // ---- 서버가 계산한 숫자·신호·리포트·운영 기록: 관리자만 읽어요 (리포트는 모든 관리자). 쓰기는 서버만.
+      // 훈련하는 분은 방 주인이어도 못 읽어요: 관리자이면서 role 'family' 이고, 지금 지정된 훈련하는 분이 아니어야 해요.
+      function isAiAdmin(fid) { return isAdmin(fid) && isFamilyRole(fid) && !isAssignedTrainee(fid); }
       match /aiStats/{k} {
-        allow read: if isAdmin(fid);
+        allow read: if isAiAdmin(fid);
         allow write: if false;
       }
       match /aiSignals/{k} {
-        allow read: if isAdmin(fid);
+        allow read: if isAiAdmin(fid);
         allow write: if false;
       }
       match /aiReports/{k} {
-        allow read: if isAdmin(fid);
+        allow read: if isAiAdmin(fid);
         allow write: if false;
       }
       match /aiOps/{k=**} {
-        allow read: if isAdmin(fid);
+        allow read: if isAiAdmin(fid);
         allow write: if false;
       }
 
@@ -738,9 +740,9 @@ service cloud.firestore {
           && d.by == myId(fid) && okMs(d.ts);
       }
       match /aiNotes/{nid} {
-        allow read: if isAdmin(fid);
-        allow create, update: if isAdmin(fid) && okId(nid) && validNote();
-        allow delete: if isAdmin(fid);
+        allow read: if isAiAdmin(fid);
+        allow create, update: if isAiAdmin(fid) && okId(nid) && validNote();
+        allow delete: if isAiAdmin(fid);
       }
 
       // ---- 관리자의 문항 검토 결정 (옛날 이야기 내보내기, 모호 의심 문항 은퇴·신고). 서버 트리거가 처리해요.
