@@ -123,6 +123,8 @@ service cloud.firestore {
         && isMember(newData().familyId)
         && newData().createdBy == myId(newData().familyId)
         && exists(memberPath(newData().familyId, newData().memberId))
+        // 떠난(내보낸) 사람에게는 코드를 만들 수 없어요
+        && !('leftTs' in get(memberPath(newData().familyId, newData().memberId)).data)
         // 다른 사람의 복구 코드: 관리자만 (방 주인 포함). 내 코드(다른 기기로 옮기기)는 누구나.
         // (방금 가족 코드로 들어온 사람이 곧바로 아버지·방 주인으로 옮겨 타는 것을 막아요)
         && (newData().memberId == myId(newData().familyId) || isAdmin(newData().familyId))
@@ -183,7 +185,9 @@ service cloud.firestore {
           && get(transferPath(newData().code)).data.expiresTs > request.time
           && !('usedBy' in get(transferPath(newData().code)).data)
           && getAfter(transferPath(newData().code)).data.usedBy == uid()
-          && exists(memberPath(fid, newData().memberId));
+          && exists(memberPath(fid, newData().memberId))
+          // 내보내진(또는 떠난) 사람은 미리 만들어 둔 코드로도 다시 들어올 수 없어요
+          && !('leftTs' in get(memberPath(fid, newData().memberId)).data);
       }
 
       // ---- family root doc
@@ -223,7 +227,9 @@ service cloud.firestore {
               && getAfter(joinCodePath(newData().joinCode)).data.familyId == fid)
         // 방 주인만: 방 주인 넘기기, 관리자 지정/해제 (함께 바꿔도 돼요: 넘기면서 나를 관리자로 남기기)
         || (isOwner(fid) && changed().hasOnly(['ownerMemberId', 'admins'])
-              && (!('ownerMemberId' in changed()) || exists(memberPath(fid, newData().ownerMemberId)))
+              // 새 방 주인은 지금 있는 사람이어야 해요 (떠난 사람에게 넘기면 방 주인이 없는 방이 돼요)
+              && (!('ownerMemberId' in changed()) || (exists(memberPath(fid, newData().ownerMemberId))
+                    && !('leftTs' in get(memberPath(fid, newData().ownerMemberId)).data)))
               && (!('admins' in changed()) || validAdminsChange()))
       );
       allow delete: if isMember(fid) && isOwner(fid);

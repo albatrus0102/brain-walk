@@ -422,6 +422,86 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('F2: new owner can revoke the previous owner', updateDoc(doc(d3, 'families', F2), { admins: ['m3'] }));
   await t('F2: previous owner is no longer admin', setDoc(doc(d1, `${P}/state/display`), disp('m1')), false);
 }
+// =============================================================================
+// 공격자 시점 점검 (독립 검증): 내보낸 사람의 재입장, 떠난 사람에게 방 주인 넘기기, 역할·관리자 우회
+// F3: o 방 주인(가족) / a 관리자(가족) / f 가족(관리자 아님) / t 훈련하는 분 / k 내보낼 사람(가족)
+// =============================================================================
+{
+  const { planDoc, progressStart } = await import('../js/program.js');
+  const F3 = 'fam3', C3 = 'FAQ234', P = `families/${F3}`;
+  const dO = db('uo'), dAd = db('ua'), dF = db('uf'), dT = db('ut'), dK = db('uk'), dK2 = db('uk2');
+  const join = (dd, u, m, role, name) => { const b = writeBatch(dd); b.set(doc(dd, `${P}/uids/${u}`), { memberId: m, via: 'join', code: C3, addedTs: serverTimestamp() }); b.set(doc(dd, `${P}/members/${m}`), { name, role, joinedTs: serverTimestamp() }); return b.commit(); };
+  const age = (m, ms) => env.withSecurityRulesDisabled(async c => { await updateDoc(doc(c.firestore(), `${P}/members/${m}`), { joinedTs: Timestamp.fromMillis(Date.now() - ms) }); });
+  {
+    const b = writeBatch(dO);
+    b.set(doc(dO, 'families', F3), { createdBy: 'uo', createdTs: serverTimestamp(), ownerMemberId: 'o', joinCode: C3 });
+    b.set(doc(dO, 'joinCodes', C3), { familyId: F3, createdBy: 'o', createdTs: serverTimestamp(), expiresTs: in7d() });
+    b.set(doc(dO, `${P}/uids/uo`), { memberId: 'o', via: 'create', addedTs: serverTimestamp() });
+    b.set(doc(dO, `${P}/members/o`), { name: '아들', role: 'family', joinedTs: serverTimestamp() });
+    await t('F3: found', b.commit());
+  }
+  await t('F3: admin-to-be joins', join(dAd, 'ua', 'a', 'family', '딸'));
+  await t('F3: plain family joins', join(dF, 'uf', 'f', 'family', '사위'));
+  await t('F3: trainee joins', join(dT, 'ut', 't', 'trainee', '아버지'));
+  await t('F3: trainee claims empty slot', setDoc(doc(dT, `${P}/state/trainee`), { userId: 't', displayLabel: '아버지' }));
+  await t('F3: member to be kicked joins', join(dK, 'uk', 'k', 'family', '손님'));
+  await t('F3: owner grants a', updateDoc(doc(dO, 'families', F3), { admins: ['a'] }));
+  for (const m of ['a', 'f', 't', 'k']) await age(m, 3 * 3600e3);
+
+  // -- non-admin family: every escalation path
+  await t('F3: family cannot add self to admins', updateDoc(doc(dF, 'families', F3), { admins: ['a', 'f'] }), false);
+  await t('F3: family cannot take ownership', updateDoc(doc(dF, 'families', F3), { ownerMemberId: 'f' }), false);
+  await t('F3: family cannot set admins + owner together', updateDoc(doc(dF, 'families', F3), { ownerMemberId: 'f', admins: ['f'] }), false);
+  await t('F3: family cannot write plan', setDoc(doc(dF, `${P}/state/plan`), planDoc({}, [], 'f', Date.now())), false);
+  await t('F3: family cannot reassign trainee', setDoc(doc(dF, `${P}/state/trainee`), { userId: 'f', displayLabel: 'x' }), false);
+  await t('F3: family cannot relabel trainee', updateDoc(doc(dF, `${P}/state/trainee`), { displayLabel: '할배' }), false);
+  await t('F3: family cannot delete display/alarm', deleteDoc(doc(dF, `${P}/state/alarm`)), false);
+  await t('F3: family cannot flip trainee role', updateDoc(doc(dF, `${P}/members/t`), { role: 'family' }), false);
+  await t('F3: family cannot rotate code', (async () => { const b = writeBatch(dF); b.set(doc(dF, 'joinCodes', 'FFF234'), { familyId: F3, createdBy: 'f', createdTs: serverTimestamp(), expiresTs: in7d() }); b.update(doc(dF, 'families', F3), { joinCode: 'FFF234' }); await b.commit(); })(), false);
+  await t('F3: family cannot rewrite own joinedTs to reopen the role window', updateDoc(doc(dF, `${P}/members/f`), { joinedTs: serverTimestamp() }), false);
+  await t('F3: family cannot change own role after window', updateDoc(doc(dF, `${P}/members/f`), { role: 'trainee' }), false);
+
+  // -- trainee: role, family-only reads, forging
+  await t('F3: trainee cannot switch own role', updateDoc(doc(dT, `${P}/members/t`), { role: 'family' }), false);
+  await t('F3: trainee cannot read surveys', getDocs(collection(dT, `${P}/surveys`)), false);
+  await t('F3: trainee cannot read clocks', getDocs(collection(dT, `${P}/clocks`)), false);
+  await t('F3: trainee cannot unassign self (delete trainee)', deleteDoc(doc(dT, `${P}/state/trainee`)), false);
+  const today3 = new Date().toISOString().slice(0, 10);
+  const pr = Object.assign(progressStart(null, { userId: 't', date: today3, planned: ['odd'], gameId: 'odd', now: Date.now() }), { sts: serverTimestamp() });
+  await t('F3: family cannot forge trainee progress', setDoc(doc(dF, `${P}/progress/${today3}-t`), pr), false);
+  await t('F3: admin cannot forge trainee progress either', setDoc(doc(dAd, `${P}/progress/${today3}-t`), pr), false);
+  await t('F3: family cannot forge trainee presence', setDoc(doc(dF, `${P}/presence/t`), { lastSeen: serverTimestamp(), ts: Date.now() }), false);
+
+  // -- kicked member: removal must be final
+  await t('F3: k makes an own transfer code before being kicked', setDoc(doc(dK, 'transferCodes', 'KKK234'), { familyId: F3, memberId: 'k', createdBy: 'k', createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 20 * 60e3) }));
+  await t('F3: admin removes k (uid link)', deleteDoc(doc(dAd, `${P}/uids/uk`)));
+  await t('F3: admin marks k as left', updateDoc(doc(dAd, `${P}/members/k`), { leftTs: serverTimestamp() }));
+  await t('F3: kicked k cannot read', getDoc(doc(dK, `${P}/state/trainee`)), false);
+  await t('F3: kicked k cannot re-enter with the pre-made transfer code', (async () => {
+    const b = writeBatch(dK2);
+    b.update(doc(dK2, 'transferCodes', 'KKK234'), { usedBy: 'uk2', usedTs: serverTimestamp() });
+    b.set(doc(dK2, `${P}/uids/uk2`), { memberId: 'k', via: 'transfer', code: 'KKK234', addedTs: serverTimestamp() });
+    await b.commit();
+  })(), false);
+  await t('F3: kicked k still locked out on a second device', getDoc(doc(dK2, `${P}/state/trainee`)), false);
+  await t('F3: admin cannot grant-recover a left member either', setDoc(doc(dAd, 'transferCodes', 'KKL234'), { familyId: F3, memberId: 'k', createdBy: 'a', createdTs: serverTimestamp(), expiresTs: Timestamp.fromMillis(Date.now() + 20 * 60e3) }), false);
+  await t('F3: owner cannot grant admin to a left member', updateDoc(doc(dO, 'families', F3), { admins: ['a', 'k'] }), false);
+
+  // -- owner protection and ownership transfer
+  await t('F3: admin cannot remove owner link', deleteDoc(doc(dAd, `${P}/uids/uo`)), false);
+  await t('F3: admin cannot mark owner left', updateDoc(doc(dAd, `${P}/members/o`), { leftTs: serverTimestamp() }), false);
+  await t('F3: admin cannot delete owner member doc', deleteDoc(doc(dAd, `${P}/members/o`)), false);
+  await t('F3: admin cannot revoke owner by editing admins', updateDoc(doc(dAd, 'families', F3), { admins: [] }), false);
+  await t('F3: admin cannot read owner push devices', getDocs(collection(dAd, `${P}/members/o/devices`)), false);
+  await t('F3: owner cannot hand the room to a left member (room would be orphaned)', updateDoc(doc(dO, 'families', F3), { ownerMemberId: 'k' }), false);
+  await t('F3: owner cannot hand the room to a non-member', updateDoc(doc(dO, 'families', F3), { ownerMemberId: 'ghost' }), false);
+  await t('F3: owner cannot sneak a name change into a handover', updateDoc(doc(dO, 'families', F3), { ownerMemberId: 'a', name: 'x' }), false);
+  await t('F3: owner hands room to admin a', updateDoc(doc(dO, 'families', F3), { ownerMemberId: 'a' }));
+  await t('F3: old owner is now plain family (not in admins)', setDoc(doc(dO, `${P}/state/plan`), planDoc({}, [], 'o', Date.now())), false);
+  await t('F3: old owner cannot take the room back', updateDoc(doc(dO, 'families', F3), { ownerMemberId: 'o' }), false);
+  await t('F3: new owner clears the admins list (owner-only edit)', updateDoc(doc(dAd, 'families', F3), { admins: [] }));
+  await t('F3: new owner is still admin with empty admins list', setDoc(doc(dAd, `${P}/state/plan`), planDoc({}, [], 'a', Date.now())));
+}
 console.log(`\n${pass} passed, ${fail} failed`);
 await env.cleanup();
 process.exit(fail ? 1 : 0);
