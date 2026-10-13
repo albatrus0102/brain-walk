@@ -693,6 +693,19 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await clearConsents();
   await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), `${P}/consents/t`), { kind: 'ai-report-notice', version: '2026-11-v1', ackTs: Timestamp.now() }); });
   await t('F4: admin updates a trainee-made consent', updateDoc(doc(dAd, `${P}/consents/t`), { withdrawnTs: serverTimestamp(), byAdmin: 'a' }));
+  // 검증 추가: 철회 표시만 지워 예전 ackTs 로 다시 켜기, 켜기+끄기 한 번에, 철회 중 ackTs 만 새로 쓰기는 거부
+  await t('F4v: admin cannot re-enable by only clearing withdrawnTs (stale ackTs)', updateDoc(doc(dAd, `${P}/consents/t`), { withdrawnTs: deleteField(), byAdmin: 'a' }), false);
+  await t('F4v: admin cannot re-ack while leaving the withdrawal in place', updateDoc(doc(dAd, `${P}/consents/t`), { version: '2026-11-v1', ackTs: serverTimestamp(), byAdmin: 'a' }), false);
+  await t('F4v: admin cannot ack and withdraw in one write', updateDoc(doc(dAd, `${P}/consents/t`), { ackTs: serverTimestamp(), withdrawnTs: serverTimestamp(), byAdmin: 'a' }), false);
+  await t('F4v: admin re-enable with an empty version denied', updateDoc(doc(dAd, `${P}/consents/t`), { version: '', ackTs: serverTimestamp(), withdrawnTs: deleteField(), byAdmin: 'a' }), false);
+  await t('F4v: admin re-enables (app shape)', updateDoc(doc(dAd, `${P}/consents/t`), { version: '2026-11-v1', ackTs: serverTimestamp(), withdrawnTs: deleteField(), byAdmin: 'a' }));
+  await t('F4v: admin cannot drop byAdmin attribution', updateDoc(doc(dAd, `${P}/consents/t`), { withdrawnTs: serverTimestamp(), byAdmin: deleteField() }), false);
+  await t('F4v: trainee cannot create a consent for another member (self shape)', setDoc(doc(dT, `${P}/consents/f`), cs()), false);
+  await t('F4v: trainee cannot create a consent for another member (admin shape)', setDoc(doc(dT, `${P}/consents/f`), ac('t')), false);
+  await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), `${P}/consents/f`), { kind: 'ai-report-notice', version: 'v', ackTs: Timestamp.now() }); });
+  await t('F4v: trainee cannot update another member consent', updateDoc(doc(dT, `${P}/consents/f`), { withdrawnTs: serverTimestamp(), byAdmin: 't' }), false);
+  await t('F4v: stranger cannot create the trainee consent', setDoc(doc(dX, `${P}/consents/t`), ac('a')), false);
+  await t('F4v: signed-out cannot update the trainee consent', updateDoc(doc(anon, `${P}/consents/t`), { withdrawnTs: serverTimestamp(), byAdmin: 'a' }), false);
 
   // ---- server-only top-level AI collections: closed to members, admins, strangers and "worker"-style accounts
   const pw = env.authenticatedContext('worker-uid', { firebase: { sign_in_provider: 'password' }, email: 'bw-ai-worker@example.invalid' }).firestore();

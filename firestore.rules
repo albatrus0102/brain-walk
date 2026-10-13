@@ -808,13 +808,14 @@ service cloud.firestore {
           && d.kind == 'ai-report-notice' && nonEmpty(d.version, 20) && d.ackTs == request.time && optBool('withFamily')
           && d.byAdmin == myId(fid);
       }
+      // 두 모양만: 다시 켜기(버전 + 서버 시각 ackTs, 철회 표시 없음) 또는 끄기(서버 시각 withdrawnTs 만).
+      // (철회 표시만 지워 예전 ackTs 로 다시 켜기, 켜기와 끄기를 한 번에 쓰기는 거부)
       function validAdminConsentUpdate() {
         return newData().kind == oldData().kind
-          && changed().hasOnly(['version', 'ackTs', 'withdrawnTs', 'byAdmin'])
           && 'byAdmin' in newData() && newData().byAdmin == myId(fid)
-          && (!changed().hasAny(['version']) || nonEmpty(newData().version, 20))
-          && (!changed().hasAny(['ackTs']) || newData().ackTs == request.time)
-          && (!changed().hasAny(['withdrawnTs']) || !('withdrawnTs' in newData()) || newData().withdrawnTs == request.time);
+          && ((changed().hasOnly(['version', 'ackTs', 'withdrawnTs', 'byAdmin'])
+                && nonEmpty(newData().version, 20) && newData().ackTs == request.time && !('withdrawnTs' in newData()))
+           || (changed().hasOnly(['withdrawnTs', 'byAdmin']) && newData().withdrawnTs == request.time));
       }
       match /consents/{mid} {
         allow read: if isMember(fid) && (isAdmin(fid) || mid == myId(fid));
