@@ -13,7 +13,7 @@ import { S } from './state.js';
 import { ACTS } from './ui/acts.js';
 import { toast } from './ui/dom.js';
 import { AI_BACK } from './ui/screens/ai-admin.js';
-import { ADMIN_SUBSCREENS, confirmQuit, go, render } from './ui/shell.js';
+import { ADMIN_SUBSCREENS, BACK_TO, confirmQuit, go, render } from './ui/shell.js';
 import { $, LS } from './util.js';
 
 /* ================= 이벤트 ================= */
@@ -27,6 +27,7 @@ document.addEventListener('click', e => {
     if (S.screen === 'game') leaveGameConfirm(() => go('home'));
     else if (a === 'back' && ADMIN_SUBSCREENS.includes(S.screen)) ACTS.adminback();
     else if (a === 'back' && AI_BACK[S.screen]) go(AI_BACK[S.screen]);
+    else if (a === 'back' && BACK_TO[S.screen] && !isTrainee()) go(BACK_TO[S.screen]);
     else { S.ciFlow = false; go('home'); }
   }
   else if (a === 'quit') leaveGameConfirm(() => go('home'));

@@ -127,6 +127,7 @@ const SHELL_FILES = /*SHELL_START*/ [
   "./js/util.js",
   "./manifest.webmanifest",
   "./styles/app.css",
+  "./styles/compact.css",
   "./styles/m3-tokens.css"
 ] /*SHELL_END*/;
 

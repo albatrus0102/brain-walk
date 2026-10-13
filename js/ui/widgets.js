@@ -47,3 +47,34 @@ export function barsHtml(items, label) {
 }
 export const mdShort = date => String(date).slice(5).replace('-', '/');
 export function progressBar(pct, label) { return '<div class="progress" role="progressbar" aria-label="' + label + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(pct) + '"><span style="width:' + pct + '%"></span></div>'; }
+
+/* ================= 가족·관리자(촘촘한) 화면의 M3 조각들 ================= */
+/* M3 list item (HTML 문자열): o = { id, act, to, data:{}, icon, emoji, title, sub, value, chevron, cls, trail(HTML) }. act/to 가 있으면 누르는 줄(button) */
+export function liHtml(o) {
+  const btn = !!(o.act || o.to), lead = o.icon ? '<span class="lead' + (o.tint ? ' tint' : '') + '">' + ic(o.icon) + '</span>' : o.emoji ? '<span class="lead e" aria-hidden="true">' + o.emoji + '</span>' : '';
+  const attrs = (o.id ? ' id="' + o.id + '"' : '') + (btn ? ' data-act="' + (o.act || 'nav') + '"' : '') + (o.to ? ' data-to="' + o.to + '"' : '') + Object.keys(o.data || {}).map(k => ' data-' + k + '="' + esc(o.data[k]) + '"').join('') + (o.aria ? ' aria-label="' + esc(o.aria) + '"' : '');
+  const trail = (o.value != null && o.value !== '' ? '<b>' + o.value + '</b>' : '') + (o.trail || '') + (o.chevron === false || (!btn && !o.chevron) ? '' : ic('chevron'));
+  return '<' + (btn ? 'button type="button"' : 'div') + ' class="li' + (o.cls ? ' ' + o.cls : '') + '"' + attrs + '>' + lead +
+    '<span class="body"><span class="hl">' + o.title + '</span>' + (o.sub ? '<span class="sl"' + (o.subId ? ' id="' + o.subId + '"' : '') + '>' + o.sub + '</span>' : '') + '</span>' +
+    (trail ? '<span class="trail">' + trail + '</span>' : '') + '</' + (btn ? 'button' : 'div') + '>';
+}
+/* DOM 버전 (설정처럼 onclick 이 필요한 줄) */
+export function liEl(o, onclick) {
+  const tmp = h('div'); tmp.innerHTML = liHtml(Object.assign({ act: onclick ? 'noop' : undefined }, o));
+  const el = tmp.firstChild; if (onclick) { el.removeAttribute('data-act'); el.addEventListener('click', onclick); }
+  return el;
+}
+export const subheadHtml = (text, id) => '<h2 class="subhead"' + (id ? ' id="' + id + '"' : '') + '>' + text + '</h2>';
+export const listHtml = (rows, id, cls) => '<div class="list' + (cls ? ' ' + cls : '') + '"' + (id ? ' id="' + id + '"' : '') + '>' + rows.join('') + '</div>';
+/* M3 탭 (기록 화면: 훈련 기록 / 점검) */
+export function tabsHtml(tabs, cur, label) {
+  return '<div class="tabs" role="tablist" aria-label="' + esc(label || '') + '">' + tabs.map(t => '<button type="button" role="tab" class="tab" id="tab-' + t[0] + '" aria-selected="' + (cur === t[0]) + '" data-act="nav" data-to="' + t[0] + '">' + t[1] + '</button>').join('') + '</div>';
+}
+export const RECORD_TABS = [['family', '훈련 기록'], ['assess', '점검·설문']];
+/* 요약 타일: o = { id, icon, label, value(HTML), sub(HTML), cls, to/act, num } */
+export function tileHtml(o) {
+  const btn = !!(o.to || o.act);
+  return '<' + (btn ? 'button type="button"' : 'div') + ' class="tile' + (o.cls ? ' ' + o.cls : '') + '"' + (o.id ? ' id="' + o.id + '"' : '') + (btn ? ' data-act="' + (o.act || 'nav') + '"' : '') + (o.to ? ' data-to="' + o.to + '"' : '') + '>' +
+    '<span class="tl">' + (o.icon ? ic(o.icon) : '') + o.label + '</span><span class="tv' + (o.num ? ' num' : '') + '"' + (o.valueId ? ' id="' + o.valueId + '"' : '') + '>' + o.value + '</span>' + (o.sub != null ? '<span class="ts"' + (o.subId ? ' id="' + o.subId + '"' : '') + '>' + o.sub + '</span>' : '') + (o.extra || '') + '</' + (btn ? 'button' : 'div') + '>';
+}
+void adminNames;
