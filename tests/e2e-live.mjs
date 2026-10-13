@@ -89,7 +89,7 @@ must(subOk, '훈련하는 분 홈이 바로 "게임 2개"로 바뀌어요 (다�
 await learner.click('#btn-main'); await learner.waitForSelector('#g-title');
 await admin.waitForSelector('#plan-h'); await admin.click('#btn-back');
 if (await admin.waitForSelector('#dlg-title', { timeout: 1500 }).then(() => true, () => false)) await admin.click('#dlg-btn-1');   // 저장하지 않은 계획이 남았다고 보면 나가기
-await admin.waitForSelector('#set-main-h'); await admin.click('#btn-back');
+await admin.waitForSelector('#set-main-h'); await admin.click('#nav-home');
 await admin.waitForSelector('#dash');
 must(await until(admin, () => (document.querySelector('#dash-status') || {}).innerText === '훈련 중 · 2개 중 0개'), '관리자 홈: 훈련 중 · 2개 중 0개');
 must(await until(admin, () => /^지금: .+\(.+부터\)$/.test(((document.querySelector('#dash-sub') || {}).innerText || '').trim())), '관리자 홈: 지금: 게임 이름 (○부터)');

@@ -19,7 +19,10 @@ const navItems = () => (isTrainee() ? NAV_TRAINEE : NAV_FAMILY);
 const NAV_OF = { assess: 'family' };
 const navKey = s => NAV_OF[s] || s;
 /* 설정·점검 허브에서 여는 화면들: 뒤로 가기가 돌아갈 곳 (AI 화면은 ai-admin.js 의 AI_BACK) */
-export const BACK_TO = { setMine: 'settings', setNotify: 'settings', surveys: 'assess', clinical: 'assess', clocks: 'assess', assessView: 'assess', clinicalForm: 'clinical' };
+/* 하단 메뉴의 꼭지 화면. 그 밖의 화면을 꼭지에서 열었으면 어디서 왔는지 기억해 뒀다가, 뒤로 가기가 그곳으로 돌아가요 (같은 화면을 홈·설정·점검 어디서든 열 수 있어서) */
+const TABS = ['home', 'family', 'assess', 'chat', 'settings'];
+export const backTarget = (name, dflt) => { const o = S.origin && S.origin[name]; return o && o !== name ? o : dflt; };
+export const BACK_TO = { setMine: 'settings', setNotify: 'settings', surveys: 'assess', clinical: 'assess', clocks: 'assess', assessView: 'assess', clinicalForm: 'clinical', surveyIntro: 'surveys', surveyDone: 'surveys' };
 /* 훈련하는 분이 열 수 있는 화면: 흐름(훈련·쉬는 화면·점검·생활 체크·축하), 가족 대화, 가족이 도와줄 때 여는 설정. 나머지는 눌러도 홈으로. */
 const TRAINEE_SCREENS = ['home', 'game', 'result', 'courseBreak', 'checkIntro', 'checkin', 'courseDone', 'chat', 'settings', 'assess', 'assessStep', 'assessBreak', 'assessDone', 'surveyIntro', 'surveyQ', 'surveyDone', 'clock', 'clockDone'];
 /* 방 주인(관리자)이 훈련하는 분일 때, 설정 안의 '가족방 관리'에서 여는 관리 화면 */
@@ -31,6 +34,7 @@ const BARE = n => n === 'setup' || n.indexOf('ob-') === 0;   // 설정 안내·�
 const guard = name => (isTrainee() && !BARE(name) && !TRAINEE_SCREENS.includes(name) && !(ADMIN_SCREENS.includes(name) && isAdmin())) ? 'home' : name;
 export function go(name) {
   name = guard(name);
+  if (TABS.includes(name)) S.origin = {}; else if (TABS.includes(S.screen) && S.screen !== name) (S.origin || (S.origin = {}))[name] = S.screen;
   pmOnNav(name);
   stopSpeech(); closeSheet(); navTo(name); S.screen = name; render();
 }
@@ -80,8 +84,8 @@ export function renderChrome() {
   const bar = $('#appbar-in'); bar.textContent = '';
   const tr = isTrainee();
   // 촘촘한 모드: 하단 메뉴의 꼭지(홈·기록·대화·설정)는 뒤로 가기 없이, 그 안의 화면만 뒤로 가기 아이콘
-  const top = compact && (showNav || S.screen === 'chat');
-  if (S.screen !== 'home' && !BARE(S.screen) && !top) bar.append(h('button', { class: 'icon-btn labeled', id: 'btn-back', type: 'button', 'data-act': 'back', 'aria-label': ADMIN_SCREENS.includes(S.screen) ? '뒤로 가기, 설정으로' : S.screen.indexOf('ai') === 0 ? '뒤로 가기' : '뒤로 가기, 처음 화면으로' }, svgIcon('back'), h('span', { text: tr && !ADMIN_SCREENS.includes(S.screen) ? '처음으로' : '뒤로' })));
+  const top = compact && showNav;
+  if (S.screen !== 'home' && !BARE(S.screen) && !top) bar.append(h('button', { class: 'icon-btn labeled', id: 'btn-back', type: 'button', 'data-act': 'back', 'aria-label': ADMIN_SCREENS.includes(S.screen) ? '뒤로 가기, 설정으로' : S.screen.indexOf('ai') === 0 || compact ? '뒤로 가기' : '뒤로 가기, 처음 화면으로' }, svgIcon('back'), h('span', { text: tr && !ADMIN_SCREENS.includes(S.screen) ? '처음으로' : '뒤로' })));
   else bar.append(svgIcon('leaf'));
   bar.append(h('div', { class: 'appbar-title', id: 'appbar-title', text: title }));
   // 훈련하는 분: 글자 없는 작은 톱니바퀴 (누르면 가족용이라는 확인창). 가족: 오른쪽 위 설정(아바타) 단추

@@ -13,7 +13,7 @@ import { S } from './state.js';
 import { ACTS } from './ui/acts.js';
 import { toast } from './ui/dom.js';
 import { AI_BACK } from './ui/screens/ai-admin.js';
-import { ADMIN_SUBSCREENS, BACK_TO, confirmQuit, go, render } from './ui/shell.js';
+import { ADMIN_SUBSCREENS, BACK_TO, backTarget, confirmQuit, go, render } from './ui/shell.js';
 import { $, LS } from './util.js';
 
 /* ================= 이벤트 ================= */
@@ -25,19 +25,20 @@ document.addEventListener('click', e => {
   if (a === 'nav') { if (b.dataset.to === 'settings') { S.remDraft = null; } go(b.dataset.to); }
   else if (a === 'back' || a === 'home') {
     if (S.screen === 'game') leaveGameConfirm(() => go('home'));
+    else if (a === 'back' && !isTrainee() && (S.screen === 'surveyQ' || S.screen === 'clock')) confirmQuit();
     else if (a === 'back' && ADMIN_SUBSCREENS.includes(S.screen)) ACTS.adminback();
-    else if (a === 'back' && AI_BACK[S.screen]) go(AI_BACK[S.screen]);
-    else if (a === 'back' && BACK_TO[S.screen] && !isTrainee()) go(BACK_TO[S.screen]);
+    else if (a === 'back' && AI_BACK[S.screen]) go(backTarget(S.screen, AI_BACK[S.screen]));
+    else if (a === 'back' && BACK_TO[S.screen] && !isTrainee()) go(backTarget(S.screen, BACK_TO[S.screen]));
     else { S.ciFlow = false; go('home'); }
   }
   else if (a === 'quit') leaveGameConfirm(() => go('home'));
   else if (a === 'sound') {
     S.prefs.sound = !S.prefs.sound; LS.set('bw.sound', S.prefs.sound); applyDisplay({ noRender: true }); if (!S.prefs.sound) stopSpeech();
     b.setAttribute('aria-checked', String(S.prefs.sound));
-    const stt = $('#sound-switch-state'); if (stt) stt.textContent = S.prefs.sound ? '켜져 있어요. 문제를 읽어 드려요.' : '꺼져 있어요.';
+    const stt = $('#sound-switch-state'); if (stt) stt.textContent = S.prefs.sound ? '켜져 있어요.' : '꺼져 있어요.';
     if (S.prefs.sound) say('소리 안내를 켰어요.');
   }
-  else if (a === 'contrast') { S.prefs.contrast = !S.prefs.contrast; LS.set('bw.contrast', S.prefs.contrast); applyDisplay({ noRender: true }); b.setAttribute('aria-checked', String(S.prefs.contrast)); const stt = $('#contrast-switch-state'); if (stt) stt.textContent = S.prefs.contrast ? '켜져 있어요. 글자와 테두리가 더 진해요.' : '꺼져 있어요.'; }
+  else if (a === 'contrast') { S.prefs.contrast = !S.prefs.contrast; LS.set('bw.contrast', S.prefs.contrast); applyDisplay({ noRender: true }); b.setAttribute('aria-checked', String(S.prefs.contrast)); const stt = $('#contrast-switch-state'); if (stt) stt.textContent = S.prefs.contrast ? '켜져 있어요.' : '꺼져 있어요.'; }
   else if (a === 'notify') { S.notifyFamily = !S.notifyFamily; b.setAttribute('aria-checked', String(S.notifyFamily)); const stt = $('#notify-switch-state'); if (stt) stt.textContent = S.notifyFamily ? '켜져 있어요. 나갈 때 가족 대화방에 알려요.' : '꺼져 있어요.'; }
   else if (a === 'size') { S.prefs.size = b.dataset.v; LS.set('bw.size', S.prefs.size); applyDisplay(); render(true); const nb = $('#size-' + S.prefs.size); if (nb) nb.focus(); }
   else if (a === 'font') { S.prefs.font = b.dataset.v; LS.set('bw.font', S.prefs.font); applyDisplay(); render(true); const nb = $('#font-' + S.prefs.font); if (nb) nb.focus(); }

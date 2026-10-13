@@ -104,5 +104,19 @@ await common('family', 'back-family');
   must(st && st.bw === 1, 'history.state 로만 상태를 관리해요');
   await page.close();
 }
+/* 가족 화면: 뒤로 가기 버튼은 들어온 곳(홈·설정·점검 탭)으로 돌아가요. 대화방에도 뒤로 가기가 있어요 */
+{
+  const { page } = await newPage(browser, { tag: 'back-fam-tabs', seed: { 'bw.role': 'family', 'bw.aiDemo': true } }); await startDemo(page); await page.waitForSelector('#dash');
+  const scr = () => page.evaluate(() => window.__S.screen);
+  const step = async (sel, want, msg) => { await page.click(sel); await page.waitForTimeout(200); must((await scr()) === want, msg + ' → ' + want + ' (' + await scr() + ')'); };
+  await step('#tile-ai', 'aiReports', '홈 AI 신호 타일'); await step('#btn-back', 'home', '  뒤로: 홈');
+  await step('#nav-settings', 'settings', '설정 탭'); await step('#row-ai-reports', 'aiReports', '설정 › AI 리포트'); await step('#btn-back', 'settings', '  뒤로: 설정');
+  await step('#row-ai-settings', 'aiSettings', '설정 › AI 리포트 설정'); await step('#btn-back', 'settings', '  뒤로: 설정');
+  await step('#nav-family', 'family', '기록 탭'); await step('#tab-assess', 'assess', '점검·설문 탭'); await step('#hub-ai', 'aiReports', '점검 › AI 리포트'); await step('#btn-back', 'assess', '  뒤로: 점검');
+  await step('#hub-surveys', 'surveys', '설문 목록'); await step('#sv-open-kdsq', 'surveyIntro', '설문 소개'); await step('#btn-back', 'surveys', '  뒤로: 설문 목록');
+  await page.evaluate(() => window.__go('chat')); await page.waitForTimeout(200);
+  must(await vis(page, '#btn-back'), '대화방: 뒤로 가기 버튼이 있어요 (하단 메뉴가 없으니 막다른 길이 없게)'); await step('#btn-back', 'home', '  뒤로: 홈');
+  await page.close();
+}
 out('back tests finished');
 await done(browser);

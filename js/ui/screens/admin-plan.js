@@ -9,7 +9,7 @@ import { ACTS } from '../acts.js';
 import { dialog, toast } from '../dom.js';
 import { MON_FIRST, autoNextText, checkText, daysText, levelText } from '../plan-text.js';
 import { SCREENS } from '../registry.js';
-import { go, render } from '../shell.js';
+import { backTarget, go, render } from '../shell.js';
 import { adminOnlyNote, segHtml, switchRow, xpCard } from '../widgets.js';
 import { $, WD, addDays, clampLv, esc, parseYmd } from '../../util.js';
 
@@ -64,8 +64,8 @@ SCREENS.adminPlan = {
       (S.icsText ? '<div class="field"><label for="ics-text">파일이 저장되지 않으면 아래 내용을 복사해 \'brainwalk-alarm.ics\' 파일로 저장해 쓰세요.</label><textarea class="input copybox" id="ics-text" readonly rows="6"></textarea><button class="btn tonal mt" id="btn-ics-copy" type="button" data-act="pl-icscopy">내용 복사하기</button></div>' : '');
     // 3 게임 고르기와 순서
     const order = d.order === 'fixed' ? d.fixedOrder : cat.map(g => g.id);
-    const opt = (v, t, sub) => '<button type="button" class="gamebtn" role="radio" id="plan-order-' + v + '" aria-checked="' + (d.order === v) + '" data-act="pl-order" data-v="' + v + '"' + dis + '><span><strong>' + t + '</strong><span class="t-small muted">' + sub + '</span></span><span class="t-title-m" aria-hidden="true">' + (d.order === v ? '✓' : '') + '</span></button>';
-    const c3 = '<div class="pick-list" role="radiogroup" aria-label="게임 순서 방식">' + opt('rotate', '날마다 바꾸기 (추천)', '다섯 영역을 골고루, 날마다 다른 게임으로 해요.') + opt('fixed', '정한 순서대로', '매일 같은 순서로 해요.') + '</div>' +
+    const opt = (v, t, sub) => '<button type="button" class="gamebtn" role="radio" id="plan-order-' + v + '" aria-checked="' + (d.order === v) + '" data-act="pl-order" data-v="' + v + '"' + dis + '><span><strong>' + t + '</strong>' + (sub ? '<span class="t-small muted">' + sub + '</span>' : '') + '</span><span class="t-title-m" aria-hidden="true">' + (d.order === v ? '✓' : '') + '</span></button>';
+    const c3 = '<div class="pick-list" role="radiogroup" aria-label="게임 순서 방식">' + opt('rotate', '날마다 바꾸기 (추천)') + opt('fixed', '정한 순서대로') + '</div>' +
       '<ul class="grows" id="plan-games">' + order.map((id, i) => {
         const g = GAMES[id], on = d.games[id].on;
         return '<li class="grow" data-g="' + id + '"><span class="gnm"><strong>' + esc(g.name) + '</strong><span class="pill">' + esc(DOM[g.domain].name) + '</span>' + (g.bank ? '<span class="pill aipill">AI 문제</span>' : '') + '</span><span class="gctl">' +
@@ -86,8 +86,8 @@ SCREENS.adminPlan = {
       '<button class="btn outlined" id="plan-allauto" type="button" data-act="pl-allauto"' + (ro || !nFixed ? ' disabled' : '') + '>모두 자동으로 되돌리기</button>';
     // 5 점검과 생활 체크
     const c5 = '<div>' + segHtml('월간 두뇌 점검', 'chk-l', CHECKS, d.checkEveryWeeks, 'pl-check', 'plan-check', ro) + '<p class="t-body mt" id="plan-nextcheck">' + nextCheckText(d) + '</p></div>' +
-      switchRow('plan-checkin', '생활 체크 (기분·잠)', '훈련을 마친 뒤 30초 동안 물어봐요.', d.checkin, 'pl-checkin', ro) +
-      switchRow('plan-score', '점수 보여 주기', '끄면 점수 없이 ‘잘하셨어요’ 같은 칭찬만 보여요.', d.showScore, 'pl-score', ro);
+      switchRow('plan-checkin', '생활 체크 (기분·잠)', '', d.checkin, 'pl-checkin', ro) +
+      switchRow('plan-score', '점수 보여 주기', '', d.showScore, 'pl-score', ro);
     return '<div class="stack"><h1 class="t-headline" id="plan-h">훈련 계획</h1>' + adminOnlyNote() + summary +
       xpCard('p1', '하루 분량', N + '개 · 약 ' + M + '분', c1, true) + xpCard('p2', '훈련 요일과 알람', daysText(d.weekdays) + ' · ' + hm(d.alarmTime), c2) +
       xpCard('p3', '게임 고르기와 순서', onN + '개 게임 · ' + (d.order === 'fixed' ? '정한 순서' : '날마다 바꾸기'), c3) + xpCard('p4', '난이도', levelText(d), c4) +
@@ -133,8 +133,9 @@ ACTS['pl-save'] = async () => {
 };
 /* 뒤로 가기: 저장하지 않은 계획이 있으면 한 번 물어봐요 */
 ACTS.adminback = () => {
-  if (S.screen === 'adminPlan' && planDirty()) { dialog('저장하지 않고 나갈까요?', '고친 내용이 사라져요.', [{ label: '계속 고치기', kind: 'filled' }, { label: '나가기', kind: 'text', run: () => { S.planDraft = null; go('settings'); } }]); return; }
-  S.planDraft = null; S.dispDraft = null; go('settings');
+  const to = backTarget(S.screen, 'settings');
+  if (S.screen === 'adminPlan' && planDirty()) { dialog('저장하지 않고 나갈까요?', '고친 내용이 사라져요.', [{ label: '계속 고치기', kind: 'filled' }, { label: '나가기', kind: 'text', run: () => { S.planDraft = null; go(to); } }]); return; }
+  S.planDraft = null; S.dispDraft = null; go(to);
 };
 document.addEventListener('change', e => {
   if (S.screen !== 'adminPlan' || !isAdmin()) return;
