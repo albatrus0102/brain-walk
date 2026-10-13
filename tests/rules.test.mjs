@@ -755,6 +755,51 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
 }
 
 // =============================================================================
+// F4c: 관리자 대신 동의(byAdmin) — 내보낸 관리자, 훈련하는 분이 바뀐 뒤, 관리자가 훈련하는 분이 된 뒤
+// o 방 주인(가족) / a·b 관리자(가족) / t 훈련하는 분 / f 가족
+// =============================================================================
+{
+  const F = 'fam4c', C = 'FCK234', P = `families/${F}`;
+  const dO = db('u4co'), dA = db('u4ca'), dB = db('u4cb'), dT = db('u4ct'), dF = db('u4cf');
+  const join = (dd, u, m, role, name) => { const b = writeBatch(dd); b.set(doc(dd, `${P}/uids/${u}`), { memberId: m, via: 'join', code: C, addedTs: serverTimestamp() }); b.set(doc(dd, `${P}/members/${m}`), { name, role, joinedTs: serverTimestamp() }); return b.commit(); };
+  const ac = by => ({ kind: 'ai-report-notice', version: '2026-11-v1', ackTs: serverTimestamp(), byAdmin: by });
+  {
+    const b = writeBatch(dO);
+    b.set(doc(dO, 'families', F), { createdBy: 'u4co', createdTs: serverTimestamp(), ownerMemberId: 'o', joinCode: C });
+    b.set(doc(dO, 'joinCodes', C), { familyId: F, createdBy: 'o', createdTs: serverTimestamp(), expiresTs: in7d() });
+    b.set(doc(dO, `${P}/uids/u4co`), { memberId: 'o', via: 'create', addedTs: serverTimestamp() });
+    b.set(doc(dO, `${P}/members/o`), { name: '아들', role: 'family', joinedTs: serverTimestamp() });
+    await t('F4c: found', b.commit());
+  }
+  await t('F4c: a joins', join(dA, 'u4ca', 'a', 'family', '딸'));
+  await t('F4c: b joins', join(dB, 'u4cb', 'b', 'family', '사위'));
+  await t('F4c: f joins', join(dF, 'u4cf', 'f', 'family', '손주'));
+  await t('F4c: t joins', join(dT, 'u4ct', 't', 'trainee', '아버지'));
+  await t('F4c: t claims the trainee slot', setDoc(doc(dT, `${P}/state/trainee`), { userId: 't', displayLabel: '아버지' }));
+  await t('F4c: owner grants a', updateDoc(doc(dO, 'families', F), { admins: ['a'] }));
+  await t('F4c: owner grants b', updateDoc(doc(dO, 'families', F), { admins: ['a', 'b'] }));
+  await t('F4c: b creates the trainee consent', setDoc(doc(dB, `${P}/consents/t`), ac('b')));
+  // b 를 내보내요 (앱: 기기 연결을 모두 지우고 leftTs). admins 목록에는 남아 있어도 연결이 없으면 구성원이 아니에요.
+  await t('F4c: owner removes b (unlink)', deleteDoc(doc(dO, `${P}/uids/u4cb`)));
+  await t('F4c: owner removes b (leftTs)', updateDoc(doc(dO, `${P}/members/b`), { leftTs: serverTimestamp() }));
+  await t('F4c: removed admin cannot withdraw the trainee consent', updateDoc(doc(dB, `${P}/consents/t`), { withdrawnTs: serverTimestamp(), byAdmin: 'b' }), false);
+  await t('F4c: removed admin cannot read the trainee consent', getDoc(doc(dB, `${P}/consents/t`)), false);
+  await env.withSecurityRulesDisabled(async c => { await deleteDoc(doc(c.firestore(), `${P}/consents/t`)); });
+  await t('F4c: removed admin cannot create the trainee consent', setDoc(doc(dB, `${P}/consents/t`), ac('b')), false);
+  await t('F4c: a (still admin) creates the trainee consent', setDoc(doc(dA, `${P}/consents/t`), ac('a')));
+  // 훈련하는 분이 f 로 바뀌면: 예전 훈련하는 분 t 의 문서는 관리자 길로 못 바꾸고, 새 훈련하는 분 f 는 돼요.
+  await env.withSecurityRulesDisabled(async c => { const x = c.firestore(); await setDoc(doc(x, `${P}/state/trainee`), { userId: 'f', displayLabel: '손주' }); await updateDoc(doc(x, `${P}/members/f`), { role: 'trainee' }); });
+  await t('F4c: admin cannot update a former trainee consent', updateDoc(doc(dA, `${P}/consents/t`), { withdrawnTs: serverTimestamp(), byAdmin: 'a' }), false);
+  await t('F4c: admin creates the new trainee consent', setDoc(doc(dA, `${P}/consents/f`), ac('a')));
+  // 관리자 a 가 훈련하는 분이 되면 관리자 길은 꺼져요 (자기 것도, 남의 것도).
+  await env.withSecurityRulesDisabled(async c => { const x = c.firestore(); await setDoc(doc(x, `${P}/state/trainee`), { userId: 'a', displayLabel: '딸' }); });
+  await t('F4c: admin-turned-trainee cannot create its own consent via the admin path', setDoc(doc(dA, `${P}/consents/a`), ac('a')), false);
+  await t('F4c: admin-turned-trainee cannot withdraw the previous trainee consent', updateDoc(doc(dA, `${P}/consents/f`), { withdrawnTs: serverTimestamp(), byAdmin: 'a' }), false);
+  await t('F4c: admin-turned-trainee still acknowledges for itself', setDoc(doc(dA, `${P}/consents/a`), { kind: 'ai-report-notice', version: '2026-11-v1', ackTs: serverTimestamp() }));
+  await t('F4c: owner (family) can withdraw the new trainee consent', updateDoc(doc(dO, `${P}/consents/a`), { withdrawnTs: serverTimestamp(), byAdmin: 'o' }));
+}
+
+// =============================================================================
 // 새 가족방 만들기는 '만들기 코드'를 아는 사람만 (appConfig/creation, createProofs)
 // =============================================================================
 {
@@ -807,6 +852,80 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('CC: the old code no longer works', setDoc(doc(db('p5'), 'createProofs/p5'), { proof: CREATE_CODE, ts: serverTimestamp() }), false);
   await t('CC: the new code works', setDoc(doc(db('p5'), 'createProofs/p5'), { proof: 'new-code-12345', ts: serverTimestamp() }));
   await t('CC: a proof made with the old code stops working after the code changes', (async () => { await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), 'createProofs/p6'), { proof: CREATE_CODE, ts: Timestamp.now() }); }); await found(db('p6'), 'p6', 'famN6', 'NNN239', false); })(), false);
+
+  // ---- 검증 추가 (CCv): 만료, 남의 증거, 증거 꾸미기, 배치 시각 꾸미기, 관리자·예전 방 주인의 코드 바꾸기
+  const NEW = 'new-code-12345';
+  const seedProof = (u, ms) => env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), `createProofs/${u}`), { proof: NEW, ts: Timestamp.fromMillis(ms) }); });
+  await seedProof('v1', Date.now() - 31 * 60 * 1000);
+  await t('CCv: a proof older than 30 minutes is rejected', found(db('v1'), 'v1', 'famV1', 'VVV234', false), false);
+  await seedProof('v1', Date.now() - 29 * 60 * 1000);
+  await t('CCv: a proof younger than 30 minutes works (boundary sanity)', found(db('v1'), 'v1', 'famV1', 'VVV234', false));
+  await seedProof('victim', Date.now());
+  await t('CCv: replaying another user\'s proof (createdBy = me) is denied', found(db('x1'), 'x1', 'famX1', 'XXX234', false), false);
+  await t('CCv: claiming createdBy = victim from my uid is denied', (async () => {
+    const d = db('x1'), b = writeBatchRaw(d);
+    b.set(doc(d, 'families', 'famX2'), { createdBy: 'victim', createdTs: serverTimestamp(), ownerMemberId: 'mx1', joinCode: 'XXY234' });
+    b.set(doc(d, 'joinCodes', 'XXY234'), { familyId: 'famX2', createdBy: 'mx1', createdTs: serverTimestamp(), expiresTs: in7d() });
+    b.set(doc(d, 'families/famX2/uids/x1'), { memberId: 'mx1', via: 'create', addedTs: serverTimestamp() });
+    b.set(doc(d, 'families/famX2/members/mx1'), { name: '나', role: 'family', joinedTs: serverTimestamp() });
+    await b.commit();
+  })(), false);
+  await t('CCv: cannot read another user\'s proof', getDoc(doc(db('x1'), 'createProofs/victim')), false);
+  await t('CCv: cannot list proofs', getDocs(collection(db('x1'), 'createProofs')), false);
+  await t('CCv: cannot overwrite another user\'s proof', setDoc(doc(db('x1'), 'createProofs/victim'), { proof: NEW, ts: serverTimestamp() }), false);
+  await t('CCv: cannot delete another user\'s proof', deleteDoc(doc(db('x1'), 'createProofs/victim')), false);
+  await t('CCv: signed-out cannot write a proof', setDoc(doc(anon, 'createProofs/x'), { proof: NEW, ts: serverTimestamp() }), false);
+  await t('CCv: signed-out cannot create a family', setDoc(doc(anon, 'families/famAnon'), { createdBy: 'x', createdTs: serverTimestamp(), ownerMemberId: 'mx', joinCode: 'ANN234' }), false);
+  await t('CCv: stranger without any proof cannot create a bare family doc', setDoc(doc(db('x2'), 'families/famX3'), { createdBy: 'x2', createdTs: serverTimestamp(), ownerMemberId: 'mx2', joinCode: 'XXZ234' }), false);
+  // 증거 꾸미기: 시각을 남기고 proof 만 바꾸기, 키 더하기, 너무 긴 값, 배치에서 꾸민 시각
+  await seedProof('x3', Date.now() - 60 * 60 * 1000);
+  await t('CCv: refreshing an expired proof without a new server time is denied', updateDoc(doc(db('x3'), 'createProofs/x3'), { proof: NEW }), false);
+  await t('CCv: refreshing with a client time is denied', updateDoc(doc(db('x3'), 'createProofs/x3'), { ts: Timestamp.fromMillis(Date.now()) }), false);
+  await t('CCv: proof with an extra key denied', setDoc(doc(db('x3'), 'createProofs/x3'), { proof: NEW, ts: serverTimestamp(), ok: true }), false);
+  await t('CCv: proof longer than 100 chars denied', setDoc(doc(db('x3'), 'createProofs/x3'), { proof: 'x'.repeat(101), ts: serverTimestamp() }), false);
+  await t('CCv: proof that is not a string denied', setDoc(doc(db('x3'), 'createProofs/x3'), { proof: 12345, ts: serverTimestamp() }), false);
+  await t('CCv: batch with a wrong-code proof and a forged (client) time is denied', (async () => {
+    const d = db('x4'), b = writeBatchRaw(d);
+    b.set(doc(d, 'createProofs/x4'), { proof: 'guess-123456', ts: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000) });
+    b.set(doc(d, 'families/famX4'), { createdBy: 'x4', createdTs: serverTimestamp(), ownerMemberId: 'mx4', joinCode: 'XXA234' });
+    b.set(doc(d, 'joinCodes/XXA234'), { familyId: 'famX4', createdBy: 'mx4', createdTs: serverTimestamp(), expiresTs: in7d() });
+    b.set(doc(d, 'families/famX4/uids/x4'), { memberId: 'mx4', via: 'create', addedTs: serverTimestamp() });
+    b.set(doc(d, 'families/famX4/members/mx4'), { name: '나', role: 'family', joinedTs: serverTimestamp() });
+    await b.commit();
+  })(), false);
+  await t('CCv: batch with the right code but a forged future time is denied', (async () => {
+    const d = db('x4'), b = writeBatchRaw(d);
+    b.set(doc(d, 'createProofs/x4'), { proof: NEW, ts: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000) });
+    b.set(doc(d, 'families/famX4'), { createdBy: 'x4', createdTs: serverTimestamp(), ownerMemberId: 'mx4', joinCode: 'XXA234' });
+    b.set(doc(d, 'joinCodes/XXA234'), { familyId: 'famX4', createdBy: 'mx4', createdTs: serverTimestamp(), expiresTs: in7d() });
+    b.set(doc(d, 'families/famX4/uids/x4'), { memberId: 'mx4', via: 'create', addedTs: serverTimestamp() });
+    b.set(doc(d, 'families/famX4/members/mx4'), { name: '나', role: 'family', joinedTs: serverTimestamp() });
+    await b.commit();
+  })(), false);
+  await seedProof('x5', Date.now());
+  await t('CCv: deleting my proof inside the founding batch is denied', (async () => {
+    const d = db('x5'), b = writeBatchRaw(d);
+    b.delete(doc(d, 'createProofs/x5'));
+    b.set(doc(d, 'families/famX5'), { createdBy: 'x5', createdTs: serverTimestamp(), ownerMemberId: 'mx5', joinCode: 'XXB234' });
+    b.set(doc(d, 'joinCodes/XXB234'), { familyId: 'famX5', createdBy: 'mx5', createdTs: serverTimestamp(), expiresTs: in7d() });
+    b.set(doc(d, 'families/famX5/uids/x5'), { memberId: 'mx5', via: 'create', addedTs: serverTimestamp() });
+    b.set(doc(d, 'families/famX5/members/mx5'), { name: '나', role: 'family', joinedTs: serverTimestamp() });
+    await b.commit();
+  })(), false);
+  // 코드 바꾸기: primary 가족방의 관리자(방 주인 아님), 예전 방 주인은 거부. 새 방 주인은 허용.
+  await t('CCv: owner grants mJ admin in the primary family', updateDoc(doc(db('pP'), 'families', FP), { admins: ['mJ'] }));
+  await t('CCv: a primary-family admin (not owner) cannot set the code', setDoc(doc(db('pJ'), 'appConfig/creation'), Object.assign(hashOf('admin-code-123'), { setBy: 'mJ' })), false);
+  await t('CCv: a primary-family admin cannot update the code with merge', setDoc(doc(db('pJ'), 'appConfig/creation'), { setBy: 'mJ', updatedTs: serverTimestamp() }, { merge: true }), false);
+  await t('CCv: owner hands the primary family to mJ', updateDoc(doc(db('pP'), 'families', FP), { ownerMemberId: 'mJ' }));
+  await t('CCv: the former primary owner cannot set the code', setDoc(doc(db('pP'), 'appConfig/creation'), Object.assign(hashOf('old-owner-123'), { setBy: 'mpP' })), false);
+  await t('CCv: the new primary owner can set the code', setDoc(doc(db('pJ'), 'appConfig/creation'), Object.assign(hashOf('handover-code-1'), { setBy: 'mJ' })));
+  await t('CCv: the owner of a family created with the code still cannot set it', setDoc(doc(db('v1'), 'appConfig/creation'), Object.assign(hashOf('x-code-12345'), { setBy: 'mv1' })), false);
+  await t('CCv: owner cannot read the code doc after setting it', getDoc(doc(db('pJ'), 'appConfig/creation')), false);
+  await t('CCv: writing appConfig/other is denied', setDoc(doc(db('pJ'), 'appConfig/other'), { x: 1 }), false);
+  // 들어가기(가입 코드)·기기 옮기기는 만들기 코드와 상관없어요: 코드를 바꾼 뒤에도 기존 가족방에 가입돼요.
+  await t('CCv: joining an existing family still works after the creation code changes', (async () => { const d = db('pK'), b = writeBatchRaw(d); b.set(doc(d, `${P}/uids/pK`), { memberId: 'mK', via: 'join', code: CP, addedTs: serverTimestamp() }); b.set(doc(d, `${P}/members/mK`), { name: '손주', role: 'family', joinedTs: serverTimestamp() }); await b.commit(); })());
+  await env.withSecurityRulesDisabled(async c => { await deleteDoc(doc(c.firestore(), 'appConfig/creation')); });
+  await t('CCv: joining still works even with no creation doc at all', (async () => { const d = db('pL'), b = writeBatchRaw(d); b.set(doc(d, `${P}/uids/pL`), { memberId: 'mL', via: 'join', code: CP, addedTs: serverTimestamp() }); b.set(doc(d, `${P}/members/mL`), { name: '조카', role: 'family', joinedTs: serverTimestamp() }); await b.commit(); })());
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
