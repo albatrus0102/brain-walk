@@ -38,8 +38,8 @@ SCREENS.adminDisplay = {
       '<section class="card outlined stack" aria-label="화면 설정">' +
       '<div>' + segHtml('글꼴', 'dd-font-l', FONT_OPTS.map(o => o[0] === 'pretendard' ? [o[0], '프리텐다드 (추천)'] : o), d.font, 'dd-font', 'dd-font', ro) + '</div>' +
       '<div>' + segHtml('글자 크기', 'dd-size-l', SIZE_OPTS, d.size, 'dd-size', 'dd-size', ro) + '</div>' +
-      switchRow('dd-contrast', '고대비', '글자와 테두리를 더 진하게', d.contrast, 'dd-contrast', ro) +
-      switchRow('dd-voice', '소리 안내', '문제와 안내를 읽어 드려요', d.voice, 'dd-voice', ro) +
+      switchRow('dd-contrast', '고대비', '', d.contrast, 'dd-contrast', ro) +
+      switchRow('dd-voice', '소리 안내', '', d.voice, 'dd-voice', ro) +
       (d.voice ? '<div>' + segHtml('말 빠르기', 'dd-rate-l', RATES, nearRate(d.rate), 'dd-rate', 'dd-rate', ro) + '<div class="mt"><button class="btn tonal" id="dd-hear" type="button" data-act="dd-hear">들어 보기</button></div></div>' : '') +
       '</section>' +
       '' +

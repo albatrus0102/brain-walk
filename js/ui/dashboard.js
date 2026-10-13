@@ -63,7 +63,7 @@ export function dashboardHtml() {
     if (past && (cfg.days || []).includes(now.getDay())) cls = 'warm';
   } else if (t.state === 'inProgress') {
     status = (isCheck ? '두뇌 점검 중' : '훈련 중') + ' · ' + N + '개 중 ' + t.n + '개';
-    sub = t.current ? '지금: ' + esc(gname(t.current)) + (t.currentSince ? ' (' + hhmm(t.currentSince) + '부터)' : '') : (t.legacy ? '옛 버전 앱이라 게임별 진행은 끝난 것만 보여요.' : '');
+    sub = t.current ? '지금: ' + esc(gname(t.current)) + (t.currentSince ? ' (' + hhmm(t.currentSince) + '부터)' : '') : '';
   } else if (t.state === 'paused') {
     status = '쉬는 중 · ' + N + '개 중 ' + t.n + '개'; sub = t.lastTs ? '마지막 움직임 ' + hhmm(t.lastTs) : '';
   } else if (t.state === 'done') {

@@ -107,10 +107,8 @@ export function courseStatus() {
   return { done: pdone || ids.size >= N, ts, any: !!p || allSessions().some(s => s.date === t), count: Math.min(Math.max(pn, ids.size), N) };
 }
 function syncNoteText() {
-  if (S.dbState === 'pending') return '';
-  if (S.dbState !== 'ready') return '기록은 이 기기에만 저장돼요.';
-  if (S.dbError || S.writeFailed || S.canWrite === false) return '가족과 함께 저장하는 데 문제가 있어요. 인터넷 연결을 확인해 주세요. 기록은 이 기기에 먼저 저장돼요.';
-  return '기록이 가족과 함께 저장되고 있어요.';
+  if (S.dbState === 'ready' && (S.dbError || S.writeFailed || S.canWrite === false)) return '가족과 함께 저장하는 데 문제가 있어요. 인터넷 연결을 확인해 주세요.';
+  return '';
 }
 export function updateSyncNote() { document.querySelectorAll('.sync-note').forEach(el => { el.textContent = syncNoteText(); }); }
 export const NO_WRITE_MSG = '지금은 저장하지 못했어요. 인터넷 연결을 확인하고 다시 해 보세요.';

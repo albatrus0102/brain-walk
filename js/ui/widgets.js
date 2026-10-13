@@ -11,8 +11,8 @@ export function switchRow(id, label, stateText, checked, act, disabled) {
   return '<div class="switch-row"><div><div class="t-title-m" id="' + id + '-label">' + label + '</div><div class="t-small muted" id="' + id + '-state">' + stateText + '</div></div>' +
     '<button class="switch" id="' + id + '" type="button" role="switch" aria-checked="' + checked + '" aria-labelledby="' + id + '-label" data-act="' + act + '"' + (disabled ? ' disabled' : '') + '></button></div>';
 }
-const soundRow = () => switchRow('sound-switch', '소리 안내', synth ? (S.prefs.sound ? '켜져 있어요. 문제를 읽어 드려요.' : '꺼져 있어요.') : '이 기기에서는 소리 안내를 쓸 수 없어요.', S.prefs.sound, 'sound', !synth);
-const contrastRow = () => switchRow('contrast-switch', '고대비 모드', S.prefs.contrast ? '켜져 있어요. 글자와 테두리가 더 진해요.' : '꺼져 있어요.', S.prefs.contrast, 'contrast', false);
+const soundRow = () => switchRow('sound-switch', '소리 안내', synth ? (S.prefs.sound ? '켜져 있어요.' : '꺼져 있어요.') : '이 기기에서는 소리 안내를 쓸 수 없어요.', S.prefs.sound, 'sound', !synth);
+const contrastRow = () => switchRow('contrast-switch', '고대비 모드', S.prefs.contrast ? '켜져 있어요.' : '꺼져 있어요.', S.prefs.contrast, 'contrast', false);
 export const SIZE_OPTS = [['normal', '보통'], ['large', '크게'], ['xlarge', '아주 크게'], ['max', '최대']];
 export const FONT_OPTS = [['pretendard', '프리텐다드'], ['noto', '노토 산스'], ['system', '휴대폰 기본']];
 /* 라디오 묶음 (M3 segmented button). opts = [[값, 글자]], cur = 지금 값, act = data-act, idp = 버튼 id 앞부분, extra = 버튼에 붙일 속성 */

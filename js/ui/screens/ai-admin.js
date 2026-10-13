@@ -38,7 +38,7 @@ function screen(titleText, fill) {
       if (acc !== 'ok') { root.append(h('h1', { class: 't-headline', id: 'ai-h', text: 'AI 리포트' }), blocked(acc)); return; }
       ensureAdminSubs();
       root.append(h('h1', { class: 't-headline', id: 'ai-h', text: titleText }));
-      if (AD.denied) root.append(h('section', { class: 'card tertiary', id: 'ai-denied' }, h('p', { class: 't-body', text: '이 기기에서는 AI 리포트를 읽을 수 없어요. 관리자인 가족의 휴대폰에서 열어 주세요.' })));
+      if (AD.denied) root.append(h('section', { class: 'card tertiary', id: 'ai-denied' }, h('p', { class: 't-body', text: '이 기기에서는 AI 리포트를 읽을 수 없어요' })));
       if (isExample()) root.append(h('p', { class: 'chip-status', id: 'ai-example', text: '예시' }));
       fill(root);
     }
@@ -47,7 +47,7 @@ function screen(titleText, fill) {
 function blocked(acc) {
   return h('section', { class: 'card tertiary', id: 'ai-blocked' },
     h('p', { class: 't-title', id: 'ai-blocked-t', text: acc === 'trainee' ? '이 기기는 ' + traineeLabel() + ' 훈련용이에요' : '관리자만 볼 수 있어요' }),
-    h('p', { class: 't-body mt', text: acc === 'trainee' ? 'AI 리포트는 가족 휴대폰(관리자)에서 열어 주세요.' : '관리자: ' + (adminNames().join(', ') || '방 주인') }));
+    acc === 'trainee' ? null : h('p', { class: 't-body mt', text: '관리자: ' + (adminNames().join(', ') || '방 주인') }));
 }
 
 /* ---------------- 리포트 목록 ---------------- */
@@ -227,7 +227,7 @@ SCREENS.aiNotes = screen('메모 더하기', root => {
     h('div', { class: 'field' }, h('label', { for: 'ai-n-from', text: '언제부터' }), h('input', { class: 'input', type: 'date', id: 'ai-n-from', value: d.from })),
     h('div', { class: 'field mt' }, h('label', { for: 'ai-n-to', text: '언제까지' }), h('input', { class: 'input', type: 'date', id: 'ai-n-to', value: d.to, disabled: d.ongoing ? '' : null })),
     h('button', { type: 'button', class: 'chip mt', id: 'ai-n-ongoing', 'aria-pressed': String(d.ongoing), 'data-act': 'ai-n-ongoing', text: '아직 계속' }),
-    h('div', { class: 't-title-m mt', id: 'ai-n-codes-l', text: '어떤 일인가요? (여러 개 골라도 돼요)' }),
+    h('div', { class: 't-title-m mt', id: 'ai-n-codes-l', text: '어떤 일인가요?' }),
     h('div', { class: 'chips', role: 'group', 'aria-labelledby': 'ai-n-codes-l' }, NOTE_CODES.map(c => h('button', { type: 'button', class: 'chip', id: 'ai-n-c-' + c[0], 'aria-pressed': String(d.codes.includes(c[0])), 'data-act': 'ai-n-code', 'data-v': c[0], text: c[1] }))),
     h('div', { class: 'field mt' }, h('label', { for: 'ai-n-text', text: '자세한 내용 (선택, 200자)' }), h('textarea', { class: 'input', id: 'ai-n-text', rows: '3', maxlength: '200', text: d.text }), h('p', { class: 't-small muted', id: 'ai-n-count', text: d.text.length + '/200' })),
     h('div', { class: 'mt' }, btn('저장', 'filled', 'ai-n-save', 'ai-n-save'))));
@@ -318,7 +318,7 @@ SCREENS.aiOps = screen('루틴 상태', root => {
     statusRow('ai-st-server', '서버', sv.lastTick ? msOf(sv.lastTick) > Date.now() - 3 * 3600e3 : null, '마지막 확인 ' + ago(msOf(sv.lastTick || sv.lastRun)), sv.reason ? '상태: ' + sv.reason : null),
     statusRow('ai-st-tg', '텔레그램 알림', tg.lastResult ? tg.lastResult === 'sent' : null, tg.lastResult ? ({ sent: '보냈어요', failed: '보내지 못했어요', queued: '조용한 시간이라 기다리고 있어요' }[tg.lastResult] || tg.lastResult) + ' · ' + ago(msOf(tg.lastTs)) : '기록 없음'),
     statusRow('ai-st-th', '신호 문턱 버전', null, hl.thresholdsVer || (AD.thresholds && AD.thresholds.current && AD.thresholds.current.ver) || 'v1'),
-    statusRow('ai-st-cons', traineeLabel() + ' 안내 확인', cons ? !('withdrawnTs' in cons) : false, cons ? ('withdrawnTs' in cons ? '살펴보지 말아 달라고 하셨어요' : when(msOf(cons.ackTs)) + '에 확인하셨어요' + (cons.withFamily ? ' (가족과 함께)' : '')) : '아직 안내를 보지 않으셨어요. 확인하기 전에는 숫자를 모으지 않아요.')));
+    statusRow('ai-st-cons', traineeLabel() + ' 안내 확인', cons ? !('withdrawnTs' in cons) : false, cons ? ('withdrawnTs' in cons ? '살펴보지 말아 달라고 하셨어요' : when(msOf(cons.ackTs)) + '에 확인하셨어요' + (cons.withFamily ? ' (가족과 함께)' : '')) : '아직 안내를 보지 않으셨어요')));
   root.append(switchSection());
 });
 
