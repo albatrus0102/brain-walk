@@ -1,4 +1,5 @@
 import { disconnectData, isAdmin, isTrainee } from '../data.js';
+import { ic } from '../icons.js';
 import { Platform } from '../platform.js';
 import { disablePush, enablePush, pushIsOn, pushReasonText } from '../push.js';
 import { S } from '../state.js';
@@ -35,8 +36,14 @@ export async function togglePush(btnEl) {
   if (!r.ok) toast(pushReasonText(r.reason));
   render(true);
 }
-export function pushRow() {
+/* asListItem: 설정 목록의 한 줄(아이콘 + 글 + 스위치)로 */
+export function pushRow(asListItem) {
   const wrap = h('div', {});
+  if (asListItem) {
+    wrap.className = 'li';
+    wrap.innerHTML = '<span class="lead">' + ic('bell') + '</span><span class="body"><span class="hl" id="push-switch-label">알림 받기</span></span><span class="trail"><button class="switch" id="push-switch" type="button" role="switch" aria-checked="' + pushIsOn() + '" aria-labelledby="push-switch-label" data-act="push"' + (S.pushState === 'unsupported' ? ' disabled' : '') + '></button></span>';
+    return wrap;
+  }
   wrap.innerHTML = switchRow('push-switch', '알림 받기', pushStateText(), pushIsOn(), 'push', S.pushState === 'unsupported');
   return wrap;
 }
