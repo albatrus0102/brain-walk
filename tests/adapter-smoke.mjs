@@ -3,11 +3,13 @@
 // 사람마다(A 아버지·B 가족·C 새 기기) 별도 프로세스로 돌려서 진짜 기기처럼 서로 다른 로그인을 써요.
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { CREATE_CODE, seedCreation } from './seed-creation.mjs';
 const actor = process.argv[2];
 const dir = process.env.SMOKE_DIR || path.join(os.tmpdir(), 'bw-smoke');
 
 if (!actor) {   // ---- 오케스트레이터
   fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
+  await seedCreation();   // 가족방 만들기 코드(해시)를 심어요. appConfig/primary 는 일부러 안 심어요 (방 주인이 코드를 못 바꾸는 것도 확인)
   const run = n => new Promise(res => { const p = spawn(process.execPath, [process.argv[1], n], { stdio: 'inherit', env: { ...process.env, SMOKE_DIR: dir } }); p.on('exit', c => res(c)); });
   const codes = await Promise.all(['A', 'B', 'C', 'D'].map(run));
   console.log(codes.every(c => c === 0) ? 'SMOKE: ALL PASSED' : 'SMOKE: FAILED ' + codes);
@@ -41,7 +43,14 @@ const mid1 = () => Date.now() + '-' + Math.random().toString(36).slice(2, 7);
 try {
   if (actor === 'A') {
     ok(await FA.init() === false, '새 기기는 가입 필요(온보딩)');
-    const r = await M.createFamily({ name: '아버지', role: 'trainee' });
+    ok(await M.checkCreateCode('틀린 코드').then(() => false, e => e && e.code === 'bad-code'), '만들기 코드가 틀리면 화면에서 바로 알 수 있어요');
+    ok(await denied(M.createFamily({ name: '아버지', role: 'trainee' })), '만들기 코드 없이는 가족방을 못 만들어요');
+    ok(await denied(M.createFamily({ name: '아버지', role: 'trainee', createCode: 'wrong-code-123' })), '틀린 만들기 코드로는 가족방을 못 만들어요');
+    ok(await M.checkCreateCode(CREATE_CODE) === true, '맞는 만들기 코드는 통과');
+    const r = await M.createFamily({ name: '아버지', role: 'trainee', createCode: CREATE_CODE });
+    ok(await (async () => { const { F, db } = FA.sdk; try { await F.getDoc(F.doc(db, 'createProofs', FA.uid)); return false; } catch (e) { return e.code === 'permission-denied'; } })(), '만들기 증거 문서는 아무도 읽지 못해요');
+    ok(await denied(M.setCreateCode('another-code-12345')), 'appConfig/primary 가 없으면 방 주인도 코드를 못 바꿔요');
+    ok(await M.setCreateCode('short').then(() => false, e => e && e.code === 'short-code'), '8글자 미만 코드는 거절');
     ok(/^[2-9A-HJ-NP-Z]{6}$/.test(r.code), '가족 만들기 + 6글자 코드 ' + r.code);
     ok(FA.me().id === r.mid && FA.me().name === '아버지', 'me() = memberId');
     ok((await FA.getDoc('state/trainee')).userId === r.mid, 'state/trainee 설정');

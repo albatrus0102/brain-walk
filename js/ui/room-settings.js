@@ -3,7 +3,7 @@ import { Platform } from '../platform.js';
 import { disablePush, enablePush, pushIsOn, pushReasonText } from '../push.js';
 import { S } from '../state.js';
 import { FirebaseAdapter } from '../store/firebase-adapter.js';
-import { TRANSFER_MIN, clearLocalData, createTransferCode, deleteFamily, deleteMyRecords, getInviteInfo, isOwner, leaveFamily, listMyDevices, renameSelf, revokeDevice, rotateJoinCode, transferLink, transferOwnership } from '../store/membership.js';
+import { TRANSFER_MIN, clearLocalData, createTransferCode, deleteFamily, deleteMyRecords, getInviteInfo, isOwner, leaveFamily, listMyDevices, renameSelf, revokeDevice, rotateJoinCode, MIN_CREATE_CODE, setCreateCode, transferLink, transferOwnership } from '../store/membership.js';
 import { Store } from '../store/store.js';
 import { LS } from '../util.js';
 import { closeSheet, dialog, h, openSheet, toast } from './dom.js';
@@ -105,6 +105,21 @@ export function openRename() {
     };
     input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
     body.append(h('div', { class: 'field' }, h('label', { for: 'rename-input', text: '이름 (최대 20글자)' }), input), btn('저장', 'filled', save, 'rename-save'), btn('취소', 'text', closeSheet, 'rename-cancel'));
+  });
+}
+
+/* 방 주인: 새 가족방을 만들 때 묻는 '만들기 코드' 정하기. 서버에는 해시만 가요. */
+export function openCreateCode() {
+  openSheet('가족방 만들기 코드 정하기', (body) => {
+    const input = h('input', { class: 'input', id: 'ccset-input', type: 'password', autocomplete: 'off', spellcheck: 'false', maxlength: '100', 'aria-label': '새 만들기 코드 (' + MIN_CREATE_CODE + '글자 이상)', placeholder: MIN_CREATE_CODE + '글자 이상' });
+    const save = async () => {
+      const v = input.value.trim();
+      if (v.length < MIN_CREATE_CODE) { toast(MIN_CREATE_CODE + '글자 이상 적어 주세요.'); return; }
+      try { await setCreateCode(v); closeSheet(); toast('정했어요.'); } catch (e) { toast('저장하지 못했어요.'); }
+    };
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+    body.append(h('div', { class: 'field' }, h('label', { for: 'ccset-input', text: '새 만들기 코드 (' + MIN_CREATE_CODE + '글자 이상)' }), input), btn('저장', 'filled', save, 'ccset-save'), btn('취소', 'text', closeSheet, 'ccset-cancel'));
+    input.focus();
   });
 }
 

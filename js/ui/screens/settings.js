@@ -9,7 +9,7 @@ import { dialog, h } from '../dom.js';
 import { installSlot } from '../install.js';
 import { planSummary } from '../plan-text.js';
 import { SCREENS } from '../registry.js';
-import { btn, confirmDeleteAll, confirmDeleteLocal, confirmLeave, openDevices, openInvite, openOwnerTransfer, openRename, openTransfer, pushRow } from '../room-settings.js';
+import { btn, confirmDeleteAll, confirmDeleteLocal, confirmLeave, openCreateCode, openDevices, openInvite, openOwnerTransfer, openRename, openTransfer, pushRow } from '../room-settings.js';
 import { go } from '../shell.js';
 import { FONT_OPTS, SIZE_OPTS, prefsCard, segHtml, slotText, switchRow, xpCard } from '../widgets.js';
 import { $ } from '../../util.js';
@@ -48,7 +48,7 @@ SCREENS.settings = {
     const rem = chatAvail() ? xpCard('notif', '알림', '훈련 시간 · 내 확인 시간', '<div id="push-slot"></div>' +
       '<div class="field"><label for="rem-time">내 확인 시간 (매일)</label><input class="input" type="time" id="rem-time" value="' + esc(S.remDraft.time) + '"></div>' +
       switchRow('rem-switch', '이 시간에 알려 주기', S.remDraft.enabled ? '켜져 있어요.' : '꺼져 있어요.', S.remDraft.enabled, 'remsw', false) + '<button class="btn filled" id="btn-rem-save" type="button" data-act="remsave">저장</button>') : '';
-    const own = fb && isOwnerNow() ? xpCard('owner', '방 주인 전용', '관리자 넘기기 · 가족방 삭제', '<div id="owner-slot" class="stack"></div>') : '';
+    const own = (fb || local) && isOwnerNow() ? xpCard('owner', '방 주인 전용', fb ? '만들기 코드 · 관리자 넘기기 · 가족방 삭제' : '가족방 만들기 코드', '<div id="owner-slot" class="stack"></div>') : '';
     return '<div class="stack"><h1 class="t-headline" id="set-main-h">설정</h1>' + adminChip() +
       xpCard('mine', '내 화면', esc(fontName()) + ' · 글자 ' + esc(sizeName()), segHtml('글꼴', 'font-label', FONT_OPTS, S.prefs.font, 'font', 'font') + segHtml('글자 크기', 'size-label', SIZE_OPTS, S.prefs.size, 'size', 'size') +
         switchRow('sound-switch', '소리 안내', S.prefs.sound ? '켜져 있어요. 문제를 읽어 드려요.' : '꺼져 있어요.', S.prefs.sound, 'sound', false) + switchRow('contrast-switch', '고대비 모드', S.prefs.contrast ? '켜져 있어요. 글자와 테두리가 더 진해요.' : '꺼져 있어요.', S.prefs.contrast, 'contrast', false), true) +
@@ -70,7 +70,7 @@ SCREENS.settings = {
       me.append(h('p', { class: 't-body', text: '내 이름: ' + ((FirebaseAdapter.me() || {}).name || '') }), btn('내 이름 바꾸기', 'tonal', openRename, 'btn-rename'), btn('다른 기기로 옮기기', 'tonal', () => openTransfer(), 'btn-transfer'), btn('연결된 기기', 'tonal', openDevices, 'btn-devices'),
         btn('가족 나가기', 'outlined', confirmLeave, 'btn-leave'), btn('모든 기록 삭제', 'outlined', confirmDeleteAll, 'btn-delete-all'));
     }
-    const ow = $('#owner-slot', el); if (ow) ow.append(btn('관리자 넘기기 (가족방 주인 바꾸기)', 'tonal', openOwnerTransfer, 'btn-owner-transfer'));
+    const ow = $('#owner-slot', el); if (ow) { ow.append(btn('가족방 만들기 코드 정하기', 'tonal', openCreateCode, 'btn-create-code')); if (!local) ow.append(btn('관리자 넘기기 (가족방 주인 바꾸기)', 'tonal', openOwnerTransfer, 'btn-owner-transfer')); }
     if (local) { const d = $('#btn-delete-local', el); if (d) d.addEventListener('click', confirmDeleteLocal); }
   }
 };

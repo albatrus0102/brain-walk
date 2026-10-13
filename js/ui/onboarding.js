@@ -2,7 +2,7 @@ import { Platform } from '../platform.js';
 import { S } from '../state.js';
 import { Store } from '../store/store.js';
 import { FirebaseAdapter } from '../store/firebase-adapter.js';
-import { createFamily, inviteLink, inviteText, joinFamily, normalizeCode, previewJoinCode, redeemTransfer } from '../store/membership.js';
+import { checkCreateCode, createFamily, inviteLink, inviteText, joinFamily, normalizeCode, previewJoinCode, redeemTransfer } from '../store/membership.js';
 import { enterApp, startFlow, startLocalDemo } from '../boot.js';
 import { LS, iga } from '../util.js';
 import { dialog, h, toast } from './dom.js';
@@ -66,9 +66,31 @@ SCREENS['ob-start'] = {
     fill(
       h('h1', { class: 't-headline', id: 'ob-start-h', text: '오늘의 두뇌 산책에 오신 걸 환영해요' }),
       installSlot('start'),
-      big('새 가족 만들기', 'filled', () => { ob().flow = 'create'; go('ob-name'); }, 'btn-create'),
-      big('가족 코드로 들어가기', 'tonal', () => { ob().code = ''; go('ob-join'); }, 'btn-join'),
-      h('button', { class: 'btn text', type: 'button', id: 'btn-have-transfer', onclick: () => { ob().tcode = ''; go('ob-transfer'); } }, '기기 옮기기 코드가 있어요'));
+      big('가족 코드로 들어가기', 'filled', () => { ob().code = ''; go('ob-join'); }, 'btn-join'),
+      h('button', { class: 'btn text', type: 'button', id: 'btn-have-transfer', onclick: () => { ob().tcode = ''; go('ob-transfer'); } }, '기기 옮기기 코드가 있어요'),
+      h('button', { class: 'btn text', type: 'button', id: 'btn-create', onclick: () => { ob().flow = 'create'; ob().ccode = ''; go('ob-ccode'); } }, '가족방 만들기'));
+  }
+};
+
+/* ---------- 1-1. 가족방 만들기: 만들기 코드 (아는 사람만 만들 수 있어요) ---------- */
+SCREENS['ob-ccode'] = {
+  html() { return '<div class="stack" id="ob-root"></div>'; },
+  bind() {
+    const o = ob(), input = h('input', { class: 'input', id: 'create-code', type: 'password', autocomplete: 'off', spellcheck: 'false', maxlength: '100', 'aria-label': '만들기 코드' });
+    input.value = o.ccode || '';
+    const next = async () => {
+      const v = input.value.trim();
+      if (!v) { showErr('만들기 코드를 적어 주세요.'); return; }
+      btn.disabled = true; showErr('');
+      try { await checkCreateCode(v); o.ccode = v; o.flow = 'create'; go('ob-name'); }
+      catch (e) { showErr(e && e.code === 'bad-code' ? '만들기 코드가 맞지 않아요.' : '확인하지 못했어요. 인터넷 연결을 확인해 주세요.'); btn.disabled = false; }
+    };
+    const btn = big('다음', 'filled', next, 'btn-ccode-next');
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') next(); });
+    fill(h('h1', { class: 't-headline', id: 'ccode-h', text: '만들기 코드' }),
+      h('div', { class: 'field' }, h('label', { for: 'create-code', text: '만들기 코드' }), input), errP(), btn,
+      h('button', { class: 'btn text', type: 'button', id: 'btn-ccode-back', onclick: () => { o.ccode = ''; go('ob-start'); } }, '처음으로'));
+    input.focus();
   }
 };
 
@@ -131,7 +153,7 @@ SCREENS['ob-name'] = {
       h('div', { class: 'field' }, h('label', { for: 'ob-name-input', text: '내 이름' }), input),
       h('div', { class: 'chips', 'aria-label': '이름 예시' }, NAMES.map((n, i) => h('button', { class: 'chip', type: 'button', id: 'name-chip-' + i, onclick: () => { input.value = n; input.focus(); } }, n))),
       errP(), big('다음', 'filled', next, 'btn-name-next'),
-      h('button', { class: 'btn text', type: 'button', onclick: () => go(o.flow === 'join' ? 'ob-join' : 'ob-start') }, '이전'));
+      h('button', { class: 'btn text', type: 'button', onclick: () => go(o.flow === 'join' ? 'ob-join' : 'ob-ccode') }, '이전'));
     input.focus();
   }
 };
@@ -154,11 +176,12 @@ SCREENS['ob-role'] = {
             dialog('이미 훈련하는 분이 있어요', '이 가족방에는 ' + label + iga(label) + ' 훈련하는 분으로 등록되어 있어요. 우선 가족으로 들어갈게요. 훈련하는 분을 바꾸려면 관리자에게 부탁해 주세요.', [{ label: '확인', kind: 'filled' }], () => enterApp());
           } else await enterApp();
         } else {
-          const r = await createFamily({ name: o.name, role });
+          const r = await createFamily({ name: o.name, role, createCode: o.ccode }); o.ccode = '';
           Store.becomeMember(); S.roleLocal = role; LS.set('bw.role', role); LS.set('bw.roleAsked', true); o.invite = { code: r.code }; await enterApp({ stayOn: 'ob-invite' });
         }
       } catch (e) {
         document.querySelectorAll('#ob-root button').forEach(b => { b.disabled = false; });
+        if (o.flow !== 'join' && e && (e.code === 'permission-denied' || e.code === 'bad-code')) { go('ob-ccode'); showErr('만들기 코드가 맞지 않아요.'); return; }   // 코드가 그 사이 바뀌었거나 시간이 지났어요
         showErr(e && e.code === 'bad-code' ? '코드가 맞지 않거나 기간이 지났어요.' : '만들지 못했어요. 인터넷 연결을 확인하고 다시 해 보세요.');
       }
     };

@@ -23,7 +23,7 @@ const paras = page => page.evaluate(() => [...document.querySelectorAll('#screen
   must((await paras(page)).length === 0, '처음 화면: 문단 글 없음 ' + JSON.stringify(await paras(page)));
   must(await vis(page, '#btn-create') && await vis(page, '#btn-join') && await vis(page, '#btn-have-transfer'), '처음 화면: 제목 + 버튼 3개');
   await page.screenshot({ path: DIR + '/onboarding.png' });
-  for (const [scr, ob] of [['ob-join', { code: '', fromLink: true }], ['ob-transfer', {}], ['ob-name', { flow: 'create' }], ['ob-role', { flow: 'create', name: '나' }], ['ob-invite', { invite: { code: 'ABC234' }, role: 'trainee' }]]) {
+  for (const [scr, ob] of [['ob-join', { code: '', fromLink: true }], ['ob-transfer', {}], ['ob-ccode', {}], ['ob-name', { flow: 'create' }], ['ob-role', { flow: 'create', name: '나' }], ['ob-invite', { invite: { code: 'ABC234' }, role: 'trainee' }]]) {
     await page.evaluate(([s, o]) => { window.__S.ob = o; window.__go(s); }, [scr, ob]);
     await page.waitForTimeout(80);
     const ps = (await paras(page)).filter(x => !/^[A-Z0-9 ]{6,}$/.test(x) && x !== '가족 코드');

@@ -1,10 +1,20 @@
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, Timestamp, collection, getDocs, deleteField } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch as writeBatchRaw, serverTimestamp, Timestamp, collection, getDocs, deleteField } from 'firebase/firestore';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 const env = await initializeTestEnvironment({ projectId: 'demo-bw', firestore: { rules: fs.readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 } });
 let pass = 0, fail = 0;
 async function t(name, p, ok = true) { try { await (ok ? assertSucceeds(p) : assertFails(p)); pass++; console.log('ok  ', name); } catch (e) { fail++; console.log('FAIL', name, process.env.RULES_DEBUG ? e.message.replace(/\s+/g, ' ').slice(0, 500) : e.message.split('\n')[0]); } }
 const db = u => env.authenticatedContext(u).firestore();
+// ---- 가족방 만들기 코드: 시험 환경에 코드(해시만)를 심어 두고, 가족방을 만드는 배치에는 코드를 입력한 증거(createProofs)를 자동으로 함께 넣어요.
+const sha = x => createHash('sha256').update(x).digest('hex');
+const CREATE_CODE = 'test-create-code-1';
+await env.withSecurityRulesDisabled(async c => { const x = c.firestore(); await setDoc(doc(x, 'appConfig/creation'), { codeHash: sha(CREATE_CODE), setBy: 'seed', updatedTs: Timestamp.now() }); });
+const writeBatch = d => {
+  const b = writeBatchRaw(d), set = b.set.bind(b);
+  b.set = (ref, data, ...r) => { if (ref.parent.id === 'families' && ref.parent.parent === null && data && data.createdBy) set(doc(d, 'createProofs', data.createdBy), { proof: CREATE_CODE, ts: serverTimestamp() }); return set(ref, data, ...r); };
+  return b;
+};
 const anon = env.unauthenticatedContext().firestore();
 const F = 'fam1', CODE = 'ABC234', in7d = () => Timestamp.fromMillis(Date.now() + 7 * 864e5);
 // ---- founding (uid A = father)
@@ -641,6 +651,49 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('F4: re-ack with client time denied', updateDoc(doc(dT, `${P}/consents/t`), { version: 'v3', ackTs: Timestamp.fromMillis(Date.now()) }), false);
   await t('F4: consent cannot be deleted', deleteDoc(doc(dT, `${P}/consents/t`)), false);
 
+  // ---- consents: 관리자가 훈련하는 분을 대신해 켜기/끄기 ("AI 기록 관찰", byAdmin)
+  const ac = (by, o = {}) => Object.assign({ kind: 'ai-report-notice', version: '2026-11-v1', ackTs: serverTimestamp(), byAdmin: by }, o);
+  const clearConsents = () => env.withSecurityRulesDisabled(async c => { const x = c.firestore(); await deleteDoc(doc(x, `${P}/consents/t`)); await deleteDoc(doc(x, `${P}/consents/f`)); });
+  await clearConsents();
+  await t('F4: admin creates the consent for the trainee', setDoc(doc(dAd, `${P}/consents/t`), ac('a')));
+  await t('F4: trainee reads the admin-made consent', getDoc(doc(dT, `${P}/consents/t`)));
+  await t('F4: admin withdraws it (server time + byAdmin)', updateDoc(doc(dAd, `${P}/consents/t`), { withdrawnTs: serverTimestamp(), byAdmin: 'a' }));
+  await t('F4: owner (family role) turns it back on', updateDoc(doc(dO, `${P}/consents/t`), { version: '2026-11-v1', ackTs: serverTimestamp(), withdrawnTs: deleteField(), byAdmin: 'o' }));
+  await t('F4: admin withdraws and re-enables', (async () => {
+    await updateDoc(doc(dAd, `${P}/consents/t`), { withdrawnTs: serverTimestamp(), byAdmin: 'a' });
+    await updateDoc(doc(dAd, `${P}/consents/t`), { version: '2026-11-v1', ackTs: serverTimestamp(), withdrawnTs: deleteField(), byAdmin: 'a' });
+  })());
+  await t('F4: another admin update that leaves a stale byAdmin denied', updateDoc(doc(dO, `${P}/consents/t`), { ackTs: serverTimestamp() }), false);
+  await t('F4: admin update with forged byAdmin denied', updateDoc(doc(dAd, `${P}/consents/t`), { ackTs: serverTimestamp(), byAdmin: 'o' }), false);
+  await t('F4: admin update with client ackTs denied', updateDoc(doc(dAd, `${P}/consents/t`), { ackTs: Timestamp.fromMillis(Date.now()), byAdmin: 'a' }), false);
+  await t('F4: admin withdraw with client time denied', updateDoc(doc(dAd, `${P}/consents/t`), { withdrawnTs: Timestamp.fromMillis(Date.now()), byAdmin: 'a' }), false);
+  await t('F4: admin cannot change kind', updateDoc(doc(dAd, `${P}/consents/t`), { kind: 'x', byAdmin: 'a' }), false);
+  await t('F4: admin cannot add other keys on update', updateDoc(doc(dAd, `${P}/consents/t`), { withFamily: true, byAdmin: 'a' }), false);
+  await t('F4: admin cannot delete the consent', deleteDoc(doc(dAd, `${P}/consents/t`)), false);
+  await t('F4: plain family cannot update the trainee consent', updateDoc(doc(dF, `${P}/consents/t`), { withdrawnTs: serverTimestamp(), byAdmin: 'f' }), false);
+  await t('F4: trainee still withdraws its own admin-made consent', updateDoc(doc(dT, `${P}/consents/t`), { withdrawnTs: serverTimestamp() }));
+  await t('F4: trainee re-acknowledges its own admin-made consent', updateDoc(doc(dT, `${P}/consents/t`), { version: '2026-11-v1', ackTs: serverTimestamp(), withdrawnTs: deleteField() }));
+  await t('F4: trainee cannot touch byAdmin', updateDoc(doc(dT, `${P}/consents/t`), { withdrawnTs: serverTimestamp(), byAdmin: 't' }), false);
+  await clearConsents();
+  await t('F4: owner (family role) creates the consent for the trainee', setDoc(doc(dO, `${P}/consents/t`), ac('o')));
+  await clearConsents();
+  await t('F4: plain family cannot create the trainee consent', setDoc(doc(dF, `${P}/consents/t`), ac('f')), false);
+  await t('F4: trainee cannot use the byAdmin field for itself', setDoc(doc(dT, `${P}/consents/t`), ac('t')), false);
+  await t('F4: admin cannot target a non-trainee member', setDoc(doc(dAd, `${P}/consents/f`), ac('a')), false);
+  await t('F4: admin cannot target itself', setDoc(doc(dAd, `${P}/consents/a`), ac('a')), false);
+  await t('F4: admin forged byAdmin denied', setDoc(doc(dAd, `${P}/consents/t`), ac('o')), false);
+  await t('F4: admin create without byAdmin denied', setDoc(doc(dAd, `${P}/consents/t`), { kind: 'ai-report-notice', version: '2026-11-v1', ackTs: serverTimestamp() }), false);
+  await t('F4: admin create with client ackTs denied', setDoc(doc(dAd, `${P}/consents/t`), ac('a', { ackTs: Timestamp.fromMillis(Date.now()) })), false);
+  await t('F4: admin create wrong kind denied', setDoc(doc(dAd, `${P}/consents/t`), ac('a', { kind: 'other' })), false);
+  await t('F4: admin create extra key denied', setDoc(doc(dAd, `${P}/consents/t`), ac('a', { note: 1 })), false);
+  await t('F4: admin create with withdrawnTs denied', setDoc(doc(dAd, `${P}/consents/t`), ac('a', { withdrawnTs: serverTimestamp() })), false);
+  await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), `${P}/consents/f`), { kind: 'ai-report-notice', version: 'v', ackTs: Timestamp.now() }); });
+  await t('F4: admin cannot update a non-trainee consent', updateDoc(doc(dAd, `${P}/consents/f`), { withdrawnTs: serverTimestamp(), byAdmin: 'a' }), false);
+  await t('F4: admin create with withFamily is allowed', setDoc(doc(dAd, `${P}/consents/t`), ac('a', { withFamily: true })));
+  await clearConsents();
+  await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), `${P}/consents/t`), { kind: 'ai-report-notice', version: '2026-11-v1', ackTs: Timestamp.now() }); });
+  await t('F4: admin updates a trainee-made consent', updateDoc(doc(dAd, `${P}/consents/t`), { withdrawnTs: serverTimestamp(), byAdmin: 'a' }));
+
   // ---- server-only top-level AI collections: closed to members, admins, strangers and "worker"-style accounts
   const pw = env.authenticatedContext('worker-uid', { firebase: { sign_in_provider: 'password' }, email: 'bw-ai-worker@example.invalid' }).firestore();
   const anonCtx = env.authenticatedContext('anon-uid', { firebase: { sign_in_provider: 'anonymous' } }).firestore();
@@ -694,7 +747,68 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   }
   await t('F4b: trainee-owner cannot list reports', getDocs(collection(dO, `${P}/aiReports`)), false);
   await t('F4b: trainee-owner cannot write notes', setDoc(doc(dO, `${P}/aiNotes/n2`), { from: '2027-01-01', codes: ['sleep'], by: 'o', ts: Date.now() }), false);
+  const ac4b = by => ({ kind: 'ai-report-notice', version: '2026-11-v1', ackTs: serverTimestamp(), byAdmin: by });
+  await t('F4b: trainee-owner cannot use the admin path for itself', setDoc(doc(dO, `${P}/consents/o`), ac4b('o')), false);
+  await t('F4b: trainee-owner still acknowledges for itself', setDoc(doc(dO, `${P}/consents/o`), { kind: 'ai-report-notice', version: '2026-11-v1', ackTs: serverTimestamp() }));
+  await t('F4b: trainee-owner cannot update through the admin path', updateDoc(doc(dO, `${P}/consents/o`), { ackTs: serverTimestamp(), byAdmin: 'o' }), false);
+  await t('F4b: family admin updates the trainee-owner consent', updateDoc(doc(dA, `${P}/consents/o`), { withdrawnTs: serverTimestamp(), byAdmin: 'a' }));
 }
+
+// =============================================================================
+// 새 가족방 만들기는 '만들기 코드'를 아는 사람만 (appConfig/creation, createProofs)
+// =============================================================================
+{
+  const FP = 'famP', CP = 'PQR234', P = `families/${FP}`;
+  const found = (d, uid, fid, code, withProof, proof = CREATE_CODE) => {
+    const b = writeBatchRaw(d);
+    if (withProof) b.set(doc(d, 'createProofs', uid), { proof, ts: serverTimestamp() });
+    b.set(doc(d, 'families', fid), { createdBy: uid, createdTs: serverTimestamp(), ownerMemberId: 'm' + uid, joinCode: code });
+    b.set(doc(d, 'joinCodes', code), { familyId: fid, createdBy: 'm' + uid, createdTs: serverTimestamp(), expiresTs: in7d() });
+    b.set(doc(d, `families/${fid}/uids/${uid}`), { memberId: 'm' + uid, via: 'create', addedTs: serverTimestamp() });
+    b.set(doc(d, `families/${fid}/members/m${uid}`), { name: '나', role: 'family', joinedTs: serverTimestamp() });
+    return b.commit();
+  };
+  const hashOf = c => ({ codeHash: sha(c), setBy: 'mP', updatedTs: serverTimestamp() });
+  await env.withSecurityRulesDisabled(async c => { await deleteDoc(doc(c.firestore(), 'appConfig/creation')); });
+  await t('CC: no creation doc → nobody can create a family', found(db('p1'), 'p1', 'famN1', 'NNN234', true), false);
+  await t('CC: no creation doc → the proof itself is denied', setDoc(doc(db('p1'), 'createProofs/p1'), { proof: CREATE_CODE, ts: serverTimestamp() }), false);
+  await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), 'appConfig/creation'), { codeHash: sha(CREATE_CODE), setBy: 'seed', updatedTs: Timestamp.now() }); });
+  await t('CC: no proof → family create denied', found(db('p2'), 'p2', 'famN2', 'NNN235', false), false);
+  await t('CC: wrong code → family create denied', found(db('p3'), 'p3', 'famN3', 'NNN236', true, 'wrong-code-123'), false);
+  await t('CC: wrong code → the proof write is denied (the screen can tell right away)', setDoc(doc(db('p3'), 'createProofs/p3'), { proof: 'wrong-code-123', ts: serverTimestamp() }), false);
+  await t('CC: the stored hash is not a code (sending the hash itself is denied)', setDoc(doc(db('p3'), 'createProofs/p3'), { proof: sha(CREATE_CODE), ts: serverTimestamp() }), false);
+  await t('CC: proof with a client time denied', setDoc(doc(db('p3'), 'createProofs/p3'), { proof: CREATE_CODE, ts: Timestamp.fromMillis(Date.now()) }), false);
+  await t('CC: proof for someone else denied', setDoc(doc(db('p3'), 'createProofs/other'), { proof: CREATE_CODE, ts: serverTimestamp() }), false);
+  await t('CC: proofs cannot be read', getDoc(doc(db('p3'), 'createProofs/p3')), false);
+  await t('CC: right code → family create allowed (proof in the same batch)', found(db('pP'), 'pP', FP, CP, true));
+  await t('CC: right code → the proof write alone is allowed, then the family create (screen flow)', (async () => { const d = db('p4'); await setDoc(doc(d, 'createProofs/p4'), { proof: CREATE_CODE, ts: serverTimestamp() }); await found(d, 'p4', 'famN4', 'NNN237', false); })());
+  await t('CC: own proof can be deleted', deleteDoc(doc(db('p4'), 'createProofs/p4')));
+  await t('CC: after deleting the proof a new family is denied again', found(db('p4'), 'p4', 'famN5', 'NNN238', false), false);
+  await t('CC: existing family still lets people join by code', (async () => { const d = db('pJ'), b = writeBatchRaw(d); b.set(doc(d, `${P}/uids/pJ`), { memberId: 'mJ', via: 'join', code: CP, addedTs: serverTimestamp() }); b.set(doc(d, `${P}/members/mJ`), { name: '딸', role: 'family', joinedTs: serverTimestamp() }); await b.commit(); })());
+  // appConfig: 읽기 금지, primary 는 서버만
+  for (const [who, d] of [['owner', db('pP')], ['member', db('pJ')], ['stranger', db('p9')], ['signed-out', anon]]) {
+    await t(`CC: ${who} cannot read appConfig/creation`, getDoc(doc(d, 'appConfig/creation')), false);
+    await t(`CC: ${who} cannot read appConfig/primary`, getDoc(doc(d, 'appConfig/primary')), false);
+  }
+  await t('CC: nobody can list appConfig', getDocs(collection(db('pP'), 'appConfig')), false);
+  await t('CC: nobody writes appConfig/primary', setDoc(doc(db('pP'), 'appConfig/primary'), { fid: FP }), false);
+  // 코드 바꾸기: appConfig/primary 의 가족방 방 주인만
+  await t('CC: without appConfig/primary even a family owner cannot set the code', setDoc(doc(db('pP'), 'appConfig/creation'), hashOf('new-code-12345')), false);
+  await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), 'appConfig/primary'), { fid: FP }); });
+  await t('CC: a non-owner member cannot set the code', setDoc(doc(db('pJ'), 'appConfig/creation'), Object.assign(hashOf('x-code-12345'), { setBy: 'mJ' })), false);
+  await t('CC: a stranger cannot set the code', setDoc(doc(db('p9'), 'appConfig/creation'), hashOf('x-code-12345')), false);
+  await t('CC: the owner of ANOTHER family cannot set the code', setDoc(doc(db('p4'), 'appConfig/creation'), Object.assign(hashOf('x-code-12345'), { setBy: 'mp4' })), false);
+  await t('CC: owner with a forged setBy denied', setDoc(doc(db('pP'), 'appConfig/creation'), Object.assign(hashOf('x-code-12345'), { setBy: 'mJ' })), false);
+  await t('CC: owner with a client time denied', setDoc(doc(db('pP'), 'appConfig/creation'), Object.assign(hashOf('x-code-12345'), { updatedTs: Timestamp.fromMillis(Date.now()) })), false);
+  await t('CC: owner with a non-hash value denied (raw code is not accepted)', setDoc(doc(db('pP'), 'appConfig/creation'), Object.assign(hashOf('x'), { codeHash: 'x-code-12345' })), false);
+  await t('CC: owner with an extra key denied', setDoc(doc(db('pP'), 'appConfig/creation'), Object.assign(hashOf('x-code-12345'), { raw: 'x-code-12345' })), false);
+  await t('CC: the primary owner sets a new code', setDoc(doc(db('pP'), 'appConfig/creation'), Object.assign(hashOf('new-code-12345'), { setBy: 'mpP' })));
+  await t('CC: nobody deletes the code doc', deleteDoc(doc(db('pP'), 'appConfig/creation')), false);
+  await t('CC: the old code no longer works', setDoc(doc(db('p5'), 'createProofs/p5'), { proof: CREATE_CODE, ts: serverTimestamp() }), false);
+  await t('CC: the new code works', setDoc(doc(db('p5'), 'createProofs/p5'), { proof: 'new-code-12345', ts: serverTimestamp() }));
+  await t('CC: a proof made with the old code stops working after the code changes', (async () => { await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), 'createProofs/p6'), { proof: CREATE_CODE, ts: Timestamp.now() }); }); await found(db('p6'), 'p6', 'famN6', 'NNN239', false); })(), false);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 await env.cleanup();
 process.exit(fail ? 1 : 0);

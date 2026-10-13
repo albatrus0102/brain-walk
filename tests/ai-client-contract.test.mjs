@@ -37,7 +37,7 @@ const F = await import('firebase/firestore');
 const fs = await import('node:fs');
 const { FirebaseAdapter } = await import('../js/store/firebase-adapter.js');
 const { entryOf, logDocs, codeItemId, codeRole } = await import('../js/ai/itemlog-doc.js');
-const { consentWrite, withdrawPatch, consentState, CONSENT_KIND } = await import('../js/ai/consent-doc.js');
+const { consentWrite, withdrawPatch, consentState, CONSENT_KIND, adminConsentWrite, adminWithdrawPatch } = await import('../js/ai/consent-doc.js');
 const { noteDoc, noteId, reviewDoc, themesDoc, switchDoc } = await import('../js/ai/admin-docs.js');
 
 const env = await initializeTestEnvironment({ projectId: 'demo-bw', firestore: { rules: fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8'), host: '127.0.0.1', port: 8080 } });
@@ -209,6 +209,23 @@ await t('C2.6 a pending (not yet acknowledged by the server) ackTs reads as ackn
 await t('C2.7 admins read the consent list (루틴 상태 row); a plain family member cannot read it', async () => {
   const l = await A.query('consents', { limit: 10 }); assert(l.some((c) => c.id === 't'));
   assert(await denied(Fm.getDoc('consents/t')));
+});
+await t('C2.8 admin-made consent (byAdmin): create → eligible; admin off → no_consent; admin on again → eligible; the extra key breaks nothing server side', async () => {
+  await adb.doc(`${P}/consents/t`).delete();
+  assert((await eligibility(FID)).why === 'no_consent');
+  const w = adminConsentWrite(null, 'a'); assert(w.op === 'set');
+  await A.setDoc('consents/t', w.data);
+  let s = await adb.doc(`${P}/consents/t`).get();
+  assert(s.get('byAdmin') === 'a' && s.get('ackTs') instanceof Timestamp && consentState(s.data()) === 'ok');
+  const e = await eligibility(FID); assert(e.ok === true && e.traineeId === 't' && e.consentTs, JSON.stringify(e));
+  await A.updateDoc('consents/t', adminWithdrawPatch('a'));
+  s = await adb.doc(`${P}/consents/t`).get();
+  assert(consentState(s.data()) === 'withdrawn' && (await eligibility(FID)).why === 'no_consent');
+  const w2 = adminConsentWrite(s.data(), 'o'); assert(w2.op === 'update');
+  await O.updateDoc('consents/t', w2.data);
+  s = await adb.doc(`${P}/consents/t`).get();
+  assert(!('withdrawnTs' in s.data()) && s.get('byAdmin') === 'o' && (await eligibility(FID)).ok === true);
+  assert(await denied(Fm.setDoc('consents/t', adminConsentWrite(null, 'f').data)) && await denied(T.setDoc('consents/t', adminConsentWrite(null, 't').data)));
 });
 
 // ===================================================================== C3. aiNotes

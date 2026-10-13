@@ -1,5 +1,6 @@
 import { displayDoc, planDoc } from '../program.js';
 import { FirebaseAdapter as FA } from './firebase-adapter.js';
+import { LocalAdapter } from './local-adapter.js';
 import { Store } from './store.js';
 
 /* 가족 만들기 / 들어가기 / 기기 옮기기 / 나가기 / 삭제 (ARCHITECTURE.md §5)
@@ -39,17 +40,50 @@ export async function previewJoinCode(code) {
   } catch (e) { throw { code: 'bad-code', message: '코드가 맞지 않거나 기간이 지났어요' }; }
 }
 
-export async function createFamily({ name, role }) {
-  const { F, db } = FA.sdk, uid = FA.uid, fid = newId(), mid = newId();
+/* ---- 가족방 만들기 코드 (firestore.rules: appConfig/creation, createProofs) ----
+ * 새 가족방은 '만들기 코드'를 아는 사람만 만들 수 있어요. 서버에는 코드의 sha256(16진수 소문자)만 있어요.
+ * 입력한 코드는 createProofs/{내 uid} 에 쓰는데, 코드가 맞을 때만 규칙이 받아 줘요 (그래서 화면에서 바로 맞는지 알 수 있어요).
+ * 체험 모드(LocalAdapter)는 같은 검사를 appConfig/creation 문서로 흉내 내요. */
+export const MIN_CREATE_CODE = 8;
+export async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(text)));
+  return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('');
+}
+const cleanCreateCode = c => String(c == null ? '' : c).trim();
+export async function checkCreateCode(code) {
+  code = cleanCreateCode(code);
+  if (!code || code.length > 100) throw { code: 'bad-code' };
+  if (Store.mode === 'local') {
+    const cfg = await LocalAdapter.getDoc('appConfig/creation');
+    if (!cfg || cfg.codeHash !== await sha256Hex(code)) throw { code: 'bad-code' };
+    return true;
+  }
+  try { await FA.sdk.F.setDoc(FA.sdk.F.doc(FA.sdk.db, 'createProofs', FA.uid), { proof: code, ts: sv() }); }
+  catch (e) { throw { code: e && e.code === 'permission-denied' ? 'bad-code' : (e && e.code) || 'failed' }; }
+  return true;
+}
+/* 방 주인이 만들기 코드를 정해요. 서버에는 해시만 보내요. 성공하면 true */
+export async function setCreateCode(code) {
+  code = cleanCreateCode(code);
+  if (code.length < MIN_CREATE_CODE || code.length > 100) throw { code: 'short-code' };
+  const codeHash = await sha256Hex(code);
+  if (Store.mode === 'local') { await LocalAdapter.setDoc('appConfig/creation', { codeHash, setBy: 'local', updatedTs: Date.now() }); return true; }
+  await FA.sdk.F.setDoc(FA.sdk.F.doc(FA.sdk.db, 'appConfig', 'creation'), { codeHash, setBy: FA.mid, updatedTs: sv() });
+  return true;
+}
+
+export async function createFamily({ name, role, createCode }) {
+  const { F, db } = FA.sdk, uid = FA.uid, fid = newId(), mid = newId(), proof = cleanCreateCode(createCode);
   let lastErr;
   for (let i = 0; i < 3; i++) {
     const code = newCode(), b = F.writeBatch(db);
+    b.set(F.doc(db, 'createProofs', uid), { proof, ts: sv() });
     b.set(F.doc(db, 'families', fid), { createdBy: uid, createdTs: sv(), ownerMemberId: mid, joinCode: code, name: '우리 가족', schemaVersion: 1 });
     b.set(F.doc(db, 'joinCodes', code), { familyId: fid, createdBy: mid, createdTs: sv(), expiresTs: ts(Date.now() + JOIN_DAYS * DAY) });
     b.set(F.doc(db, 'families', fid, 'uids', uid), { memberId: mid, via: 'create', addedTs: sv(), device: deviceLabel() });
     b.set(F.doc(db, 'families', fid, 'members', mid), { name, role, joinedTs: sv() });
     b.set(F.doc(db, 'users', uid), { familyId: fid, memberId: mid, updatedAt: sv() });
-    try { await b.commit(); lastErr = null; await FA.setMembership(fid, mid); if (role === 'trainee') await setTrainee(); return { fid, mid, code }; }
+    try { await b.commit(); lastErr = null; await FA.setMembership(fid, mid); F.deleteDoc(F.doc(db, 'createProofs', uid)).catch(() => {}); if (role === 'trainee') await setTrainee(); return { fid, mid, code }; }
     catch (e) { lastErr = e; if (!(e && e.code === 'permission-denied')) break; }
   }
   throw lastErr;

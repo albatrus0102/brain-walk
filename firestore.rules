@@ -65,6 +65,21 @@ service cloud.firestore {
       return exists(traineePath(fid)) && get(traineePath(fid)).data.userId == myId(fid);
     }
 
+    // ---- 새 가족방 만들기는 '만들기 코드'를 아는 사람만 (appConfig/creation.codeHash = 코드의 sha256 소문자 16진수. toHexString() 은 대문자라서 .lower() 로 맞춰요).
+    // appConfig 는 앱에서 읽을 수 없고, 코드 문서가 없으면 아무도 새 가족방을 못 만들어요. 이미 있는 가족방은 영향이 없어요.
+    // 코드 바꾸기는 appConfig/primary.fid 가 가리키는 가족방(서버가 심어요)의 방 주인만. 생 코드는 어디에도 저장하지 않아요.
+    function creationPath() { return /databases/$(database)/documents/appConfig/creation; }
+    function primaryPath() { return /databases/$(database)/documents/appConfig/primary; }
+    function proofPath(u) { return /databases/$(database)/documents/createProofs/$(u); }
+    function validProofDoc(d) {
+      return d.keys().hasOnly(['proof', 'ts']) && d.keys().hasAll(['proof', 'ts'])
+        && d.proof is string && d.proof.size() > 0 && d.proof.size() <= 100
+        && exists(creationPath()) && hashing.sha256(d.proof).toHexString().lower() == get(creationPath()).data.codeHash;
+    }
+    function isPrimaryOwner() {
+      return signedIn() && exists(primaryPath()) && isMember(get(primaryPath()).data.fid) && isOwner(get(primaryPath()).data.fid);
+    }
+
     function newData() { return request.resource.data; }
     function oldData() { return resource.data; }
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
@@ -107,6 +122,24 @@ service cloud.firestore {
         && (!exists(famPath(newData().familyId)) || isAdmin(newData().familyId));
       allow update: if false;
       allow delete: if signedIn() && isAdmin(resource.data.familyId);
+    }
+
+    // ======================================================= 가족방 만들기 코드
+    match /appConfig/primary { allow read, write: if false; }   // 서버(Admin SDK)만 심어요: { fid }
+    match /appConfig/creation {
+      allow read: if false;
+      allow create, update: if isPrimaryOwner()
+        && newData().keys().hasOnly(['codeHash', 'setBy', 'updatedTs']) && newData().keys().hasAll(['codeHash', 'setBy', 'updatedTs'])
+        && newData().codeHash is string && newData().codeHash.matches('^[0-9a-f]{64}$')
+        && newData().setBy == myId(get(primaryPath()).data.fid)
+        && newData().updatedTs == request.time;
+      allow delete: if false;
+    }
+    // 만들기 코드를 입력했다는 증거: 코드가 맞을 때만 쓸 수 있고(그래서 화면에서 바로 확인돼요), 아무도 읽지 못해요. 가족방 만들기 배치가 이것을 확인해요.
+    match /createProofs/{u} {
+      allow read: if false;
+      allow create, update: if signedIn() && u == uid() && validProofDoc(newData()) && newData().ts == request.time;
+      allow delete: if signedIn() && u == uid();
     }
 
     // ======================================================= transfer codes
@@ -220,7 +253,10 @@ service cloud.firestore {
         && optStr('name', 30)
         && optNum('schemaVersion')
         && getAfter(linkPath(fid)).data.memberId == newData().ownerMemberId
-        && getAfter(joinCodePath(newData().joinCode)).data.familyId == fid;
+        && getAfter(joinCodePath(newData().joinCode)).data.familyId == fid
+        // 만들기 코드: 30분 안에 맞는 코드를 입력한 증거가 있어야 해요 (코드가 그 뒤에 바뀌었으면 다시 입력)
+        && existsAfter(proofPath(uid())) && getAfter(proofPath(uid())).data.ts > request.time - duration.value(30, 'm')
+        && validProofDoc(getAfter(proofPath(uid())).data);
       allow update: if isMember(fid) && (
            (changed().hasOnly(['name']) && str(newData().name, 30) && isAdmin(fid))
         || (changed().hasOnly(['joinCode']) && okCode(newData().joinCode) && isAdmin(fid)
@@ -761,9 +797,31 @@ service cloud.firestore {
         return d.keys().hasOnly(['kind', 'version', 'ackTs', 'withFamily']) && d.keys().hasAll(['kind', 'version', 'ackTs'])
           && d.kind == 'ai-report-notice' && nonEmpty(d.version, 20) && d.ackTs == request.time && optBool('withFamily');
       }
+      // 관리자가 훈련하는 분을 대신해 켜기 ("AI 기록 관찰"): 지금 지정된 훈련하는 분의 문서만, byAdmin = 내 memberId, 서버 시각.
+      // 관리자가 훈련하는 분 본인이면(isAiAdmin 이 아니므로) 이 길은 못 써요.
+      function isCurrentTrainee(fid, mid) {
+        return exists(traineePath(fid)) && get(traineePath(fid)).data.userId == mid;
+      }
+      function validAdminConsentCreate() {
+        let d = newData();
+        return d.keys().hasOnly(['kind', 'version', 'ackTs', 'withFamily', 'byAdmin']) && d.keys().hasAll(['kind', 'version', 'ackTs', 'byAdmin'])
+          && d.kind == 'ai-report-notice' && nonEmpty(d.version, 20) && d.ackTs == request.time && optBool('withFamily')
+          && d.byAdmin == myId(fid);
+      }
+      function validAdminConsentUpdate() {
+        return newData().kind == oldData().kind
+          && changed().hasOnly(['version', 'ackTs', 'withdrawnTs', 'byAdmin'])
+          && 'byAdmin' in newData() && newData().byAdmin == myId(fid)
+          && (!changed().hasAny(['version']) || nonEmpty(newData().version, 20))
+          && (!changed().hasAny(['ackTs']) || newData().ackTs == request.time)
+          && (!changed().hasAny(['withdrawnTs']) || !('withdrawnTs' in newData()) || newData().withdrawnTs == request.time);
+      }
       match /consents/{mid} {
         allow read: if isMember(fid) && (isAdmin(fid) || mid == myId(fid));
-        allow create: if isMember(fid) && mid == myId(fid) && validConsentCreate();
+        allow create: if isMember(fid) && (
+             (mid == myId(fid) && validConsentCreate())
+          || (isAiAdmin(fid) && isCurrentTrainee(fid, mid) && validAdminConsentCreate()));
+        allow update: if isMember(fid) && isAiAdmin(fid) && isCurrentTrainee(fid, mid) && validAdminConsentUpdate();
         allow update: if isMember(fid) && mid == myId(fid) && newData().kind == oldData().kind && (
              // 다시 확인 (문구 버전이 바뀌었거나 철회 뒤 다시 동의): 서버 시각, 철회 표시는 지워요
              (changed().hasOnly(['version', 'ackTs', 'withFamily', 'withdrawnTs']) && nonEmpty(newData().version, 20)

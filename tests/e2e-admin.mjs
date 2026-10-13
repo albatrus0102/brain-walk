@@ -177,7 +177,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
 
 /* ---------- 6) 가족 홈의 현황 (체험 모드에서 상태를 흉내) ---------- */
 {
-  const { page } = await newPage(browser, { tag: 'dash', seed: { 'bw.role': 'family' } });
+  const { page } = await newPage(browser, { tag: 'dash', tz: 'Asia/Seoul', seed: { 'bw.role': 'family' } });
   await startDemo(page);
   const put = (path, doc) => page.evaluate(async ([p, d]) => window.__Store.setDoc(p, d), [path, doc]);
   const ymdOf = off => page.evaluate(o => { const t = new Date(); t.setDate(t.getDate() + o); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); }, off);
@@ -205,8 +205,11 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   await put('presence/local', { ts: Date.now(), lastSeen: Date.now() - 10 * 60e3 });
   await page.waitForFunction(() => /10분 전에 앱을 보셨어요/.test(document.querySelector('#dash-presence').innerText));
   must(true, '10분 전에 앱을 보셨어요');
-  await put('presence/local', { ts: Date.now(), lastSeen: Date.now() - 5 * 3600e3 });
-  await page.waitForFunction(() => /오늘 .+에 마지막으로 보셨어요/.test(document.querySelector('#dash-presence').innerText)); must(true, '오늘 ○○에 마지막으로 보셨어요');
+  // 시각과 상관없이 통과하도록: 기준은 KST 의 '오늘' (이 화면은 Asia/Seoul). 5시간 전이 어제로 넘어가는 0~5시 사이에는 오늘 0시 1분으로 당기고,
+  // 그것도 30분 안(= '몇 분 전')이 되는 0시~0시 31분에는 5시간 전(어제)으로 두고 '어제'를 기대해요.
+  const seen = await page.evaluate(() => { const n = new Date(), mid = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime() + 60e3; const five = n.getTime() - 5 * 3600e3; const ts = five >= mid ? five : (n.getTime() - mid > 31 * 60e3 ? mid : five); return { ts, label: ts >= mid - 60e3 ? '오늘' : '어제' }; });
+  await put('presence/local', { ts: Date.now(), lastSeen: seen.ts });
+  await page.waitForFunction(l => new RegExp(l + ' .+에 마지막으로 보셨어요').test(document.querySelector('#dash-presence').innerText), seen.label); must(true, seen.label + ' ○○에 마지막으로 보셨어요');
   // 쉬는 중 (30분 넘게 움직임 없음)
   const old = Date.now() - 50 * 60e3;
   const pd = await P('progressStart', [null, { userId: 'local', date: today, planned, gameId: 'odd', now: old }]);

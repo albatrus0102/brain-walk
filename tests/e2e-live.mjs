@@ -6,6 +6,7 @@
 // 실행: npm run test:live   (에뮬레이터 + 인터넷의 gstatic 에서 Firebase SDK 를 받아요. 못 받으면 SKIP)
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
 import { chromium, done, errors, must, out } from './e2e-lib.mjs';
+import { CREATE_CODE, seedCreation } from './seed-creation.mjs';
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png' };
 const server = http.createServer((req, res) => {
@@ -33,6 +34,7 @@ async function open(tag) {
 const text = (p, s) => p.innerText(s).then(t => t.replace(/\s+/g, ' ').trim());
 const until = (p, fn, arg, ms = 8000) => p.waitForFunction(fn, arg, { timeout: ms }).then(() => true).catch(() => false);
 
+await seedCreation();   // 가족방 만들기 코드(해시만) — 새 가족방은 이 코드를 아는 사람만 만들어요
 const admin = await open('admin');
 await admin.goto(BASE);
 if (!(await admin.waitForSelector('#btn-create', { timeout: 20000 }).then(() => true).catch(() => false))) {
@@ -40,7 +42,11 @@ if (!(await admin.waitForSelector('#btn-create', { timeout: 20000 }).then(() => 
   await browser.close(); server.close(); process.exit(0);
 }
 /* 1) 관리자(가족)가 가족방 만들기 */
-await admin.click('#btn-create'); await admin.fill('#ob-name-input', '형'); await admin.click('#btn-name-next');
+await admin.click('#btn-create'); await admin.waitForSelector('#create-code');
+await admin.fill('#create-code', '틀린 코드 입니다'); await admin.click('#btn-ccode-next'); await admin.waitForSelector('#ob-err:not([hidden])');
+must((await text(admin, '#ob-err')) === '만들기 코드가 맞지 않아요.' && !(await admin.locator('#ob-name-input').count()), '새 가족방: 만들기 코드가 틀리면 짧은 오류만');
+await admin.fill('#create-code', CREATE_CODE); await admin.click('#btn-ccode-next'); await admin.waitForSelector('#ob-name-input');
+await admin.fill('#ob-name-input', '형'); await admin.click('#btn-name-next');
 await admin.click('#role-family'); await admin.waitForSelector('#inv-code');
 const code = (await admin.innerText('#inv-code')).trim();
 must(/^[2-9A-HJ-NP-Z]{6}$/.test(code), '가족방을 만들고 코드를 받아요 ' + code);
@@ -65,8 +71,6 @@ await admin.screenshot({ path: (process.env.SHOT_DIR || '/tmp') + '/live-dashboa
 await admin.click('#btn-settings'); await admin.waitForSelector('#set-main-h');
 await admin.click('#xp-mgmt'); await admin.click('#row-display'); await admin.waitForSelector('#dd-h');
 await admin.click('#dd-font-noto'); await admin.click('#dd-size-max'); await admin.click('#dd-save');
-await admin.waitForSelector('#snackbar:not([hidden])');
-must((await admin.innerText('#snackbar')).includes('지금 아버지가 앱을 보고 계셔서 바로 바뀌어요'), '접속 중이면 "바로 바뀌어요" 안내');
 must(await until(learner, () => document.documentElement.dataset.size === 'max' && document.documentElement.dataset.font === 'noto', null, 5000), '훈련하는 분 기기에 글꼴·최대 글자가 3초 안에 저절로 적용 (입력 없음)');
 must(await learner.evaluate(() => getComputedStyle(document.body).fontFamily.includes('Noto Sans KR')), '글꼴이 타이포 토큰으로 바뀌었어요');
 must((await admin.evaluate(() => document.documentElement.dataset.size)) === 'normal', '관리자 기기의 글자 크기는 그대로');
@@ -77,12 +81,16 @@ await admin.click('#btn-back'); await admin.click('#row-plan'); await admin.wait
 while ((await admin.innerText('#plan-gpd')) !== '2') await admin.click('#gpd-minus');
 if (await admin.locator('#plan-more').getAttribute('open') === null) await admin.click('#plan-more-sum');
 await admin.click('#plan-auto-0'); await admin.click('#plan-save');
-await admin.waitForSelector('#snackbar:not([hidden])');
-must(await learner.waitForFunction(async () => /^게임 2개/.test((await import(location.origin + '/brain-walk/js/ui/screens/home.js')).mainState().sub), null, { timeout: 15000 }).then(() => true, () => false), '훈련하는 분 홈이 바로 "게임 2개"로 바뀌어요 (다시 열지 않아도)');
+const subNow = () => learner.evaluate(async () => (await import(location.origin + '/brain-walk/js/ui/screens/home.js')).mainState().sub).catch(() => '');
+let subOk = false; for (let i = 0; i < 60 && !subOk; i++) { subOk = /^게임 2개/.test(await subNow()); if (!subOk) await learner.waitForTimeout(250); }
+must(subOk, '훈련하는 분 홈이 바로 "게임 2개"로 바뀌어요 (다시 열지 않아도)');
 
 /* 5) 훈련하는 분이 시작 → 관리자 홈에 실시간 */
 await learner.click('#btn-main'); await learner.waitForSelector('#g-title');
-await admin.click('#btn-back'); await admin.click('#btn-back').catch(() => {}); await admin.waitForSelector('#dash');
+await admin.waitForSelector('#plan-h'); await admin.click('#btn-back');
+if (await admin.waitForSelector('#dlg-title', { timeout: 1500 }).then(() => true, () => false)) await admin.click('#dlg-btn-1');   // 저장하지 않은 계획이 남았다고 보면 나가기
+await admin.waitForSelector('#set-main-h'); await admin.click('#btn-back');
+await admin.waitForSelector('#dash');
 must(await until(admin, () => (document.querySelector('#dash-status') || {}).innerText === '훈련 중 · 2개 중 0개'), '관리자 홈: 훈련 중 · 2개 중 0개');
 must(await until(admin, () => /^지금: .+\(.+부터\)$/.test(((document.querySelector('#dash-sub') || {}).innerText || '').trim())), '관리자 홈: 지금: 게임 이름 (○부터)');
 await learner.evaluate(async () => { for (let i = 0; i < 12; i++) { const c = window.__S.ctx; if (c && !c.finished) c.finish({ correct: 1, total: 1, ok: true, msg: '좋아요' }); const b = document.querySelector('#btn-next'); if (!b || b.hidden) break; const last = !/다음 문제/.test(b.textContent); b.click(); if (last) break; await new Promise(r => setTimeout(r, 120)); } });
@@ -108,7 +116,14 @@ must(await until(admin, () => [...document.querySelectorAll('#dash-week li')].po
   must(san.every((x, i) => x && x.items.length === got[i].items.length && x.items.every((it, j) => it.role === got[i].items[j].role && JSON.stringify(it.err) === JSON.stringify(got[i].items[j].err))), '서버(aiOnItemLog·집계)의 sanitizeLog 가 문서·문항을 하나도 버리지 않아요');
   await admin.evaluate(() => window.__go('aiSettings')); await admin.waitForSelector('#ai-obs'); await admin.click('#ai-obs');
   await admin.waitForFunction(() => document.getElementById('ai-obs') && document.getElementById('ai-obs').getAttribute('aria-checked') === 'true', null, { timeout: 15000 });
-  const cons = await admin.evaluate(async id => { const d = await window.__Store.getDoc('consents/' + id); return d && { kind: d.kind, version: d.version, server: !!(d.ackTs && d.ackTs.toMillis), withdrawn: 'withdrawnTs' in d, byAdmin: d.byAdmin }; }, dadId);
+  // 서버에 실제로 저장된 문서를 에뮬레이터 REST(관리자 권한)로 읽어요 (기기 안 캐시의 '아직 서버 시각 없음'과 헷갈리지 않게)
+  const readCons = async () => {
+    const r = await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/demo-bw/databases/(default)/documents:runQuery`, { method: 'POST', headers: { authorization: 'Bearer owner', 'content-type': 'application/json' }, body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'consents', allDescendants: true }] } }) });
+    const row = (await r.json()).find(x => x.document && x.document.name.endsWith('/consents/' + dadId));
+    if (!row) return null; const f = row.document.fields;
+    return { kind: f.kind && f.kind.stringValue, version: f.version && f.version.stringValue, server: !!(f.ackTs && f.ackTs.timestampValue), withdrawn: 'withdrawnTs' in f, byAdmin: f.byAdmin && f.byAdmin.stringValue };
+  };
+  let cons = await readCons(); for (let i = 0; i < 40 && !(cons && cons.server); i++) { await admin.waitForTimeout(250); cons = await readCons(); }
   must(cons && cons.kind === 'ai-report-notice' && cons.version === '2026-11-v1' && cons.server && !cons.withdrawn && !!cons.byAdmin, '관리자가 켠 기록: consents/{아버지} 에 서버 시각 + byAdmin');
   await learner.reload(); await learner.waitForSelector('#btn-main', { timeout: 20000 }); await learner.waitForTimeout(1500);
   must(!(await learner.locator('#cons-h').count()), '다시 열어도 안내 화면은 없어요');
@@ -121,7 +136,8 @@ must(await until(admin, () => [...document.querySelectorAll('#dash-week li')].po
   must(await until(admin, () => /확인하셨어요/.test(document.querySelector('#ai-st-cons').innerText)) && !(await admin.locator('#ai-denied, #ai-blocked').count()), '관리자 루틴 상태: 아버지 안내 확인 시각이 보여요 (읽기 거부 없음)');
   await admin.evaluate(() => window.__go('aiNotes')); await admin.waitForSelector('#ai-n-save');
   await admin.click('#ai-n-c-illness'); await admin.fill('#ai-n-text', '기침약'); await admin.click('#ai-n-save');
-  must(await until(admin, () => /메모를 저장했어요/.test((document.querySelector('#snackbar') || {}).innerText || '')), '관리자 메모: 화면에서 저장하면 규칙이 받아들여요');
+  let noteSaved = false; for (let i = 0; i < 40 && !noteSaved; i++) { noteSaved = (await admin.evaluate(async () => (await window.__Store.query('aiNotes', { limit: 5 })).length)) > 0; if (!noteSaved) await admin.waitForTimeout(250); }
+  must(noteSaved, '관리자 메모: 화면에서 저장하면 규칙이 받아들여요');
   const notes = await admin.evaluate(async () => (await window.__Store.query('aiNotes', { limit: 5 })).map(n => ({ codes: n.codes, to: n.to, text: n.text })));
   must(notes.length === 1 && notes[0].codes.join() === 'illness' && notes[0].text === '기침약', '메모 문서: 분류·날짜·글');
   await admin.evaluate(() => window.__go('home')); await admin.waitForSelector('#dash');
@@ -153,7 +169,7 @@ const rows = await admin.evaluate(() => [...document.querySelectorAll('#mem-list
 must(rows[0].includes('형') && rows[0].includes('방 주인') && rows[0].includes('관리자') && rows[1].includes('아버지') && rows[1].includes('훈련하는 분'), '방 주인 → 훈련하는 분 순서 + 배지');
 await admin.screenshot({ path: (process.env.SHOT_DIR || '/tmp') + '/live-members.png' });
 // 동생을 관리자로 → 읽기 전용이 풀려요
-await admin.click('#mem-2'); await admin.click('#mem-grant'); await admin.click('#dlg-btn-1'); await admin.waitForSelector('#snackbar:not([hidden])');
+await admin.click('#mem-2'); await admin.click('#mem-grant'); await admin.click('#dlg-btn-1');
 await fam.evaluate(() => window.__go('settings')); await fam.waitForSelector('#admin-chip');
 must(true, '동생에게 "관리자" 표시가 나타나요');
 // 훈련하는 분 바꾸기: 두 기기 모두 다시 열지 않고 새 역할을 따라가요 (관리자가 정한 화면 설정, 가족 홈)

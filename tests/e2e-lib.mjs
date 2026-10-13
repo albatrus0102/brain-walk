@@ -11,7 +11,7 @@ export const launch = () => chromium.launch({ executablePath: process.env.CHROME
 
 /* 새 화면(컨텍스트+페이지). seed: { 키: 값 } 을 localStorage 에 먼저 넣어요 (JSON). dark: 다크 화면. 콘솔 오류는 모두 errors 에 모아요. */
 export async function newPage(browser, o = {}) {
-  const ctx = await browser.newContext({ viewport: { width: o.w || 390, height: o.h || 844 }, colorScheme: o.dark ? 'dark' : 'light', acceptDownloads: true });
+  const ctx = await browser.newContext({ viewport: { width: o.w || 390, height: o.h || 844 }, colorScheme: o.dark ? 'dark' : 'light', acceptDownloads: true, ...(o.tz ? { timezoneId: o.tz } : {}) });
   await ctx.addInitScript(s => {
     window.__DEBUG = true;
     try { if (!sessionStorage.getItem('__seeded')) { sessionStorage.setItem('__seeded', '1'); Object.keys(s).forEach(k => localStorage.setItem(k, JSON.stringify(s[k]))); } } catch (e) {}
