@@ -1,5 +1,4 @@
 import { alarmTick } from './alarm.js';
-import { needConsent } from './ai/consent.js';
 import { allAssessments, connectData, ensureProgram, isTrainee, setPlanRaw } from './data.js';
 import { checkNudgeDialog } from './nudge.js';
 import { startAssessment } from './session.js';
@@ -8,6 +7,7 @@ import { Store } from './store/store.js';
 import { initInstall } from './ui/install.js';
 import { afterInit } from './ui/onboarding.js';
 import { applyDisplay } from './display.js';
+import { checkForUpdates, watchServiceWorker } from './sw-update.js';
 import { dialog } from './ui/dom.js';
 import { SCREENS } from './ui/registry.js';
 import { go, render } from './ui/shell.js';
@@ -19,18 +19,14 @@ SCREENS['ob-loading'] = {
   html() { return '<div class="stack"><h1 class="t-headline" id="load-h">불러오는 중이에요…</h1></div>'; }
 };
 
-const DISCLAIMER_LONG = '이 앱은 두뇌 활동을 돕는 훈련용이며 의료기기나 치료를 대신하지 않아요. 걱정되는 점이 있으면 병원에서 상담하세요.';
 function askDialog(title, text, actions) { return new Promise(res => dialog(title, text, actions, res)); }
 
 export async function startFlow() {
   S.firstRunBusy = true;
   try {
-    if (!LS.get('bw.seenDisc', false)) await askDialog('처음 오셨네요', DISCLAIMER_LONG, [{ label: '확인', kind: 'filled', run: () => LS.set('bw.seenDisc', true) }]);
-    // AI 리포트 안내: 처음 한 번 (알겠어요를 누르면 이어서 startFlow 를 다시 불러요)
-    if (isTrainee() && await needConsent()) { S.firstRunBusy = false; go('aiConsent'); return; }
     if (isTrainee() && S.plan && S.plan.checkEveryWeeks && !allAssessments().length && !LS.get('bw.offered', false)) {
       LS.set('bw.offered', true);
-      await askDialog('두뇌 건강 점검을 먼저 해 볼까요?', '지금 상태를 한 번 기록해 두면 나중에 변화를 비교할 수 있어요. 약 15분 걸려요 (두 번에 나눠 해도 돼요). 건너뛰어도 괜찮아요.', [
+      await askDialog('두뇌 건강 점검을 먼저 해 볼까요?', '약 15분', [
         { label: '점검 시작하기', kind: 'filled', run: () => { S.firstRunBusy = false; startAssessment(); } }, { label: '나중에 할게요', kind: 'text' }]);
     }
   } catch (e) {}
@@ -62,19 +58,8 @@ export async function startLocalDemo(remember) {
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator) || !(location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) return;
-  const hadController = !!navigator.serviceWorker.controller;   // 처음 설치할 때는 새로고침하지 않아요 (업데이트일 때만)
-  navigator.serviceWorker.register('./sw.js', { scope: './' }).then(reg => {
-    reg.addEventListener('updatefound', () => {
-      const w = reg.installing; if (!w) return;
-      w.addEventListener('statechange', () => {
-        if (w.state === 'installed' && navigator.serviceWorker.controller && S.screen === 'home') {
-          dialog('새 버전이 있어요', '업데이트하면 최신 화면으로 바뀌어요.', [{ label: '업데이트', kind: 'filled', run: () => w.postMessage('SKIP_WAITING') }, { label: '나중에', kind: 'text' }]);
-        }
-      });
-    });
-  }).catch(() => {});
-  let reloaded = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!hadController || reloaded || !navigator.serviceWorker.controller) return; reloaded = true; if (S.screen === 'home') location.reload(); });
+  watchServiceWorker({ getScreen: () => S.screen });   // 새 버전이 켜지면: 안전한 화면에서만 한 번 새로고침 (js/sw-update.js)
+  navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' }).then(checkForUpdates).catch(() => {});
 }
 
 export async function boot() {

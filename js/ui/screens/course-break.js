@@ -32,7 +32,7 @@ SCREENS.courseBreak = {
     return '<div class="stack brk"><h1 class="t-headline center" id="brk-h">' + esc(b.praise) + '</h1>' +
       (plan.showScore && L ? '<p class="t-title-m center" id="brk-score">정답 ' + L.rec.correct + ' / ' + L.rec.total + '</p>' : '') +
       (lv ? '<p class="t-body center muted" id="brk-level">' + lv + '</p>' : '') +
-      '<section class="card primary" id="brk-next" aria-label="다음 게임"><p class="t-title">' + esc(nextLine(g.name)) + '</p><p class="t-body mt">' + esc(g.desc) + '</p></section>' +
+      '<section class="card primary" id="brk-next" aria-label="다음 게임"><p class="t-title">' + esc(nextLine(g.name)) + '</p></section>' +
       // 화면 아래에 붙는 것은 '다음' 하나뿐이에요: 큰 글자에서도 다음 게임 소개를 가리지 않게 (남은 초·그만하기는 그 아래 흐름에)
       '<div class="cta"><button class="btn filled huge" id="btn-brk-next" type="button" data-act="brk-next">다음</button></div>' +
       '<div class="cta quiet"><p class="t-small center brk-count" id="brk-count" role="status">' + esc(countText(b)) + '</p>' +
@@ -74,7 +74,7 @@ ACTS['brk-stop'] = () => {
 SCREENS.checkIntro = {
   html() {
     return '<div class="stack"><h1 class="t-headline" id="ci-intro-h">오늘은 두뇌 점검 날이에요</h1>' +
-      '<section class="card primary"><p class="t-body">평소 훈련 대신, 한 달에 한 번 같은 문제로 두뇌 상태를 살펴봐요. 맞히지 못해도 괜찮아요. 약 15분 걸려요.</p></section>' +
+      '<section class="card primary"></section>' +
       '<div class="cta"><button class="btn filled huge" id="btn-check-start" type="button" data-act="check-start">점검 시작</button></div>' +
       '<div class="cta quiet"><button class="btn text" id="btn-check-skip" type="button" data-act="checkskip">오늘은 평소 훈련만 할게요</button></div></div>';
   }

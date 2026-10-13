@@ -81,5 +81,5 @@ await page.click('#nav-family'); await page.waitForSelector('#task-report'); awa
 await page.click('#nav-home'); await page.click('#nav-family'); await page.waitForSelector('#task-report');
 must(await page.locator('#task-report').evaluate(d => d.open), '펼친 카드는 다른 화면에 다녀와도 펼쳐져 있음');
 const rep = await page.innerText('#task-report');
-must(rep.includes('점 잇기') && rep.includes('동물 이름') && rep.includes('기준점은 없어요'), '가족 기록의 점검 과제 상세');
+must(rep.includes('점 잇기') && rep.includes('동물 이름'), '가족 기록의 점검 과제 상세');
 out('ERRORS:', JSON.stringify(errors)); await browser.close(); process.exit(errors.length ? 1 : 0);

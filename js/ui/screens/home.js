@@ -13,7 +13,7 @@ import { installSlot } from '../install.js';
 import { pushPromptCard } from '../room-settings.js';
 import { SCREENS } from '../registry.js';
 import { go, render } from '../shell.js';
-import { progressBar, slotText } from '../widgets.js';
+import { progressBar } from '../widgets.js';
 import { $, LS, WD, esc, iga, parseYmd, ymd } from '../../util.js';
 
 /* 훈련하는 분의 홈 (DESIGN.md §5 L1): 오늘 할 일 하나(큰 버튼)와 가족 한마디뿐이에요. 하단 메뉴 없음.
@@ -36,21 +36,19 @@ function traineeHtml() {
   const greet = hr < 12 ? '좋은 아침이에요' : hr < 18 ? '편안한 오후예요' : '편안한 저녁이에요';
   const cls = st.k === 'done' ? ' done' : st.k === 'rest' ? ' soft' : '';
   const card = '<section class="card ' + (due ? 'today due' : 'elevated today') + '" id="today-card" aria-labelledby="today-h"' + (due ? ' role="alert"' : '') + '>' +
-    (due ? '<h2 class="due-title" id="today-h">' + ic('alarm') + '훈련할 시간이에요!</h2><p class="t-body">천천히 하셔도 괜찮아요.</p>' : '<h2 class="sr" id="today-h">오늘의 훈련</h2>') +
+    (due ? '<h2 class="due-title" id="today-h">' + ic('alarm') + '훈련할 시간이에요!</h2>' : '<h2 class="sr" id="today-h">오늘의 훈련</h2>') +
     '<button class="main-btn' + cls + '" id="btn-main" type="button" data-act="main" data-k="' + st.k + '">' + (st.k === 'done' ? '' : ic(st.k === 'rest' ? 'leaf' : 'play')) + '<span>' + st.label + '</span></button>' +
-    '<p class="t-body center main-sub" id="main-sub">' + esc(st.sub) + '</p>' +
+    '' +
     (st.progress ? '<div>' + progressBar(st.ci.n / st.ci.N * 100, '오늘의 훈련 진행') + '</div>' : '') +
     (due ? '<button class="btn text snooze" id="banner-snooze" type="button">30분 뒤에 다시 알려 주세요</button>' : '') + '</section>';
   return '<div class="stack"><header class="hero" aria-labelledby="hello"><p class="greet">' + greet + '</p><h1 class="date" id="hello">' + (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' + WD[now.getDay()] + '요일</h1></header>' + card + '<div id="cheer-slot"></div></div>';
 }
 function bindTrainee(el) {
   const sn = $('#banner-snooze', el);
-  if (sn) sn.onclick = () => { LS.set('bw.snooze', Date.now() + 30 * 60000); alarmTick(); render(true); toast('30분 뒤에 다시 알려 드릴게요.'); };
+  if (sn) sn.onclick = () => { LS.set('bw.snooze', Date.now() + 30 * 60000); alarmTick(); render(true); };
   const slot = $('#cheer-slot', el); if (!slot) return;
-  // '가족 대화'는 늘 홈에 있어요. 가족방이 아직 없으면(체험 모드) 대화 화면이 가족방 만드는 법을 알려 줘요.
   if (!chatAvail()) {
     slot.append(h('section', { class: 'card primary cheer', id: 'cheer-card', 'aria-label': '가족' },
-      h('p', { class: 'cheer-line empty t-body muted', id: 'cheer-line', text: '가족방에 들어오면 가족의 응원 메시지가 여기에 보여요.' }),
       h('button', { class: 'btn tonal big', id: 'btn-family-chat', type: 'button', onclick: () => go('chat') }, '가족 대화')));
     return;
   }
@@ -59,13 +57,13 @@ function bindTrainee(el) {
   const un = unreadCount();
   const line = m
     ? h('button', { class: 'cheer-line', id: 'cheer-line', type: 'button', 'aria-label': '응원 메시지 듣기', onclick: () => say(nameOf(m.authorId) + '님이 말씀하셨어요. ' + m.text, true) }, h('b', { text: nameOf(m.authorId) + ': ' }), h('span', { text: m.text }))
-    : h('p', { class: 'cheer-line empty t-body muted', id: 'cheer-line', text: '가족에게 한마디 남겨 보세요.' });
+    : null;
   slot.append(h('section', { class: 'card primary cheer', id: 'cheer-card', 'aria-label': '가족' }, line,
     h('button', { class: 'btn tonal big', id: 'btn-family-chat', type: 'button', onclick: () => go('chat') }, '가족 대화', un > 0 ? h('span', { class: 'new-badge', text: '새 글 ' + (un > 99 ? '99+' : un) }) : null)));
 }
 function familyHtml() {
   const now = new Date(), hr = now.getHours();
-  const hero = '<header class="hero" aria-labelledby="hello"><p class="greet">' + (hr < 12 ? '좋은 아침이에요' : hr < 18 ? '편안한 오후예요' : '편안한 저녁이에요') + '</p><h1 class="date" id="hello">' + (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' + WD[now.getDay()] + '요일</h1><p class="t-body muted" id="fam-hello"><span data-slot="tlabel"></span>의 두뇌 산책을 함께 응원해요.</p></header>';
+  const hero = '<header class="hero" aria-labelledby="hello"><p class="greet">' + (hr < 12 ? '좋은 아침이에요' : hr < 18 ? '편안한 오후예요' : '편안한 저녁이에요') + '</p><h1 class="date" id="hello">' + (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' + WD[now.getDay()] + '요일</h1></header>';
   return '<div class="stack"><div id="home-banner"></div>' + hero + dashboardHtml() +
     '<button class="btn outlined" id="btn-pick" type="button" data-act="nav" data-to="pick">나도 훈련해 보기</button></div>';
 }
@@ -73,7 +71,6 @@ SCREENS.home = {
   html() { return isTrainee() ? traineeHtml() : familyHtml(); },
   bind(el) {
     if (isTrainee()) return bindTrainee(el);
-    slotText(el, 'tlabel', traineeLabel());
     const bn = $('#home-banner', el);
     bn.append(installSlot('home'));
     const pc = pushPromptCard(); if (pc) bn.append(pc);

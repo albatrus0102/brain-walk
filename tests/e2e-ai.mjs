@@ -1,6 +1,6 @@
 // AI 문제 은행 (앱 쪽) 화면 시험: 안내 한 번, 문항 기록 모양, 묶음 꺼내기와 대체, 기준 문항 정답 숨김, 새 게임, 이야기 늦게 묻기, 잊지 말고 누르기, XSS, 가장 큰 글자.
 // 체험 모드(예시 자료)로 돌려요. 사용법은 tests/README.md
-import { finishGame } from './e2e-lib.mjs';
+import { finishGame, mainSub } from './e2e-lib.mjs';
 import { ACK, SHOTS, bk, choiceItem, done, errors, launch, logsOf, measure, measureItems, must, newPage, noHScroll, noSeed, out, pack, packItems, planOf, playGame, readDb, solveRound, startDemo, vis, ymdNow } from './e2e-ai-lib.mjs';
 const browser = await launch();
 const NEUTRAL = '잘하셨어요, 다음 문제로 가요.';
@@ -8,36 +8,25 @@ const KEYS = ['v', 'userId', 'date', 'ts', 'sts', 'gameId', 'inCourse', 'level',
 const ITEM_KEYS = ['id', 'role', 'fmt', 'cd', 'lv', 'score', 'ok', 'rt', 'rtStart', 'err', 'pick', 'intr', 'pos'];
 const openCourse = async (page) => { await startDemo(page); await page.waitForSelector('#btn-main'); await page.click('#btn-main'); await page.waitForSelector('#g-title'); if (await vis(page, '.dialog')) await page.click('#dlg-btn-0'); };
 
-/* ---------- 1) 안내 화면: 처음 한 번만, 문구·소리·서버 시각 ---------- */
+/* ---------- 1) AI 기록 관찰: 아버지 안내 화면은 없고, 관리자가 설정에서 스위치로 켜요 ---------- */
 {
-  const { page } = await newPage(browser, { tag: 'consent', seed: { 'bw.aiDemo': true } });
-  await startDemo(page);
-  await page.waitForSelector('#cons-h');
-  must((await page.innerText('#cons-h')) === '가족이 함께 살펴볼게요', '안내: 제목');
-  const body = await page.innerText('.consent');
-  must(body.includes('아버지가 푸신 문제의 맞힌 개수와 걸린 시간을 가족이 살펴봐요.') && body.includes('컴퓨터 프로그램(AI)이 숫자만 보고 가족에게 쉬운 설명을 써 줘요.') && body.includes('아버지 이름이나 하신 말씀은 보내지 않아요. 이 프로그램은 외국 회사 서버에서 돌아가요.') && body.includes('병을 판단하는 것이 아니에요.') && body.includes('싫으시면 언제든 가족에게 말씀해 주세요.'), '안내: §8.6 문구 그대로');
-  must((await page.innerText('#btn-consent-ok')) === '알겠어요' && (await page.locator('#btn-consent-ok').boundingBox()).height >= 64, '안내: 큰 "알겠어요" 버튼');
-  await noHScroll(page, '안내'); await page.screenshot({ path: SHOTS + '/ai-consent.png' });
-  await page.click('#btn-consent-ok'); await page.waitForSelector('#btn-main');
-  const c = (await readDb(page))['consents/local'];
-  must(c && c.kind === 'ai-report-notice' && c.version === '2026-11-v1' && typeof c.ackTs === 'number' && c.withFamily === undefined && !c.withdrawnTs, '안내: consents/{id} 에 kind·version·ackTs 기록');
-  await page.reload(); await page.waitForSelector('#btn-main', { timeout: 8000 });
-  must(!(await vis(page, '#cons-h')) && (await page.evaluate(() => window.__S.screen)) === 'home', '안내: 다시 열어도 또 나오지 않아요 (한 번만)');
+  const { page } = await newPage(browser, { tag: 'consent', seed: { 'bw.aiDemo': true, 'bw.role': 'trainee' } });
+  await startDemo(page); await page.waitForSelector('#btn-main', { timeout: 8000 });
+  must(!(await page.locator('#cons-h, #btn-consent-ok').count()) && (await page.evaluate(() => window.__S.screen)) === 'home', '훈련하는 분: 안내(동의) 화면 없이 바로 홈');
   await page.close();
-  // 가족과 함께 봤어요 + 철회 뒤에는 다시
-  const { page: p2 } = await newPage(browser, { tag: 'consent2', seed: { 'bw.aiDemo': true } });
-  await startDemo(p2); await p2.waitForSelector('#cons-h'); await p2.click('#btn-consent-fam'); await p2.waitForSelector('#btn-main');
-  must((await readDb(p2))['consents/local'].withFamily === true, '안내: "가족과 함께 봤어요" 는 withFamily:true');
-  await p2.evaluate(async () => { const m = await import(location.origin + '/brain-walk/js/ai/consent.js'); await m.withdraw(); });
-  must(!!(await readDb(p2))['consents/local'].withdrawnTs, '철회: withdrawnTs 만 더해요 (문서는 남아요)');
-  await p2.reload(); await p2.waitForSelector('#btn-main', { timeout: 8000 }); await p2.waitForTimeout(800);
-  must(!(await vis(p2, '#cons-h')), '철회한 뒤에는 열 때마다 다시 묻지 않아요');
-  await p2.evaluate(() => window.__go('settings')); await p2.waitForSelector('#btn-ai-again');
-  must((await p2.innerText('#aic-state')).includes('멈춰 있어요') && !(await vis(p2, '#btn-ai-withdraw')), '설정: 멈춰 있다고 보이고 "다시 살펴봐도 돼요" 버튼');
-  await p2.click('#btn-ai-again'); await p2.waitForSelector('#cons-h');
-  await p2.click('#btn-consent-ok'); await p2.waitForSelector('#btn-main');
+  const { page: p2 } = await newPage(browser, { tag: 'consent2', seed: { 'bw.aiDemo': true, 'bw.role': 'family' } });
+  await startDemo(p2);
+  await p2.evaluate(() => window.__go('aiSettings')); await p2.waitForSelector('#ai-obs');
+  must((await p2.innerText('#ai-obs-label')) === 'AI 기록 관찰 켜기' && (await p2.getAttribute('#ai-obs', 'aria-checked')) === 'false' && !(await readDb(p2))['consents/local'], '설정 > AI: "AI 기록 관찰 켜기" 스위치 (처음엔 꺼짐, 기록 없음)');
+  await noHScroll(p2, 'AI 설정'); await p2.screenshot({ path: SHOTS + '/ai-settings.png' });
+  await p2.click('#ai-obs'); await p2.waitForFunction(() => document.getElementById('ai-obs') && document.getElementById('ai-obs').getAttribute('aria-checked') === 'true', null, { timeout: 5000 });
+  const c = (await readDb(p2))['consents/local'];
+  must(c && c.kind === 'ai-report-notice' && c.version === '2026-11-v1' && typeof c.ackTs === 'number' && c.byAdmin === 'local' && !c.withdrawnTs && c.withFamily === undefined, '켜기: consents/{훈련하는 분} 에 kind·version·ackTs·byAdmin 기록');
+  await p2.click('#ai-obs'); await p2.waitForFunction(() => document.getElementById('ai-obs').getAttribute('aria-checked') === 'false', null, { timeout: 5000 });
+  must(!!(await readDb(p2))['consents/local'].withdrawnTs, '끄기: withdrawnTs 만 더해요 (문서는 남아요)');
+  await p2.click('#ai-obs'); await p2.waitForFunction(() => document.getElementById('ai-obs').getAttribute('aria-checked') === 'true', null, { timeout: 5000 });
   const c2 = (await readDb(p2))['consents/local'];
-  must(!c2.withdrawnTs && c2.version === '2026-11-v1', '다시 알겠어요: 철회 표시를 지우고 다시 기록');
+  must(!c2.withdrawnTs && c2.version === '2026-11-v1' && c2.byAdmin === 'local', '다시 켜기: 철회 표시를 지우고 다시 기록');
   await p2.close();
 }
 
@@ -165,7 +154,7 @@ const NEW = [
 for (const g of NEW.flatMap(x => [x, Object.assign({}, x, { dark: true })])) {
   const { page } = await newPage(browser, { tag: g.id + (g.dark ? '-dark' : ''), w: 360, dark: !!g.dark, seed: Object.assign(planOf(g.id), { 'bw.size': 'max' }) });
   await startDemo(page); await page.waitForSelector('#btn-main');
-  must((await page.innerText('#main-sub')).includes('게임 1개'), g.name + ': 계획에서 켜면 코스에 들어가요');
+  must((await mainSub(page)).includes('게임 1개'), g.name + ': 계획에서 켜면 코스에 들어가요');
   await page.click('#btn-main'); await page.waitForSelector('#g-title'); if (await vis(page, '.dialog')) await page.click('#dlg-btn-0');
   must((await page.innerText('#g-title')) === g.name, g.name + ': 게임 이름');
   await noHScroll(page, g.name + ' 첫 화면(360px 최대 글자' + (g.dark ? '·다크' : '') + ')');
@@ -340,13 +329,6 @@ for (const id of ['words', 'shop', 'order', 'proverb', 'today']) {
   const { page } = await newPage(browser, { tag: 'max-' + id, w: 360, seed: Object.assign(planOf(id), { 'bw.size': 'max' }) });
   await startDemo(page); await page.click('#btn-main'); await page.waitForSelector('#g-title'); if (await vis(page, '.dialog')) await page.click('#dlg-btn-0');
   await playGame(page, { onRound: async (i) => { await noHScroll(page, id + ' ' + (i + 1) + '번째 문제 뒤(최대 글자·360px)'); } });
-  await page.close();
-}
-{
-  const { page } = await newPage(browser, { tag: 'max-consent', w: 360, seed: { 'bw.aiDemo': true, 'bw.size': 'max' } });
-  await startDemo(page); await page.waitForSelector('#cons-h'); await noHScroll(page, '안내 화면(최대 글자·360px)');
-  must((await page.locator('#btn-consent-ok').boundingBox()).width <= 360, '안내 버튼이 화면 안에 들어와요');
-  await page.screenshot({ path: SHOTS + '/ai-consent-max-360.png', fullPage: true });
   await page.close();
 }
 await done(browser);

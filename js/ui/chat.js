@@ -75,7 +75,7 @@ export function refreshChat() {
   const near = nearBottom(), first = !S._chatBuilt, prevLen = S._chatLen || 0, msgs = S.messages;
   list.textContent = '';
   if (S.msgHasMore) list.append(h('div', { class: 'center' }, btnEl('이전 대화 더 보기', 'text', () => { S.msgLimit += 100; subscribeMessages(); }, 'btn-older')));
-  if (!msgs.length) list.append(h('div', { class: 'empty' }, svgIcon('chat'), h('p', { class: 't-title', text: '아직 대화가 없어요' }), h('p', { class: 't-body muted', text: '아래 입력창에서 첫 인사를 남겨 보세요.' })));
+  if (!msgs.length) list.append(h('div', { class: 'empty' }, svgIcon('chat'), h('p', { class: 't-title', text: '아직 대화가 없어요' }), ));
   msgs.forEach((m, i) => appendMsg(list, m, msgs[i - 1], msgs[i + 1]));
   ensureProfiles(msgs.map(m => m.authorId).concat(Object.keys(S.reads)));
   const last = msgs[msgs.length - 1], grew = msgs.length > prevLen;
@@ -89,7 +89,7 @@ function renderChromeBadge() { /* 채팅 화면에서는 하단 메뉴가 없어
 function fitComposer() { const c = $('#composer'); if (c) document.documentElement.style.setProperty('--composer-h', (c.offsetHeight + 8) + 'px'); }
 function refreshComposer() {
   const top = $('#composer-top'); if (!top) return; top.textContent = '';
-  if (S.canWrite === false) top.append(h('p', { class: 't-small muted', text: '지금은 읽기만 할 수 있어요. ' + NO_WRITE_MSG }));
+  if (S.canWrite === false) top.append();
   if (S.reply) {
     const q = S.messages.find(x => x.id === S.reply);
     top.append(h('div', { class: 'replybar', id: 'replybar' }, h('span', { text: '답장: ' + (q ? nameOf(q.authorId) + ' · ' : '') + snippet(q) }), h('button', { class: 'icon-btn', type: 'button', id: 'btn-reply-cancel', 'aria-label': '답장 취소', onclick: () => { S.reply = null; refreshComposer(); } }, svgIcon('close'))));
@@ -134,7 +134,7 @@ function openMenu(m) {
     if (m.deleted) { body.append(btnEl('닫기', 'text', closeSheet, 'menu-close')); return; }
     body.append(btnEl('답장', 'tonal menuitem', () => { S.reply = m.id; closeSheet(); refreshComposer(); const ta = $('#chat-input'); if (ta) ta.focus(); }, 'menu-reply'));
     body.append(h('div', { class: 'reacts', role: 'group', 'aria-label': '공감' }, REACTS.map((e, i) => h('button', { type: 'button', id: 'react-' + i, 'aria-label': '공감 ' + e, 'aria-pressed': String(!!(m.reactions && Array.isArray(m.reactions[e]) && m.reactions[e].includes(S.myId))), onclick: () => { closeSheet(); toggleReaction(m, e); } }, e))));
-    if (m.text) body.append(btnEl('복사', 'outlined menuitem', async () => { const ok = await Platform.copy(m.text, null); closeSheet(); toast(ok ? '복사했어요.' : '복사하지 못했어요. 글자를 길게 눌러 복사해 주세요.'); }, 'menu-copy'));
+    if (m.text) body.append(btnEl('복사', 'outlined menuitem', async () => { const ok = await Platform.copy(m.text, null); closeSheet(); if (!ok) toast('복사하지 못했어요'); }, 'menu-copy'));
     if (m.text && m.authorId !== S.myId) body.append(btnEl('소리로 듣기', 'outlined menuitem', () => { closeSheet(); say(nameOf(m.authorId) + '님 말씀. ' + m.text, true); }, 'menu-tts', 'vol'));
     if (m.authorId === S.myId) body.append(btnEl('삭제', 'outlined menuitem', () => { closeSheet(); dialog('이 메시지를 삭제할까요?', '삭제하면 “삭제된 메시지입니다”로 바뀌어요.', [{ label: '취소', kind: 'text' }, { label: '삭제', kind: 'filled', run: () => deleteMessage(m) }]); }, 'menu-delete'));
     body.append(btnEl('닫기', 'text', closeSheet, 'menu-close'));
@@ -144,7 +144,7 @@ SCREENS.chat = {
   html() {
     if (!chatAvail()) {
       return '<div class="stack"><h1 class="t-headline" id="chat-h">우리 가족 대화방</h1><section class="card outlined empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="' + P.chat + '"/></svg>' +
-        (S.dbState === 'pending' ? '<p class="t-title">불러오는 중이에요…</p>' : '<p class="t-title">가족 대화는 가족방을 만들거나 가족 코드로 들어가면 쓸 수 있어요. 지금은 체험 모드라 이 기기에만 저장돼요.</p>') + '</section></div>';
+        (S.dbState === 'pending' ? '<p class="t-title">불러오는 중이에요…</p>' : '<p class="t-title">가족방이 없어요</p>') + '</section></div>';
     }
     return '<h1 class="sr" id="chat-h">우리 가족 대화방</h1><div class="chat-top" id="chat-top"></div><div id="chat-list" role="log" aria-label="대화 내용"></div>' +
       '<div class="composer" id="composer"><div class="composer-in"><div id="composer-top" class="stack" style="gap:8px"></div><div class="cbar" id="cbar"></div></div></div><button class="newpill" id="newpill" type="button" hidden>새 메시지 ↓</button>';

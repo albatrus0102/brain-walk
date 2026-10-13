@@ -28,11 +28,11 @@ SCREENS.pick = {
     const tr = isTrainee();
     return '<div class="stack"><h1 class="t-headline" id="pick-h">' + (tr ? '훈련' : '어떤 훈련을 해 볼까요?') + '</h1>' +
       (tr ? programCard() + monthlyCard() : '') +
-      '<h2 class="t-title">' + (tr ? '골라서 하기' : '훈련 고르기') + '</h2><p class="t-body muted">하고 싶은 훈련을 하나 골라 주세요. 단계는 정답률에 따라 자동으로 맞춰져요.</p>' +
-      DOMAINS.map(d => '<section aria-labelledby="dom-' + d.id + '"><h2 class="t-title-m" id="dom-' + d.id + '">' + d.name + '</h2><p class="t-small muted">' + d.desc + '</p><div class="pick-list mt">' +
-        gamesOf(d.id).filter(id => !GAMES[id].defOff || getPlan().games[id].on).map(id => '<button type="button" class="gamebtn" id="game-' + id + '" data-act="game" data-id="' + id + '"><span><strong>' + esc(GAMES[id].name) + '</strong><span class="t-small muted">' + esc(GAMES[id].desc) + '</span></span><span class="t-small" style="text-align:right">' + effectiveLevel(id, getPlan(), getLevel(id)) + '단계<br>' + levelDots(effectiveLevel(id, getPlan(), getLevel(id))) + '</span></button>').join('') +
+      '<h2 class="t-title">' + (tr ? '골라서 하기' : '훈련 고르기') + '</h2>' +
+      DOMAINS.map(d => '<section aria-labelledby="dom-' + d.id + '"><h2 class="t-title-m" id="dom-' + d.id + '">' + d.name + '</h2><div class="pick-list mt">' +
+        gamesOf(d.id).filter(id => !GAMES[id].defOff || getPlan().games[id].on).map(id => '<button type="button" class="gamebtn" id="game-' + id + '" data-act="game" data-id="' + id + '"><span><strong>' + esc(GAMES[id].name) + '</strong></span><span class="t-small" style="text-align:right">' + effectiveLevel(id, getPlan(), getLevel(id)) + '단계<br>' + levelDots(effectiveLevel(id, getPlan(), getLevel(id))) + '</span></button>').join('') +
         '</div></section>').join('') +
-      (tr ? '<h2 class="t-title">더 해 보기 (선택)</h2><section class="card outlined" aria-labelledby="clk-p"><h3 class="t-title-m" id="clk-p">시계 그리기 (한 달에 한 번)</h3><p class="t-body muted mt">손가락으로 시계를 그려 봐요. 채점은 하지 않아요.</p><div class="mt"><button class="btn tonal" id="btn-open-clock" type="button" data-act="nav" data-to="clock">그리러 가기</button></div></section>' +
-        '<section class="card outlined" aria-labelledby="svp-h"><h3 class="t-title-m" id="svp-h">마음·기억 설문</h3><p class="t-body muted mt">하고 싶을 때만 해도 괜찮아요.</p><div class="mt"><button class="btn tonal" id="btn-open-surveys" type="button" data-act="nav" data-to="surveys">설문 보기</button></div></section>' : '') + '</div>';
+      (tr ? '<h2 class="t-title">더 해 보기 (선택)</h2><section class="card outlined" aria-labelledby="clk-p"><h3 class="t-title-m" id="clk-p">시계 그리기 (한 달에 한 번)</h3><div class="mt"><button class="btn tonal" id="btn-open-clock" type="button" data-act="nav" data-to="clock">그리러 가기</button></div></section>' +
+        '<section class="card outlined" aria-labelledby="svp-h"><h3 class="t-title-m" id="svp-h">마음·기억 설문</h3><div class="mt"><button class="btn tonal" id="btn-open-surveys" type="button" data-act="nav" data-to="surveys">설문 보기</button></div></section>' : '') + '</div>';
   }
 };

@@ -20,7 +20,7 @@ SCREENS.courseDone = {
       '<svg class="badge" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="none" stroke="currentColor" stroke-width="1.5"/><path fill="currentColor" transform="translate(4.8 4.4) scale(.6)" d="' + P.star + '"/></svg>' +
       '<h1 class="t-headline center" id="done-h">오늘 훈련을 모두 마치셨어요!</h1>' +
       '<section class="card primary center"><p class="t-title" id="done-streak">' + (st >= 2 ? st + '일째 꾸준히 하고 계세요' : '정말 수고 많으셨어요.') + '</p></section>' +
-      (tr ? (chatAvail() && !S.course.replay ? '<p class="t-body center" id="done-told">가족에게 알려 드렸어요.</p>' : '') + (show ? list : '')
+      (tr ? (chatAvail() && !S.course.replay ? '' : '') + (show ? list : '')
         : list + (chatAvail() ? '<section class="card outlined">' + switchRow('notify-switch', '가족에게 알리기', S.notifyFamily ? '켜져 있어요. 나갈 때 가족 대화방에 알려요.' : '꺼져 있어요.', S.notifyFamily, 'notify', false) + '</section>' : '')) +
       '<p class="sync-note" id="sync-note"></p>' +
       '<div class="cta"><button class="btn filled" id="btn-done-home" type="button" data-act="home">처음으로</button></div></div>';

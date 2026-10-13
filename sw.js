@@ -91,6 +91,7 @@ const SHELL_FILES = /*SHELL_START*/ [
   "./js/store/store.js",
   "./js/surveys/content.js",
   "./js/surveys/engine.js",
+  "./js/sw-update.js",
   "./js/ui/acts.js",
   "./js/ui/chat.js",
   "./js/ui/dashboard.js",
@@ -104,7 +105,6 @@ const SHELL_FILES = /*SHELL_START*/ [
   "./js/ui/screens/admin-display.js",
   "./js/ui/screens/admin-plan.js",
   "./js/ui/screens/ai-admin.js",
-  "./js/ui/screens/ai-consent.js",
   "./js/ui/screens/assess.js",
   "./js/ui/screens/checkin.js",
   "./js/ui/screens/clinical.js",
@@ -130,12 +130,13 @@ const SHELL_FILES = /*SHELL_START*/ [
   "./styles/m3-tokens.css"
 ] /*SHELL_END*/;
 
-self.addEventListener('install', e => e.waitUntil(caches.open(SHELL).then(c => c.addAll(SHELL_FILES))));
+// 새 버전은 기다리지 않고 바로 켜요 (skipWaiting) → activate 에서 clients.claim. 새로고침은 앱이 안전한 화면에서만 해요 (js/sw-update.js).
+self.addEventListener('install', e => e.waitUntil(caches.open(SHELL).then(c => c.addAll(SHELL_FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil((async () => {
   for (const k of await caches.keys()) if (k.startsWith('bw-shell-') && k !== SHELL) await caches.delete(k);   // 글꼴 캐시(bw-fonts-)는 버전이 주소에 있어서 지우지 않아요
   await self.clients.claim();
 })()));
-self.addEventListener('message', e => { if (e.data === 'SKIP_WAITING') self.skipWaiting(); });   // "새 버전이 있어요 · 업데이트"
+self.addEventListener('message', e => { if (e.data === 'SKIP_WAITING') self.skipWaiting(); });   // (옛 앱 호환)
 
 self.addEventListener('fetch', e => {
   const req = e.request, url = new URL(req.url);

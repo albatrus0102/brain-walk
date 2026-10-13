@@ -1,6 +1,6 @@
 // 관리자 화면(체험 모드는 관리자이자 훈련하는 분): 설정 칸, 훈련 계획, 훈련하는 분 화면 설정, 계획이 코스·난이도에 반영, 읽기 전용,
 // 가족 홈의 실시간 현황(체험 모드에서 흉내), 아주 크게/최대·다크에서 가로 스크롤 없음.  사용법은 tests/README.md
-import { BASE, SHOTS, done, errors, finishGame, launch, must, newPage, noHScroll, startDemo, vis } from './e2e-lib.mjs';
+import { BASE, SHOTS, done, errors, finishGame, launch, must, newPage, noHScroll, startDemo, vis, mainSub } from './e2e-lib.mjs';
 const browser = await launch();
 const db = page => page.evaluate(() => JSON.parse(localStorage.getItem('bw.localdb') || '{}'));
 const mod = (page, f) => page.evaluate(async f => import(new URL('js/' + f, document.baseURI).href).then(m => Object.keys(m)), f);
@@ -29,7 +29,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   const ids = (await page.evaluate(() => [...document.querySelectorAll('#plan-games .grow')].map(x => x.dataset.g))).filter(id => !['story', 'shapes', 'route', 'think', 'letters', 'olden'].includes(id));   // 새 AI 게임 여섯 개는 처음부터 꺼져 있어요
   must((await page.locator('#plan-on-story[aria-checked=false], #plan-on-shapes[aria-checked=false], #plan-on-route[aria-checked=false], #plan-on-think[aria-checked=false], #plan-on-letters[aria-checked=false], #plan-on-olden[aria-checked=false]').count()) === 6 && (await page.locator('#plan-games .aipill').count()) === 6, '계획 화면: 새 AI 게임 여섯 개가 꺼진 채로 목록에 있어요 (관리자가 켜요)');
   for (const id of ids.slice(0, 5)) await page.click('#plan-on-' + id);
-  must((await text(page, '#plan-cap')).includes('켠 게임이 4개라 하루 최대 4개예요.'), '켠 게임 수 안내');
+  must(!(await page.locator('#plan-cap').count()), '켠 게임 수 안내 글 없음');
   for (const id of ids.slice(5)) await page.click('#plan-on-' + id);
   must((await text(page, '#plan-problems')).includes('게임을 하나 이상 골라 주세요.') && await page.isDisabled('#plan-save'), '게임을 모두 끄면 문제 안내 + 저장 막힘');
   await page.screenshot({ path: SHOTS + '/admin-plan-problem.png', fullPage: true });
@@ -55,8 +55,8 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   must((await text(page, '#xpv-p2')) === '평일 · 오전 8:30' && (await text(page, '#xpv-p5')).includes('점검 끔') && (await text(page, '#xpv-p5')).includes('자동 넘김 15초'), '카드 요약이 지금 값을 보여 줘요');
   await page.screenshot({ path: SHOTS + '/admin-plan-sections.png', fullPage: true });
   // 저장: 계획과 알람이 한 번에
-  await page.click('#plan-save'); await page.waitForSelector('#snackbar:not([hidden])');
-  must((await page.innerText('#snackbar')).includes('저장했어요. 아버지 휴대폰에 곧 적용돼요.'), '저장 안내 문구');
+  await page.click('#plan-save'); await page.waitForTimeout(500);
+  must(await page.locator('#snackbar').isHidden(), '저장해도 안내 스낵바는 없어요');
   const d = await db(page), p = d['state/plan'], a = d['state/alarm'];
   must(p && p.gamesPerDay === 2 && p.roundsPerGame === 3 && p.autoNextSec === 15 && p.checkEveryWeeks === 0 && p.showScore === true && p.targetMin === 10 && JSON.stringify(p.weekdays) === '[1,2,3,4,5]' && p.order === 'fixed', 'state/plan 저장 내용');
   must(a && a.time === '08:30' && JSON.stringify(a.days) === '[1,2,3,4,5]', 'state/alarm 도 함께 저장 (시간·요일)');
@@ -68,7 +68,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   await page.click('#plan-revert'); await page.click('#btn-back'); await page.waitForSelector('#set-main-h'); must(true, '되돌리기 뒤에는 바로 나가요');
   // 훈련하는 분 화면으로: 계획이 코스에 반영
   await page.click('#btn-role-switch'); await page.click('#dlg-btn-1'); await page.waitForSelector('#btn-main');
-  must((await text(page, '#main-sub')).startsWith('게임 2개 · 약 '), '훈련하는 분 홈: 게임 2개 (계획 반영)');
+  must((await mainSub(page)).startsWith('게임 2개 · 약 '), '훈련하는 분 홈: 게임 2개 (계획 반영)');
   await page.click('#btn-main'); await page.waitForSelector('#g-title');
   const r = await page.evaluate(() => { const s = window.__S.sess; return { rounds: s.rounds, base: s.g.rounds, n: window.__S.course.games.length }; });
   must(r.n === 2 && r.rounds === Math.max(1, Math.round(3 * r.base / 5)), '문제 수 3 → 게임별 비율 (' + r.rounds + '/' + r.base + ')');
@@ -87,7 +87,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   await page.selectOption('#plan-min-' + first2[1], '3'); await page.selectOption('#plan-max-' + first2[1], '4');
   must((await text(page, '#xpv-p4')) === '1개 고정', '난이도 요약: 1개 고정');
   await page.screenshot({ path: SHOTS + '/admin-plan-levels.png', fullPage: true });
-  await page.click('#plan-save'); await page.waitForSelector('#snackbar:not([hidden])');
+  await page.click('#plan-save'); await page.waitForTimeout(500);
   await page.click('#btn-back'); await page.click('#btn-role-switch'); await page.click('#dlg-btn-1'); await page.waitForSelector('#btn-main');
   await page.click('#btn-main'); await page.waitForSelector('#g-title');
   let lv = await page.evaluate(() => ({ id: window.__S.sess.g.id, level: window.__S.sess.level }));
@@ -108,8 +108,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   const { page } = await newPage(browser, { tag: 'display', seed: { 'bw.role': 'family' } });
   await startDemo(page);
   await page.click('#btn-settings'); await page.click('#xp-mgmt'); await page.click('#row-display'); await page.waitForSelector('#dd-h');
-  must((await page.innerText('#dd-nodoc')).includes('아직 정하지 않았어요'), '정하지 않았을 때 안내');
-  must((await text(page, '#dd-lead')).includes('휴대폰에 바로 적용돼요'), '안내 문구');
+  must(!(await page.locator('#dd-nodoc, #dd-lead, #dd-foot').count()), '화면 설정: 안내 글 없음');
   const fs0 = await page.evaluate(() => parseFloat(document.querySelector('#disp-preview').style.fontSize));
   await page.click('#dd-font-noto'); await page.click('#dd-size-max');
   const st = await page.evaluate(() => { const s = document.querySelector('#disp-preview').style; return { fontFamily: s.fontFamily, fontSize: s.fontSize }; });
@@ -118,8 +117,8 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   must(await vis(page, '#dd-hear'), '말 빠르기 + 들어 보기');
   await page.click('#dd-hear');
   await page.screenshot({ path: SHOTS + '/admin-display.png', fullPage: true });
-  await page.click('#dd-save'); await page.waitForSelector('#snackbar:not([hidden])');
-  must((await page.innerText('#snackbar')).includes('저장했어요. 아버지 휴대폰에 곧 적용돼요.'), '저장 안내 (접속 중이 아니면)');
+  await page.click('#dd-save'); await page.waitForTimeout(500);
+  must(await page.locator('#snackbar').isHidden(), '저장해도 안내 스낵바는 없어요');
   const d = (await db(page))['state/display'];
   must(d && d.font === 'noto' && d.size === 'max' && d.contrast === true && d.voice === true && d.rate === 1.05, 'state/display 저장 내용');
   must((await page.evaluate(() => document.documentElement.getAttribute('data-size'))) === 'normal', '이 기기(가족)의 글자 크기는 그대로');
@@ -129,7 +128,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   must((await page.evaluate(() => getComputedStyle(document.body).fontFamily)).includes('Noto Sans KR'), '글꼴이 타이포 토큰으로 바뀌어요');
   await noHScroll(page, '최대: 홈'); await page.screenshot({ path: SHOTS + '/learner-home-max.png' });
   await page.click('#btn-gear'); await page.click('#dlg-btn-1'); await page.waitForSelector('#set-main-h');
-  must(await vis(page, '#prefs-remote') && (await page.innerText('#prefs-remote')).includes('가족(관리자)이 정해요'), '훈련하는 분 설정: 관리자가 정했다는 안내');
+  must(await vis(page, '#prefs-remote') && !(await page.innerText('#prefs-remote')).includes('가족(관리자)이 정해요'), '훈련하는 분 설정: "화면과 소리" 제목만 (안내 글 없음)');
   await noHScroll(page, '최대: 설정'); await page.click('#btn-set-home');
   await page.click('#btn-main'); await page.waitForSelector('#g-title'); await noHScroll(page, '최대: 게임');
   await finishGame(page); await page.waitForSelector('#brk-h'); await noHScroll(page, '최대: 쉬는 화면');
@@ -160,9 +159,9 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   await startDemo(page);
   await page.evaluate(() => { window.__S.debugNonAdmin = true; });
   await page.click('#btn-settings'); await page.click('#xp-mgmt');
-  must((await text(page, '#mgmt-body')).includes('관리자만 바꿀 수 있어요'), '설정: 관리자만 바꿀 수 있어요');
+  must(!(await page.locator('#admin-note').count()), '설정: 관리자 안내 글 없음');
   await page.click('#row-plan'); await page.waitForSelector('#plan-h');
-  must((await text(page, '#admin-note')).startsWith('관리자만 바꿀 수 있어요. 관리자:'), '계획: 읽기 전용 안내');
+  must(!(await page.locator('#admin-note').count()), '계획: 안내 글 없음 (읽기 전용은 막힌 버튼으로)');
   for (const k of ['p1', 'p2', 'p3', 'p4', 'p5']) await openCard(page, k);
   const dis = await page.evaluate(() => [...document.querySelectorAll('#screen button[data-act^="pl-"], #screen select, #screen input[type=time]')].filter(e => !e.disabled).map(e => e.id));
   must(dis.length === 0, '계획: 모든 입력이 꺼져 있어요 (' + dis.slice(0, 3) + ')');
@@ -170,7 +169,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   await page.screenshot({ path: SHOTS + '/admin-plan-readonly.png', fullPage: true });
   await page.click('#btn-back'); await page.click('#row-display'); await page.waitForSelector('#dd-h');
   const dis2 = await page.evaluate(() => [...document.querySelectorAll('#screen .seg button, #screen .switch')].filter(e => !e.disabled).length);
-  must(dis2 === 0 && !(await vis(page, '#dd-save')) && (await text(page, '#admin-note')).includes('관리자만'), '화면 설정도 읽기 전용');
+  must(dis2 === 0 && !(await vis(page, '#dd-save')), '화면 설정도 읽기 전용');
   await page.click('#dd-font-system', { force: true }).catch(() => {});
   must(!(await db(page))['state/display'], '눌러도 저장되지 않아요');
   await page.close();

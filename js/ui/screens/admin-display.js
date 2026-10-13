@@ -32,7 +32,7 @@ function previewHtml(d) {
 SCREENS.adminDisplay = {
   html() {
     const d = draft(), ro = !isAdmin(), L = esc(traineeLabel());
-    const lead = '<p class="t-body muted" id="dd-lead">여기서 바꾸면 ' + L + ' 휴대폰에 바로 적용돼요. ' + L + iga(traineeLabel()) + ' 따로 누를 것은 없어요.</p>' + (S.displayRemote ? '' : '<p class="t-body" id="dd-nodoc">아직 정하지 않았어요. 지금은 ' + L + ' 휴대폰에서 정한 대로 보여요.</p>');
+    const lead = '' + (S.displayRemote ? '' : '');
     return '<div class="stack"><h1 class="t-headline" id="dd-h">' + L + ' 화면</h1>' + lead + adminOnlyNote() +
       '<section class="card elevated" aria-label="미리보기"><div class="t-label muted">미리보기</div><div class="mt">' + previewHtml(d) + '</div></section>' +
       '<section class="card outlined stack" aria-label="화면 설정">' +
@@ -42,7 +42,7 @@ SCREENS.adminDisplay = {
       switchRow('dd-voice', '소리 안내', '문제와 안내를 읽어 드려요', d.voice, 'dd-voice', ro) +
       (d.voice ? '<div>' + segHtml('말 빠르기', 'dd-rate-l', RATES, nearRate(d.rate), 'dd-rate', 'dd-rate', ro) + '<div class="mt"><button class="btn tonal" id="dd-hear" type="button" data-act="dd-hear">들어 보기</button></div></div>' : '') +
       '</section>' +
-      '<p class="t-small muted" id="dd-foot">' + L + ' 휴대폰이 꺼져 있거나 인터넷이 안 되면, 다음에 앱을 열 때 적용돼요.</p>' +
+      '' +
       (ro ? '' : '<div class="cta"><button class="btn filled" id="dd-save" type="button" data-act="dd-save"' + (dirty() ? '' : ' disabled') + '>저장</button><button class="btn text" id="dd-revert" type="button" data-act="dd-revert">되돌리기</button></div>') + '</div>';
   }
 };
@@ -57,11 +57,8 @@ ACTS['dd-hear'] = () => say('오늘의 두뇌 산책을 시작해 볼까요?', t
 ACTS['dd-revert'] = () => { S.dispDraft = null; render(true); };
 ACTS['dd-save'] = async () => {
   if (!isAdmin()) return;
-  const online = presenceState(S.presence[S.trainee && S.trainee.userId || 'local'] && S.presence[S.trainee && S.trainee.userId || 'local'].lastSeen, Date.now()).state === 'online';
   try {
     await saveDisplay(draft(), S.myId || 'local');
-    const L = traineeLabel();
-    toast(online ? '저장했어요. 지금 ' + L + iga(L) + ' 앱을 보고 계셔서 바로 바뀌어요.' : '저장했어요. ' + L + ' 휴대폰에 곧 적용돼요.');
     S.dispDraft = null; render(true);
   } catch (e) { toast(writeErrMsg(e, true)); }
 };

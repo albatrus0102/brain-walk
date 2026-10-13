@@ -16,10 +16,9 @@ const must = async (cond, msg) => { if (!cond) { errors.push('ASSERT ' + msg); o
 await page.goto(BASE);
 await page.waitForSelector('#setup-h');
 await must((await page.innerText('#setup-h')).includes('관리자 설정이 필요해요'), '설정 안내 화면');
-await must((await page.innerText('#screen')).includes('README'), 'README 안내 문구');
+await must(!/README|의료기기/.test(await page.innerText('#screen')), '설정 안내 화면: 제목 + 체험 버튼만');
 await page.click('#btn-demo');
 await page.waitForSelector('#btn-main, .dialog');
-if (await vis('.dialog')) { out('dialog:', await page.innerText('#dlg-title')); await page.click('#dlg-btn-0'); }
 if (await vis('.dialog')) { out('dialog:', await page.innerText('#dlg-title')); await page.click('#dlg-btn-1'); }
 await must(await vis('#btn-main'), '홈 훈련 시작 버튼');
 

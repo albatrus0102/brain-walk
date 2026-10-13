@@ -20,7 +20,7 @@ function histBars(rs) {
 export function clinicalReportHtml(withActions) {
   const groups = byTest(), keys = Object.keys(groups);
   let o = '<section class="card outlined" id="clinical-report" aria-labelledby="cl-h"><h2 class="t-title" id="cl-h">병원 검사 기록</h2>';
-  if (!keys.length) o += '<p class="t-body muted mt">아직 기록이 없어요. 병원에서 받은 결과를 적어 두면 변화를 한눈에 볼 수 있어요.</p>';
+  if (!keys.length) o += '<p class="t-body muted mt">아직 기록이 없어요</p>';
   else {
     o += '<div class="rows mt">';
     keys.forEach(k => {
@@ -36,14 +36,13 @@ export function clinicalReportHtml(withActions) {
     });
     o += '</div>';
   }
-  o += '<p class="t-small muted mt">병원에서 받은 점수를 옮겨 적은 기록이에요. 앱이 검사하거나 해석하지 않아요. 진단이 아니에요.</p>' +
-    '<div class="mt"><button class="btn tonal" id="btn-clinical-add" type="button" data-act="clform" data-t="">검사 결과 기록하기</button></div></section>';
+  o += '<div class="mt"><button class="btn tonal" id="btn-clinical-add" type="button" data-act="clform" data-t="">검사 결과 기록하기</button></div></section>';
   return o;
 }
 
 SCREENS.clinical = {
   html() {
-    return '<div class="stack"><h1 class="t-headline" id="clin-h">병원 검사 기록</h1><p class="t-body muted">' + esc(traineeLabel()) + '이(가) 병원에서 받은 검사 결과를 적어 두는 곳이에요. 가족만 볼 수 있어요.</p>' +
+    return '<div class="stack"><h1 class="t-headline" id="clin-h">병원 검사 기록</h1>' +
       clinicalReportHtml(true) + '</div>';
   }
 };
@@ -53,7 +52,7 @@ SCREENS.clinicalForm = {
   html() {
     const c = S.cl;
     const opt = CLINICAL_TESTS.map(x => '<option value="' + x.id + '"' + (x.id === c.test ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('');
-    return '<div class="stack"><h1 class="t-headline" id="clf-h">검사 결과 기록하기</h1><p class="t-body muted">결과지를 보고 점수만 적어 주세요. 모르는 칸은 비워 두어도 돼요.</p>' +
+    return '<div class="stack"><h1 class="t-headline" id="clf-h">검사 결과 기록하기</h1>' +
       '<div class="field"><label for="cl-test">어떤 검사였나요?</label><select class="input" id="cl-test">' + opt + '</select></div>' +
       (c.test === 'other' ? '<div class="field"><label for="cl-label">검사 이름</label><input class="input" id="cl-label" type="text" maxlength="30" value="' + esc(c.label || '') + '"></div>' : '') +
       '<div class="field"><label for="cl-date">검사 받은 날</label><input class="input" id="cl-date" type="date" max="' + today() + '" value="' + esc(c.date) + '"></div>' +
@@ -96,7 +95,7 @@ export async function saveClinical() {
   if (c.result) doc.result = c.result;
   if ((c.memo || '').trim()) doc.memo = c.memo.trim().slice(0, 500);
   const id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
-  try { await Store.setDoc('clinicalTests/' + id, doc); toast('저장했어요.'); S.cl = null; go('clinical'); }
+  try { await Store.setDoc('clinicalTests/' + id, doc); S.cl = null; go('clinical'); }
   catch (e) { toast(writeErrMsg(e)); }
 }
 export function shareClinical(id) {

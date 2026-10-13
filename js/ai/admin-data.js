@@ -22,7 +22,7 @@ export function aiAccess() {
   return 'ok';
 }
 const typing = () => { const a = document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); };
-const refresh = () => { if (String(S.screen).indexOf('ai') === 0 && S.screen !== 'aiConsent' && !typing()) render(true); };
+const refresh = () => { if (String(S.screen).indexOf('ai') === 0 && !typing()) render(true); };
 export function ensureAdminSubs() {
   if (AD.subscribed || aiAccess() !== 'ok' || !Store.adapter) return;
   AD.subscribed = true;

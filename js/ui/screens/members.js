@@ -25,16 +25,15 @@ const fail = e => toast(Store.explain(e, true));
 
 SCREENS.members = {
   html() {
-    if (Store.mode !== 'firebase') return '<div class="stack"><h1 class="t-headline" id="mem-h">가족 구성원</h1><p class="t-body" id="mem-demo">체험 모드에서는 한 사람만 있어요. 가족방을 만들면 가족 구성원을 정할 수 있어요.</p></div>';
+    if (Store.mode !== 'firebase') return '<div class="stack"><h1 class="t-headline" id="mem-h">가족 구성원</h1></div>';
     const admin = isAdmin(), me = FirebaseAdapter.mid;
     return '<div class="stack"><h1 class="t-headline" id="mem-h">가족 구성원</h1>' +
-      (admin ? '<p class="t-body muted">이름을 누르면 할 수 있는 일이 나와요. 모르는 사람이 들어왔다면 내보내고, 가족 코드를 새로 만들어 주세요.</p>' : '<p class="t-body muted" id="admin-note">관리자만 바꿀 수 있어요. 관리자: ' + esc(adminNames().join(', ') || '방 주인') + '</p>') +
       '<ul class="mlist" id="mem-list">' + rows().map(([id, m], i) => {
         const badges = (id === traineeId() ? '<span class="pill tr">훈련하는 분</span>' : '') + (id === S.family.ownerMemberId ? '<span class="pill">방 주인</span>' : '') + (isAdminId(id) ? '<span class="pill ad">관리자</span>' : '') + (id === me ? '<span class="pill me">나</span>' : '');
         return '<li><button type="button" class="hub-item mrow" id="mem-' + i + '" data-act="mem-open" data-id="' + esc(id) + '"><span><strong>' + esc(m.name || '가족') + '</strong><span class="badges">' + badges + '</span>' +
           (admin && mismatch(id, m) ? '<span class="sub warn" id="mem-warn-' + i + '">역할이 맞지 않아요</span>' : '') + '</span><span class="t-title-m" aria-hidden="true">›</span></button></li>';
       }).join('') + '</ul>' +
-      (admin && rows().some(([id, m]) => mismatch(id, m)) ? '<p class="t-small muted">‘역할이 맞지 않아요’가 보이면 그 사람을 눌러 ‘고치기’를 해 주세요.</p>' : '') +
+      (admin && rows().some(([id, m]) => mismatch(id, m)) ? '' : '') +
       '<button class="btn tonal" id="btn-mem-invite" type="button" data-act="row-invite">가족 초대 코드 보기</button></div>';
   },
   bind() {
@@ -48,7 +47,7 @@ function openMember(id) {
   const nm = String(m.name || '가족'), admin = isAdmin(), me = FirebaseAdapter.mid, t = traineeId(), isT = id === t, owner = id === S.family.ownerMemberId;
   openSheet(nm, (body) => {
     body.append(h('p', { class: 't-body muted', id: 'mem-desc', text: (isT ? '훈련하는 분이에요. ' : '') + (owner ? '방 주인이에요. ' : '') + (isAdminId(id) ? '관리자예요.' : (isT ? '' : '가족이에요.')) }));
-    if (!admin) { body.append(h('p', { class: 't-body', id: 'mem-ro', text: '관리자만 바꿀 수 있어요.' }), btn('닫기', 'text', closeSheet, 'mem-close')); return; }
+    if (!admin) { body.append(btn('닫기', 'text', closeSheet, 'mem-close')); return; }
     const old = t && ms()[t] ? String(ms()[t].name || '가족') : '';
     const label = traineeLabel();
     if (mismatch(id, m)) body.append(btn('역할 고치기', 'filled', async () => { try { await setMemberRole(id, isT ? 'trainee' : 'family'); closeSheet(); toast('고쳤어요.'); await refresh(); } catch (e) { fail(e); } }, 'mem-fix'));
@@ -63,7 +62,7 @@ function openMember(id) {
     }
     if (id !== me) body.append(btn('새 기기 연결 코드 만들기', 'tonal', () => openTransfer(id, nm), 'mem-transfer'));
     if (id !== me && !owner) body.append(btn('가족방에서 내보내기', 'outlined', () => dialog(nm + '님을 내보낼까요?', nm + '님의 기기에서 가족방이 닫혀요. 지난 대화와 기록은 남아요. 다시 들어오지 못하게 가족 코드도 새로 만드는 것이 좋아요.', [{ label: '취소', kind: 'text' }, { label: '내보내기', kind: 'filled', run: async () => {
-      try { await removeMember(id); closeSheet(); toast(nm + '님을 내보냈어요.'); await refresh(); setTimeout(() => dialog('가족 코드를 새로 만들까요?', '이전 코드로는 더 이상 들어올 수 없게 돼요.', [{ label: '나중에', kind: 'text' }, { label: '새로 만들기', kind: 'filled', run: () => openInvite() }]), 300); } catch (e) { fail(e); }
+      try { await removeMember(id); closeSheet(); await refresh(); setTimeout(() => dialog('가족 코드를 새로 만들까요?', '이전 코드로는 더 이상 들어올 수 없게 돼요.', [{ label: '나중에', kind: 'text' }, { label: '새로 만들기', kind: 'filled', run: () => openInvite() }]), 300); } catch (e) { fail(e); }
     } }]), 'mem-remove'));
     body.append(btn('닫기', 'text', closeSheet, 'mem-close'));
   });

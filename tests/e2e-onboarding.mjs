@@ -9,7 +9,7 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME || '/
 const errors = [], out = (...a) => console.log(...a);
 const must = (c, msg) => { if (!c) { errors.push('ASSERT ' + msg); out('FAIL', msg); } else out('ok  ', msg); };
 const FILLED = 'self.BW_CONFIG={firebase:{apiKey:"k",authDomain:"x.firebaseapp.com",projectId:"x",storageBucket:"x",messagingSenderId:"1",appId:"1:1:web:1"},vapidKey:"v",appCheckSiteKey:""};';
-async function dismiss(pg) { await pg.waitForSelector('.dialog', { timeout: 8000 }).catch(async e => { console.log('NO DIALOG', await pg.evaluate(() => [window.__S.screen, document.getElementById('scrim').hidden, document.getElementById('scrim').innerHTML.length, localStorage.getItem('bw.seenDisc'), document.getElementById('screen').innerText.slice(0, 60)])); throw e; }); await pg.click('#dlg-btn-0'); await pg.waitForTimeout(150); if (await pg.locator('.dialog').count() && await pg.locator('.dialog').first().isVisible()) await pg.click('#dlg-btn-1'); }
+async function dismiss(pg) { await pg.waitForSelector('#appbar-title', { timeout: 8000 }); await pg.waitForTimeout(250); if (await pg.locator('.dialog').count() && await pg.locator('.dialog').first().isVisible()) await pg.click('#dlg-btn-1').catch(() => pg.click('#dlg-btn-0')); }   // 처음 안내 창은 없어요. 점검 권유 창이 뜨면 닫아요
 async function open(ua) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent: ua, permissions: ['clipboard-read', 'clipboard-write'] });
   await ctx.addInitScript(() => { try { localStorage.setItem('bw.aiDemo', 'false'); } catch (e) {} });   // 체험 모드의 AI 예시 자료·안내는 AI 시험(e2e-ai*.mjs)에서만 켜요
@@ -29,7 +29,7 @@ await page.evaluate(() => { window.__S.ob = { code: 'ABC234', fromLink: true }; 
 must((await page.inputValue('#join-code')) === 'ABC234', '?join=CODE 로 코드 미리 입력');
 await page.fill('#join-code', 'ab0 c23'); await page.click('#btn-join-next'); must((await page.innerText('#ob-err')).includes('0(영)·O, 1·I는 코드에 쓰지 않아요'), '0/O/1/I 안내');
 await page.evaluate(() => window.__go('ob-start')); must((await page.innerText('#screen')).includes('새 가족 만들기') && (await page.innerText('#screen')).includes('가족 코드로 들어가기'), '처음 화면: 새 가족 만들기 / 가족 코드로 들어가기');
-must((await page.innerText('#screen')).includes('의료기기나 치료를 대신하지 않아요'), '의료기기 아님 안내(기관·번호 없음)');
+{ const t0 = await page.innerText('#screen'); must(!/의료기기|저장되는 정보|치료|진단|치매|\d{4}-\d{4}/.test(t0) && !(await page.locator('#disclaimer, .foot').count()), '처음 화면: 면책 카드·저장되는 정보 카드·꼬리말 없음'); }
 await page.evaluate(() => { window.__S.ob = { flow: 'create' }; window.__go('ob-name'); }); await page.click('#name-chip-0'); must((await page.inputValue('#ob-name-input')) === '아버지', '이름 예시 칩');
 await page.click('#btn-name-next'); await page.waitForSelector('#ob-role-h'); must(await page.locator('#role-trainee').isVisible() && await page.locator('#role-family').isVisible(), '역할: 훈련하는 분 / 가족');
 await page.evaluate(() => { window.__S.ob = { invite: { code: 'ABC234' } }; window.__go('ob-invite'); });
@@ -45,6 +45,7 @@ await page.click('#inv-kakao'); await page.waitForTimeout(100); must(await page.
 const ios = await open('Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1');
 await ios.goto(BASE + '?join=XYZ789'); await ios.waitForSelector('#err-h'); await ios.click('#btn-demo'); await dismiss(ios);
 await ios.evaluate(() => { window.__S.ob = { code: 'XYZ789' }; window.__go('ob-join'); });
-const t = await ios.innerText('#screen'); must(t.includes('공유 → 홈 화면에 추가 후 알림을 켤 수 있어요') && t.includes('XYZ789'), 'iOS: 홈 화면에 추가 안내 + 큰 코드');
+const t = await ios.innerText('#screen'); must(t.includes('XYZ789') && await ios.locator('#btn-install-ios').isVisible() && !t.includes('공유 → 홈 화면에 추가'), 'iOS: "📲 홈 화면에 설치" 버튼 하나 + 큰 코드 (설명 글 없음)');
+await ios.click('#btn-install-ios'); must((await ios.innerText('#ios-steps')).includes('공유 버튼'), 'iOS: 버튼을 누르면 그림 안내가 창으로 나와요'); await ios.click('#dlg-btn-0');
 await ios.screenshot({ path: SHOTS + '/onboarding-ios.png' });
 out('ERRORS:', JSON.stringify(errors)); await browser.close(); process.exit(errors.length ? 1 : 0);

@@ -49,17 +49,17 @@ SCREENS.adminPlan = {
     const c1 = '<div class="stepline"><span class="t-title-m" id="gpd-l">하루 게임 수</span><div class="stepper" role="group" aria-labelledby="gpd-l">' +
         '<button type="button" class="step" id="gpd-minus" data-act="pl-gpd" data-d="-1" aria-label="게임 수 하나 줄이기"' + (ro || d.gamesPerDay <= 1 ? ' disabled' : '') + '>−</button><output class="stepval" id="plan-gpd" aria-live="polite">' + d.gamesPerDay + '</output>' +
         '<button type="button" class="step" id="gpd-plus" data-act="pl-gpd" data-d="1" aria-label="게임 수 하나 늘리기"' + (ro || d.gamesPerDay >= 9 ? ' disabled' : '') + '>＋</button></div></div>' +
-      (d.gamesPerDay > onN && onN ? '<p class="t-small muted" id="plan-cap">켠 게임이 ' + onN + '개라 하루 최대 ' + onN + '개예요.</p>' : '') +
+      (d.gamesPerDay > onN && onN ? '' : '') +
       '<details class="field-opt" id="plan-more" data-xp="plan-more"' + (S.xpOpen['plan-more'] ? ' open' : '') + '><summary id="plan-more-sum">자세히</summary><div class="stack mt">' +
         selectHtml('plan-rounds', '게임당 문제 수', [['', '기본 (게임마다 달라요)']].concat([3, 4, 5, 6, 7, 8, 9, 10].map(n => [n, n + '개'])), d.roundsPerGame == null ? '' : d.roundsPerGame, ro) +
-        '<p class="t-small muted">카드 짝 맞추기처럼 한 판이 긴 게임은 비율에 맞춰 줄여요.</p>' +
+        '' +
         '<div>' + segHtml('목표 시간', 'tgt-l', TARGETS.concat(TARGETS.some(t => t[0] === d.targetMin) ? [] : [[d.targetMin, d.targetMin + '분']]), d.targetMin, 'pl-target', 'plan-target', ro) + '</div>' +
-        '<div>' + segHtml('게임 사이 자동 넘김', 'auto-l', AUTOS, d.autoNextSec, 'pl-auto', 'plan-auto', ro) + '<p class="t-small muted mt">게임이 끝나면 칭찬 화면이 나오고, 정한 초가 지나면 저절로 다음 게임이 시작돼요. 끄면 ‘다음’을 눌러야 해요.</p></div>' +
+        '<div>' + segHtml('게임 사이 자동 넘김', 'auto-l', AUTOS, d.autoNextSec, 'pl-auto', 'plan-auto', ro) + '</div>' +
       '</div></details>' +
-      '<p class="t-body" id="plan-est">예상 시간: 약 ' + M + '분</p>' + (M > d.targetMin + 5 ? '<p class="fb soft" id="plan-over">예상 시간이 목표보다 길어요. 게임 수나 문제 수를 줄여 보세요.</p>' : '');
+      '<p class="t-body" id="plan-est">예상 시간: 약 ' + M + '분</p>' + (M > d.targetMin + 5 ? '' : '');
     // 2 요일과 알람
     const c2 = '<div><div class="t-title-m" id="days-label">훈련 요일</div><div class="days mt" role="group" aria-labelledby="days-label">' + DAYS.map(o => '<button type="button" class="chip" id="plan-day-' + o[0] + '" aria-pressed="' + d.weekdays.includes(o[0]) + '" data-act="pl-day" data-d="' + o[0] + '"' + dis + '>' + o[1] + '</button>').join('') + '</div></div>' +
-      '<div class="field"><label for="plan-alarm-time">알람 시간</label><input class="input" type="time" id="plan-alarm-time" value="' + esc(d.alarmTime) + '"' + dis + '></div><p class="t-small muted">알람은 훈련하는 날에만 울려요.</p>' +
+      '<div class="field"><label for="plan-alarm-time">알람 시간</label><input class="input" type="time" id="plan-alarm-time" value="' + esc(d.alarmTime) + '"' + dis + '></div>' +
       (Platform.canSaveFile() ? '<button class="btn outlined" id="btn-ics" type="button" data-act="pl-ics"' + dis + '>휴대폰 캘린더에 등록하기</button>' : '') +
       (S.icsText ? '<div class="field"><label for="ics-text">파일이 저장되지 않으면 아래 내용을 복사해 \'brainwalk-alarm.ics\' 파일로 저장해 쓰세요.</label><textarea class="input copybox" id="ics-text" readonly rows="6"></textarea><button class="btn tonal mt" id="btn-ics-copy" type="button" data-act="pl-icscopy">내용 복사하기</button></div>' : '');
     // 3 게임 고르기와 순서
@@ -74,7 +74,7 @@ SCREENS.adminPlan = {
       }).join('') + '</ul><p class="t-body" id="plan-today2">오늘: ' + esc(list.join(' → ')) + '</p><p class="t-body muted" id="plan-tmr">내일: ' + esc(tmr.join(' → ')) + '</p>';
     // 4 난이도
     const nFixed = cat.filter(g => d.games[g.id].mode === 'fixed').length;
-    const c4 = '<p class="t-body" id="lv-help">자동: 정답률이 80% 이상이면 한 단계 올리고, 50% 미만이면 한 단계 내려요.</p>' +
+    const c4 = '' +
       '<details class="field-opt" id="plan-lv" data-xp="plan-lv"' + (S.xpOpen['plan-lv'] ? ' open' : '') + '><summary id="plan-lv-sum">게임마다 정하기</summary><div class="stack mt">' + cat.map(g => {
         const id = g.id, x = d.games[id], now = clampLv(S.levels[id] || 1), levels = [1, 2, 3, 4, 5];
         return '<div class="lvset card outlined" data-g="' + id + '"><div class="rowline"><strong>' + esc(GAMES[id].name) + '</strong><span class="t-small muted">지금 ' + now + '단계</span></div>' +
@@ -93,7 +93,7 @@ SCREENS.adminPlan = {
       xpCard('p3', '게임 고르기와 순서', onN + '개 게임 · ' + (d.order === 'fixed' ? '정한 순서' : '날마다 바꾸기'), c3) + xpCard('p4', '난이도', levelText(d), c4) +
       xpCard('p5', '점검과 생활 체크', '점검 ' + checkText(d) + ' · 생활 체크 ' + (d.checkin ? '켬' : '끔') + ' · 자동 넘김 ' + autoNextText(d.autoNextSec), c5) +
       (probs.length ? '<ul class="problems" id="plan-problems" role="alert">' + probs.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>' : '') +
-      (ro ? '' : '<div class="cta">' + (started ? '<p class="t-small muted center" id="plan-started">오늘 이미 시작한 훈련은 그대로 하고, 바뀐 계획은 다음 훈련부터 적용돼요.</p>' : '') + '<button class="btn filled" id="plan-save" type="button" data-act="pl-save"' + (probs.length || !planDirty() ? ' disabled' : '') + '>저장</button><button class="btn text" id="plan-revert" type="button" data-act="pl-revert">되돌리기</button></div>') + '</div>';
+      (ro ? '' : '<div class="cta">' + (started ? '' : '') + '<button class="btn filled" id="plan-save" type="button" data-act="pl-save"' + (probs.length || !planDirty() ? ' disabled' : '') + '>저장</button><button class="btn text" id="plan-revert" type="button" data-act="pl-revert">되돌리기</button></div>') + '</div>';
   },
   bind(el) { const t = $('#ics-text', el); if (t) t.value = S.icsText; }
 };
@@ -118,9 +118,9 @@ ACTS['pl-revert'] = () => { S.planDraft = null; render(true); };
 ACTS['pl-ics'] = () => {
   const d = draft(), ics = buildIcs({ time: d.alarmTime, days: d.weekdays }, Date.now(), '');
   if (!ics) { toast('시간과 요일을 하나 이상 골라 주세요.'); return; }
-  Platform.saveFile('brainwalk-alarm.ics', new Blob([ics], { type: 'text/calendar' })).then(() => toast('저장했어요. 파일을 열면 휴대폰 캘린더에 알림이 등록돼요.')).catch(() => { S.icsText = ics; render(true); toast('파일을 저장하지 못했어요. 아래 내용을 복사해 쓰세요.'); });
+  Platform.saveFile('brainwalk-alarm.ics', new Blob([ics], { type: 'text/calendar' })).catch(() => { S.icsText = ics; render(true); toast('파일을 저장하지 못했어요'); });
 };
-ACTS['pl-icscopy'] = () => { const t = $('#ics-text'); Platform.copy(S.icsText, t).then(ok => toast(ok ? '복사했어요.' : '글자를 길게 눌러 복사해 주세요.')); };
+ACTS['pl-icscopy'] = () => { const t = $('#ics-text'); Platform.copy(S.icsText, t).then(ok => { if (!ok) toast('복사하지 못했어요'); }); };
 ACTS['pl-save'] = async () => {
   if (!isAdmin()) return;
   const d = draft(), prog = todayProgressDoc(), started = !!(prog && prog.status === 'started');
@@ -128,7 +128,6 @@ ACTS['pl-save'] = async () => {
   try {
     await savePlan(d, catalog(), S.myId || 'local', d.alarmTime);
     S.planBase = JSON.stringify(d);
-    toast('저장했어요. ' + traineeLabel() + ' 휴대폰에 곧 적용돼요.' + (started ? ' 오늘 이미 시작한 훈련은 그대로 하고, 바뀐 계획은 다음 훈련부터 적용돼요.' : ''));
     render(true);
   } catch (e) { toast(writeErrMsg(e, true)); }
 };

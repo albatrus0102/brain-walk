@@ -24,7 +24,7 @@ const noRed = async (page, msg) => {
   const t = await page.innerText('#ai-r-r-a-' + (await page.$$eval('.airow-btn', e => e.map(x => x.id)))[0].split('r-a-')[1]);
   must(/\d+\/\d+ \(.\) 아침 리포트/.test(t) && /관찰/.test(t), '행: 날짜·종류·신호등 글자(관찰)·한 줄');
   must((await page.locator('.lpill').count()) >= 4 && (await page.locator('.lpill .lg').count()) >= 4, '신호등: 색 + 모양 + 글자 알약');
-  must((await page.innerText('#ai-disc')).includes('이 리포트는 병을 판단하지 않아요. 기록의 흐름(추세)을 관찰한 것이에요. 걱정되면 의사와 상담하세요.'), '목록 맨 아래: 안내 문구');
+  must((await page.locator('#ai-disc').count()) === 0, '목록: 맨 아래 안내 문구 카드 없음');
   must(!FORBID.test(await page.innerText('#screen')), '진단·정상/비정상 같은 말이 없어요');
   await noHScroll(page, '목록'); await noRed(page, '목록');
   await page.click('#ai-tab-weekly'); must((await page.locator('.airow-btn').count()) === 1, '주간 탭: 주간 리포트만');
@@ -39,8 +39,8 @@ const noRed = async (page, msg) => {
   must(!(await vis(page, '#ai-d-speed .ai-detail')), '자세히는 처음에 접혀 있어요');
   await page.click('#ai-d-speed > summary');
   const det = await page.innerText('#ai-d-speed .ai-detail');
-  must(await vis(page, '#ai-d-speed .ai-detail') && det.includes('주당 기울기') && det.includes('+1.8%') && det.includes('메모와 겹치는 기간'), '자세히: 숫자·신호 이유·메모 겹침');
-  must((await page.innerText('#ai-conf-line')) === '신뢰 정도: 약한 신호예요' && (await page.innerText('#ai-disc')).includes('의사와 상담하세요') && !/센터|\d{4}-\d{4}/.test(await page.innerText('#ai-disc')), '신뢰 정도와 맨 아래 안내 문구');
+  must(await vis(page, '#ai-d-speed .ai-detail') && det.includes('주당 기울기') && det.includes('+1.8%'), '자세히: 숫자·신호 이유');
+  must((await page.innerText('#ai-conf-line')) === '신뢰 정도: 약한 신호예요' && (await page.locator('#ai-disc').count()) === 0 && !/센터|\d{4}-\d{4}/.test(await page.innerText('#screen')), '신뢰 정도 한 줄, 맨 아래 안내 문구·기관·번호 없음');
   await page.screenshot({ path: SHOTS + '/ai-report-max-360.png', fullPage: true });
   await noHScroll(page, '리포트 보기(최대 글자·360px)'); await noRed(page, '보기');
   must(!FORBID.test(await page.innerText('#screen')), '보기: 진단 말투 없음');
@@ -89,7 +89,7 @@ for (const dark of [false, true]) {
 {
   const { page } = await newPage(browser, { tag: 'notes', w: 360, seed: seed({ 'bw.size': 'max' }) });
   await openAi(page); await go(page, 'aiNotes'); await page.waitForSelector('#ai-note-form');
-  must((await page.innerText('#ai-n-hint')).includes('AI에게 보내지 않아요') && (await page.innerText('#ai-n-hint')).includes('날짜와 고른 분류만 가요'), '메모: "AI에게 보내지 않아요" 안내');
+  must(!(await page.locator('#ai-n-hint').count()), '메모: 안내 글 없음');
   must((await page.locator('#ai-note-form .chip[id^=ai-n-c-]').count()) === 9 && (await page.getAttribute('#ai-n-text', 'maxlength')) === '200', '분류 9개 칩, 자유 글 200자');
   await page.click('#ai-n-save'); must(/하나 이상 골라/.test(await page.innerText('#snackbar')), '분류를 안 고르면 저장하지 않아요');
   await page.fill('#ai-n-from', '2027-02-28'); await page.fill('#ai-n-to', '2027-03-06');
@@ -139,7 +139,7 @@ for (const dark of [false, true]) {
   must(await vis(page, '#ai-st-cons') && (await page.innerText('#ai-st-cons')).includes('안내'), '아버지 안내 확인 상태 줄');
   must(await vis(page, '#btn-ai-switch'), '루틴 상태 맨 아래: AI 리포트 끄기'); await noHScroll(page, '루틴 상태');
   await go(page, 'aiSettings'); await page.waitForSelector('#ai-themes');
-  must((await page.innerText('#ai-theme-hint')).includes('이 낱말만 AI에 가요') && (await page.locator('#ai-theme-chips .chip').count()) === 3, '관심사: "이 낱말만 AI에 가요" 와 기본 3개');
+  must(!(await page.locator('#ai-theme-hint').count()) && (await page.locator('#ai-theme-chips .chip').count()) === 3, '관심사: 안내 글 없이 기본 3개');
   await page.fill('#ai-theme-in', 'abc'); await page.click('#ai-theme-add'); must(/한글 낱말/.test(await page.innerText('#snackbar')), '한글이 아니면 받지 않아요');
   await page.fill('#ai-theme-in', '열한글자가넘는낱말입니다'); must((await page.inputValue('#ai-theme-in')).length === 10, '10글자 제한');
   for (const w of ['바둑', '텃밭', '민화', '낚시', '독서', '합창']) { await page.fill('#ai-theme-in', w); await page.click('#ai-theme-add'); }

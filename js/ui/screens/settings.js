@@ -1,6 +1,5 @@
 import { chatAvail, getPlan, isAdmin, isOwnerNow, isTrainee, traineeId, traineeLabel } from '../../data.js';
 import { refreshRole } from '../../data.js';
-import { localConsent } from '../../ai/consent.js';
 import { FirebaseAdapter } from '../../store/firebase-adapter.js';
 import { Store } from '../../store/store.js';
 import { S } from '../../state.js';
@@ -23,7 +22,7 @@ const adminChip = () => isAdmin() && Store.mode === 'firebase' ? '<p class="chip
 /* 훈련하는 분 기기를 관리하는 줄들 (가족 기기의 3번 카드, 훈련하는 분 기기에서 관리자가 여는 '가족방 관리'가 함께 써요) */
 function mgmtRows() {
   const none = !traineeId() && Store.mode === 'firebase';
-  return none ? '<p class="t-body" id="no-trainee">아직 훈련하는 분이 없어요. 가족 구성원에서 정해 주세요.</p>'
+  return none ? '<p class="t-body" id="no-trainee">훈련하는 분이 없어요</p>'
     : '<p class="t-body" id="plan-summary">' + esc(planSummary(getPlan())) + '</p>' +
       rowBtn('row-display', esc(traineeLabel()) + ' 화면 (글자·소리)', '글꼴·글자 크기·소리를 ' + esc(traineeLabel()) + ' 휴대폰에 바로 적용해요') +
       rowBtn('row-plan', '훈련 계획 (분량·요일·알람·게임·난이도)', '하루 게임 수, 문제 수, 요일, 게임 고르기, 난이도');
@@ -42,26 +41,23 @@ SCREENS.settings = {
         (fb ? '<section class="card outlined" aria-labelledby="push-h2"><h2 class="t-title" id="push-h2">알림 받기</h2><div class="mt" id="push-slot"></div></section>' : '') +
         '<section class="card outlined" aria-labelledby="inst-h"><h2 class="t-title" id="inst-h">앱 설치</h2><div class="mt" id="install-slot"></div></section>' +
         (fb ? '<section class="card outlined" aria-label="이 기기"><div class="stack" id="dev-slot"></div></section>' : '') + mg +
-        (localConsent() === 'withdrawn'
-          ? '<section class="card outlined" id="ai-consent-card" aria-labelledby="aic-h"><h2 class="t-title" id="aic-h">가족이 숫자를 살펴보는 것</h2><p class="t-body mt" id="aic-state">지금은 멈춰 있어요. 가족이 숫자를 살펴보지 않아요.</p><div class="mt"><button class="btn tonal" id="btn-ai-again" type="button" data-act="consent-again">다시 살펴봐도 돼요</button></div></section>'
-          : '<section class="card outlined" id="ai-consent-card" aria-labelledby="aic-h"><h2 class="t-title" id="aic-h">가족이 숫자를 살펴보는 것</h2><p class="t-body mt" id="aic-state">푼 문제의 맞힌 개수와 걸린 시간을 가족이 살펴봐요. 싫으시면 멈출 수 있어요.</p><div class="mt"><button class="btn outlined" id="btn-ai-withdraw" type="button" data-act="consent-withdraw">살펴보지 말아 주세요</button></div></section>') +
-        (local ? '<section class="card outlined" id="demo-card" aria-labelledby="demo-h"><h2 class="t-title" id="demo-h">체험 모드</h2><p class="t-body mt">지금은 체험 모드예요. 기록은 이 기기에만 저장되고, 가족 대화와 알림은 쓸 수 없어요. 체험 모드에서는 한 사람이 관리자와 훈련하는 분을 모두 해 볼 수 있어요.</p><div class="stack mt"><button class="btn tonal" id="btn-role-switch" type="button" data-act="roleswitch">가족(관리자) 화면으로 보기</button></div></section>' : '') +
+        (local ? '<section class="card outlined" id="demo-card" aria-labelledby="demo-h"><h2 class="t-title" id="demo-h">체험 모드</h2><div class="stack mt"><button class="btn tonal" id="btn-role-switch" type="button" data-act="roleswitch">가족(관리자) 화면으로 보기</button></div></section>' : '') +
         '<div class="cta"><button class="btn filled" id="btn-set-home" type="button" data-act="home">처음으로</button></div></div>';
     }
     // ---- 가족(관리자 포함) 기기
     const rem = chatAvail() ? xpCard('notif', '알림', '훈련 시간 · 내 확인 시간', '<div id="push-slot"></div>' +
-      '<div class="field"><label for="rem-time">내 확인 시간 (매일)</label><p class="t-small muted">이 시간에 앱이 열려 있고 <span data-slot="tlabel"></span><span data-slot="tiga"></span> 아직 훈련 전이면 알려 드려요.</p><input class="input" type="time" id="rem-time" value="' + esc(S.remDraft.time) + '"></div>' +
+      '<div class="field"><label for="rem-time">내 확인 시간 (매일)</label><input class="input" type="time" id="rem-time" value="' + esc(S.remDraft.time) + '"></div>' +
       switchRow('rem-switch', '이 시간에 알려 주기', S.remDraft.enabled ? '켜져 있어요.' : '꺼져 있어요.', S.remDraft.enabled, 'remsw', false) + '<button class="btn filled" id="btn-rem-save" type="button" data-act="remsave">저장</button>') : '';
     const own = fb && isOwnerNow() ? xpCard('owner', '방 주인 전용', '관리자 넘기기 · 가족방 삭제', '<div id="owner-slot" class="stack"></div>') : '';
     return '<div class="stack"><h1 class="t-headline" id="set-main-h">설정</h1>' + adminChip() +
-      xpCard('mine', '내 화면', esc(fontName()) + ' · 글자 ' + esc(sizeName()), '<p class="t-small muted">이 휴대폰에서만 바뀌어요.</p>' + segHtml('글꼴', 'font-label', FONT_OPTS, S.prefs.font, 'font', 'font') + segHtml('글자 크기', 'size-label', SIZE_OPTS, S.prefs.size, 'size', 'size') +
+      xpCard('mine', '내 화면', esc(fontName()) + ' · 글자 ' + esc(sizeName()), segHtml('글꼴', 'font-label', FONT_OPTS, S.prefs.font, 'font', 'font') + segHtml('글자 크기', 'size-label', SIZE_OPTS, S.prefs.size, 'size', 'size') +
         switchRow('sound-switch', '소리 안내', S.prefs.sound ? '켜져 있어요. 문제를 읽어 드려요.' : '꺼져 있어요.', S.prefs.sound, 'sound', false) + switchRow('contrast-switch', '고대비 모드', S.prefs.contrast ? '켜져 있어요. 글자와 테두리가 더 진해요.' : '꺼져 있어요.', S.prefs.contrast, 'contrast', false), true) +
       rem +
-      xpCard('mgmt', esc(traineeLabel()) + ' 기기 관리', fb && !traineeId() ? '아직 정하지 않았어요' : esc(planSummary(getPlan())), '<div class="stack" id="mgmt-body">' + mgmtRows() + (isAdmin() ? '' : '<p class="t-body muted" id="admin-note">관리자만 바꿀 수 있어요.</p>') + '</div>') +
+      xpCard('mgmt', esc(traineeLabel()) + ' 기기 관리', fb && !traineeId() ? '아직 정하지 않았어요' : esc(planSummary(getPlan())), '<div class="stack" id="mgmt-body">' + mgmtRows() + '' + '</div>') +
       (fb ? xpCard('room', '가족방', '초대 코드 · 가족 구성원', '<div class="stack">' + roomRows(false) + '</div>') : '') +
       '<section class="card outlined" aria-labelledby="inst-h"><h2 class="t-title" id="inst-h">앱 설치</h2><div class="mt" id="install-slot"></div></section>' +
       (fb ? xpCard('me', '내 정보', '이름 · 기기 · 나가기', '<div class="stack" id="me-slot"></div>') : '') + own +
-      (local ? '<section class="card outlined" id="demo-card" aria-labelledby="demo-h"><h2 class="t-title" id="demo-h">체험 모드</h2><p class="t-body mt">지금은 체험 모드예요. 기록은 이 기기에만 저장돼요. 훈련하는 분 화면이 어떻게 보이는지 미리 볼 수 있어요.</p><div class="stack mt"><button class="btn tonal" id="btn-role-switch" type="button" data-act="roleswitch">훈련하는 분 화면으로 보기</button><button class="btn outlined" id="btn-delete-local" type="button">모든 기록 삭제 (이 기기)</button></div></section>' : '') + '</div>';
+      (local ? '<section class="card outlined" id="demo-card" aria-labelledby="demo-h"><h2 class="t-title" id="demo-h">체험 모드</h2><div class="stack mt"><button class="btn tonal" id="btn-role-switch" type="button" data-act="roleswitch">훈련하는 분 화면으로 보기</button><button class="btn outlined" id="btn-delete-local" type="button">모든 기록 삭제 (이 기기)</button></div></section>' : '') + '</div>';
   },
   bind(el) {
     const local = Store.mode === 'local';

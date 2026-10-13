@@ -90,7 +90,7 @@ h1[tabindex="-1"]:focus-visible{outline:none}
 .nav-item:hover .nav-pill{background:var(--md-sys-color-surface-container-highest)}
 .nav-item[aria-current="page"]{color:var(--md-sys-color-on-surface)}
 .nav-item[aria-current="page"] .nav-pill{background:var(--md-sys-color-secondary-container);color:var(--md-sys-color-on-secondary-container)}
-/* 하단 메뉴(고정)에 맨 아래 안내 글(footer)이 가려지지 않게: 여백은 main 이 아니라 footer 아래에 둬요 */
+/* 하단 메뉴(고정)에 맨 아래 내용이 가려지지 않게: 여백은 main 이 아니라 이 빈 칸에 둬요 */
 body.has-nav .foot-wrap{padding-bottom:calc(var(--nav-h,100px) + 24px)}
 
 /* ---- Progress ---- */
@@ -235,7 +235,6 @@ body.has-nav .foot-wrap{padding-bottom:calc(var(--nav-h,100px) + 24px)}
 .scrim[hidden]{display:none}
 .dialog{width:100%;max-width:480px;background:var(--md-sys-color-surface-container-high);color:var(--md-sys-color-on-surface);border-radius:var(--md-sys-shape-corner-extra-large);padding:28px 24px 16px;box-shadow:var(--md-sys-elevation-level3)}
 .dialog .actions{display:flex;flex-direction:column;gap:8px;margin-top:20px}
-.foot{margin-top:32px;padding-top:16px;border-top:1px solid var(--md-sys-color-outline-variant);color:var(--md-sys-color-on-surface-variant);font-size:var(--md-sys-typescale-body-small-size);line-height:1.6}
 .sync-note{font-size:var(--md-sys-typescale-body-small-size);color:var(--md-sys-color-on-surface-variant)}
 :root[data-contrast="high"] .card.outlined,:root[data-contrast="high"] .gamebtn{border-color:var(--md-sys-color-outline)}
 /* ---- 추가 컴포넌트 ---- */

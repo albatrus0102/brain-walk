@@ -41,3 +41,6 @@ export async function finishGame(page, correct = true) {
   }
 }
 export const done = async (browser) => { out('ERRORS:', JSON.stringify(errors)); await browser.close(); process.exit(errors.length ? 1 : 0); };
+
+/* 훈련하는 분 홈의 큰 버튼 아래 한 줄(예: "게임 5개 · 약 8분")은 화면에 글로 두지 않아요. 값은 홈의 mainState() 에서 읽어요. */
+export const mainSub = page => page.evaluate(async () => (await import(location.origin + '/brain-walk/js/ui/screens/home.js')).mainState().sub);

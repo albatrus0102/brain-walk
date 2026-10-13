@@ -19,7 +19,7 @@ export function currentFlags() {
 export function currentSummary() { return weeklySummary(allSessions(), allCheckins(), currentFlags().consult, todayS()); }
 export async function shareSummary() {
   const sm = currentSummary();
-  if (await sendMessage({ kind: 'summary', text: sm.text, record: { type: 'week', ref: todayS(), title: '이번 주 요약', score: sm.avg } })) toast('이번 주 요약을 대화방에 공유했어요.');
+  if (await sendMessage({ kind: 'summary', text: sm.text, record: { type: 'week', ref: todayS(), title: '이번 주 요약', score: sm.avg } })) { /* 공유됨 */ }
 }
 export function talkAbout(rec) { S.attach = rec; go('chat'); }
 const TIPS = [

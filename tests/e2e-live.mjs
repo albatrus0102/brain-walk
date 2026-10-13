@@ -52,9 +52,10 @@ const learner = await open('learner');
 await learner.goto(BASE + '?join=' + code); await learner.waitForSelector('#btn-join-next');
 await learner.click('#btn-join-next'); await learner.fill('#ob-name-input', '아버지'); await learner.click('#btn-name-next');
 await learner.click('#role-trainee');
-/* AI 리포트 안내(처음 한 번, DESIGN-AI §8.6): 훈련하는 분 기기에만 나와요. "알겠어요" → consents/{id} (서버 시각) */
-must(await learner.waitForSelector('#btn-consent-ok', { timeout: 20000 }).then(() => true).catch(() => false) && (await text(learner, '#cons-h')) === '가족이 함께 살펴볼게요', '훈련하는 분 기기: 처음 한 번 AI 리포트 안내가 나와요');
-await learner.click('#btn-consent-ok'); await learner.waitForSelector('#btn-main', { timeout: 20000 });
+/* 훈련하는 분 기기에는 AI 안내(동의) 화면이 없어요: 바로 홈. 동의는 관리자가 설정 > AI 의 "AI 기록 관찰 켜기"로 대신 기록해요
+ * (consents/{아버지} + byAdmin + 서버 시각. 이 줄은 firestore.rules 가 관리자 쓰기를 허용해야 통과해요) */
+await learner.waitForSelector('#btn-main', { timeout: 20000 });
+must(!(await learner.locator('#cons-h, #btn-consent-ok').count()), '훈련하는 분 기기: 안내(동의) 화면 없이 바로 홈');
 must(!(await learner.locator('#navbar').isVisible()) && (await text(learner, '#btn-main')) === '오늘 훈련 시작', '훈련하는 분 기기: 큰 버튼 하나, 하단 메뉴 없음');
 must(await until(admin, () => document.querySelector('#dash-status') && document.querySelector('#dash-status').innerText.includes('아직 시작 전')), '관리자 홈에 아버지의 현황이 나타나요 (시작 전)');
 must(await until(admin, () => /지금 앱을 보고 계세요/.test((document.querySelector('#dash-presence') || {}).innerText || '')), '접속 기록(하트비트): ● 지금 앱을 보고 계세요');
@@ -77,7 +78,7 @@ while ((await admin.innerText('#plan-gpd')) !== '2') await admin.click('#gpd-min
 if (await admin.locator('#plan-more').getAttribute('open') === null) await admin.click('#plan-more-sum');
 await admin.click('#plan-auto-0'); await admin.click('#plan-save');
 await admin.waitForSelector('#snackbar:not([hidden])');
-must(await until(learner, () => /^게임 2개/.test((document.querySelector('#main-sub') || {}).innerText || '')), '훈련하는 분 홈이 바로 "게임 2개"로 바뀌어요 (다시 열지 않아도)');
+must(await learner.waitForFunction(async () => /^게임 2개/.test((await import(location.origin + '/brain-walk/js/ui/screens/home.js')).mainState().sub), null, { timeout: 15000 }).then(() => true, () => false), '훈련하는 분 홈이 바로 "게임 2개"로 바뀌어요 (다시 열지 않아도)');
 
 /* 5) 훈련하는 분이 시작 → 관리자 홈에 실시간 */
 await learner.click('#btn-main'); await learner.waitForSelector('#g-title');
@@ -105,10 +106,12 @@ must(await until(admin, () => [...document.querySelectorAll('#dash-week li')].po
   const SR = createRequire(path.join(ROOT, 'functions/package.json'))('./ai/core/series.js');
   const san = got.map(d => SR.sanitizeLog(d, d.id));
   must(san.every((x, i) => x && x.items.length === got[i].items.length && x.items.every((it, j) => it.role === got[i].items[j].role && JSON.stringify(it.err) === JSON.stringify(got[i].items[j].err))), '서버(aiOnItemLog·집계)의 sanitizeLog 가 문서·문항을 하나도 버리지 않아요');
-  const cons = await admin.evaluate(async id => { const d = await window.__Store.getDoc('consents/' + id); return d && { kind: d.kind, version: d.version, server: !!(d.ackTs && d.ackTs.toMillis), withdrawn: 'withdrawnTs' in d }; }, dadId);
-  must(cons && cons.kind === 'ai-report-notice' && cons.version === '2026-11-v1' && cons.server && !cons.withdrawn, '안내 동의: consents/{아버지} 에 서버 시각으로 기록 (관리자가 읽어요)');
+  await admin.evaluate(() => window.__go('aiSettings')); await admin.waitForSelector('#ai-obs'); await admin.click('#ai-obs');
+  await admin.waitForFunction(() => document.getElementById('ai-obs') && document.getElementById('ai-obs').getAttribute('aria-checked') === 'true', null, { timeout: 15000 });
+  const cons = await admin.evaluate(async id => { const d = await window.__Store.getDoc('consents/' + id); return d && { kind: d.kind, version: d.version, server: !!(d.ackTs && d.ackTs.toMillis), withdrawn: 'withdrawnTs' in d, byAdmin: d.byAdmin }; }, dadId);
+  must(cons && cons.kind === 'ai-report-notice' && cons.version === '2026-11-v1' && cons.server && !cons.withdrawn && !!cons.byAdmin, '관리자가 켠 기록: consents/{아버지} 에 서버 시각 + byAdmin');
   await learner.reload(); await learner.waitForSelector('#btn-main', { timeout: 20000 }); await learner.waitForTimeout(1500);
-  must(!(await learner.locator('#cons-h').count()), '다시 열어도 안내는 또 나오지 않아요 (한 번만)');
+  must(!(await learner.locator('#cons-h').count()), '다시 열어도 안내 화면은 없어요');
   // 훈련하는 분 기기는 AI 리포트 화면에 못 가고, 직접 읽어도 규칙이 막아요
   await learner.evaluate(() => window.__go('aiReports'));
   must((await learner.evaluate(() => window.__S.screen)) === 'home', '훈련하는 분 기기: AI 리포트 화면으로 가면 홈으로 돌아와요');
@@ -132,7 +135,7 @@ await fam.click('#role-family'); await fam.waitForSelector('#dash', { timeout: 2
 await fam.click('#btn-settings'); await fam.waitForSelector('#set-main-h');
 must(!(await fam.locator('#admin-chip').count()) && !(await fam.locator('#owner-slot').count()), '관리자 표시·방 주인 전용 칸이 없어요');
 await fam.click('#xp-mgmt'); await fam.click('#row-plan'); await fam.waitForSelector('#plan-h');
-must((await text(fam, '#admin-note')) === '관리자만 바꿀 수 있어요. 관리자: 형', '관리자가 아닌 가족: "관리자만 바꿀 수 있어요. 관리자: 형"');
+must(!(await fam.locator('#admin-note').count()), '관리자가 아닌 가족: 안내 글 없이 막힌 버튼만');
 for (const k of ['p1', 'p2', 'p3', 'p4', 'p5']) if ((await fam.getAttribute('#xpc-' + k, 'open')) === null) await fam.click('#xp-' + k);
 const live = await fam.evaluate(() => [...document.querySelectorAll('#screen button[data-act^="pl-"], #screen select, #screen input[type=time]')].filter(e => !e.disabled).length);
 must(live === 0 && !(await fam.locator('#plan-save').count()), '모든 입력이 꺼져 있고 저장 버튼이 없어요');

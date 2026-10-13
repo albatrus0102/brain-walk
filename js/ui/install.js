@@ -1,7 +1,7 @@
 import { Platform } from '../platform.js';
 import { S } from '../state.js';
 import { LS } from '../util.js';
-import { h, toast } from './dom.js';
+import { dialog, h } from './dom.js';
 import { render } from './shell.js';
 
 /* 홈 화면 설치 안내.
@@ -63,44 +63,38 @@ async function doInstall(btn) {
   try {
     await ev.prompt();
     const c = await ev.userChoice;
-    if (c && c.outcome === 'accepted') { S.installed = true; toast('설치했어요. 홈 화면의 \'두뇌산책\' 아이콘으로 열어 주세요'); }
+    if (c && c.outcome === 'accepted') S.installed = true;
   } catch (e) {}
   S.installEvt = null;   // 한 번 쓰면 다시 쓸 수 없어요
   refreshInstall();
 }
 
+/* 설명 글은 화면에 두지 않아요: 설치 방법은 버튼을 눌렀을 때만 창으로 보여요 */
+const INSTALL_LABEL = '📲 홈 화면에 설치';
+const howTo = (id, kids) => h('button', { class: 'btn filled', type: 'button', id, onclick: () => dialog(INSTALL_LABEL, '', [{ label: '닫기', kind: 'filled' }], null, kids) }, INSTALL_LABEL);
+
 function body(where, code) {
   const st = installState();
   if (st === 'done') return [h('p', { class: 't-body', id: 'install-done', text: '설치됨 ✓' })];
-  if (st === 'prompt') return [
-    h('p', { class: 't-body', text: '다음부터 아이콘만 누르면 열려요.' }),
-    h('button', { class: 'btn filled', type: 'button', id: 'btn-install', onclick: e => doInstall(e.currentTarget) }, '설치하기')];
-  if (st === 'ios') return [
-    h('p', { class: 't-body', text: '다음부터 아이콘만 누르면 열려요. 공유 → 홈 화면에 추가 후 알림을 켤 수 있어요.' }),
-    iosSteps(),
-    h('p', { class: 't-small muted', text: '알림은 홈 화면 앱을 연 뒤 설정에서 켤 수 있어요 (iOS 16.4 이상).' }),
-    code ? h('p', { class: 't-body', text: '홈 화면 앱을 연 뒤 이 코드를 입력해 주세요:' }) : null,
-    code ? h('p', { class: 't-display center', id: 'ob-ios-code', text: code }) : null];
+  if (st === 'prompt') return [h('button', { class: 'btn filled', type: 'button', id: 'btn-install', onclick: e => doInstall(e.currentTarget) }, INSTALL_LABEL)];
+  if (st === 'ios') return [howTo('btn-install-ios', iosSteps()), code ? h('p', { class: 't-display center', id: 'ob-ios-code', text: code }) : null];
   if (st === 'inapp') {
     const info = inAppInfo(), android = Platform.platformName() === 'android';
-    const out = [h('p', { class: 't-body', text: '카카오톡·네이버 같은 앱 안에서는 홈 화면에 설치할 수 없어요. 크롬이나 사파리에서 열어 주세요. 초대 코드는 그대로 유지돼요.' })];
-    if (info.kakao) out.push(h('a', { class: 'btn filled', id: 'btn-open-external', href: kakaoExternalUrl(), rel: 'noopener' }, '기본 브라우저로 열기'));
-    else if (android) out.push(h('a', { class: 'btn filled', id: 'btn-open-chrome', href: chromeIntentUrl(), rel: 'noopener' }, '크롬으로 열기'));
-    else out.push(h('p', { class: 't-body', id: 'inapp-guide' }, '오른쪽 아래 ⋯ 또는 공유 버튼 → ', h('b', { text: "'Safari로 열기'" })));
-    return out;
+    if (info.kakao) return [h('a', { class: 'btn filled', id: 'btn-open-external', href: kakaoExternalUrl(), rel: 'noopener' }, '기본 브라우저로 열기')];
+    if (android) return [h('a', { class: 'btn filled', id: 'btn-open-chrome', href: chromeIntentUrl(), rel: 'noopener' }, '크롬으로 열기')];
+    return [howTo('btn-open-safari', h('p', { class: 't-body', id: 'inapp-guide' }, '오른쪽 아래 ⋯ 또는 공유 버튼 → ', h('b', { text: "'Safari로 열기'" })))];
   }
-  return [h('p', { class: 't-body', id: 'install-menu', text: '브라우저 오른쪽 위 메뉴(⋮)에서 "앱 설치" 또는 "홈 화면에 추가"를 눌러 주세요.' })];
+  return [howTo('btn-install-menu', h('p', { class: 't-body', id: 'install-menu', text: '브라우저 메뉴(⋮) → "앱 설치" 또는 "홈 화면에 추가"' }))];
 }
-const titleOf = () => { const st = installState(); return st === 'inapp' ? inAppInfo().name + ' 안에서는 앱 설치가 안 돼요' : st === 'done' ? '앱 설치' : '📲 홈 화면에 앱 설치'; };
 
 function fill(slot) {
   const where = slot.dataset.install, code = slot.dataset.code || '';
   slot.textContent = '';
   if (!installVisible(where)) return;
   if (where === 'settings') { slot.append(...body(where, code).filter(Boolean)); slot.classList.add('stack'); return; }
-  const kids = [h('h2', { class: 't-title', id: 'install-h', text: titleOf() }), ...body(where, code)];
+  const kids = [...body(where, code)];
   if (where !== 'join') kids.push(h('button', { class: 'btn text', type: 'button', id: 'install-dismiss', onclick: () => { LS.set(DISMISS_KEY, Date.now() + DAYS7); if (S.screen === 'home') render(true); else refreshInstall(); } }, '닫기'));
-  slot.append(h('section', { class: 'card primary install-card stack', id: 'install-card', 'aria-labelledby': 'install-h' }, ...kids.filter(Boolean)));
+  slot.append(h('section', { class: 'card primary install-card stack', id: 'install-card' }, ...kids.filter(Boolean)));
 }
 /* 화면에 놓을 자리 */
 export function installSlot(where, code) { const s = h('div', { 'data-install': where, 'data-code': code || null }); fill(s); return s; }

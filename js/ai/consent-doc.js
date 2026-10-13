@@ -20,3 +20,12 @@ export function consentState(d) {
   if ('withdrawnTs' in d) return 'withdrawn';
   return d.version === CONSENT_VERSION ? 'ok' : 'old';
 }
+
+/* 관리자가 훈련하는 분을 대신해 켜기 (설정 > AI 리포트 설정 > "AI 기록 관찰 켜기"): 같은 kind·version, 서버 시각, byAdmin = 관리자 memberId.
+ * 문서가 없으면 만들고(create), 있으면(철회했거나 문구 버전이 바뀐 경우) 다시 켜요(update, 철회 표시는 지워요). */
+export function adminConsentWrite(cur, adminId) {
+  if (!cur) return { op: 'set', data: { kind: CONSENT_KIND, version: CONSENT_VERSION, ackTs: SERVER_TS, byAdmin: adminId } };
+  return { op: 'update', data: { version: CONSENT_VERSION, ackTs: SERVER_TS, withdrawnTs: DELETE_FIELD, byAdmin: adminId } };
+}
+/* 관리자가 끄기: 서버 시각만 더해요 (지우지 않아요) */
+export const adminWithdrawPatch = adminId => ({ withdrawnTs: SERVER_TS, byAdmin: adminId });

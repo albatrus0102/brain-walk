@@ -25,15 +25,12 @@ SCREENS.family = {
     const last = all[0], lastTxt = !last ? '기록 없음' : last.date === today ? '오늘' : daysBetween(last.date, today) + '일 전';
     const avgDur = all.length ? fmtDur(Math.round(mean(all.map(s => Number(s.durationSec) || 0)))) : '-';
     let o = '<div class="stack"><h1 class="t-headline" id="fam-h">가족이 보는 기록</h1><div id="fam-status"></div>';
-    if (fl.consult.flag) o += '<section class="card tertiary" id="flag-consult" role="status"><p class="t-title-m">최근 점수가 낮아지고 있어요. 병원 상담을 권해요.</p><p class="t-small mt">이 안내는 진단이 아니라, 점수 변화를 보고 드리는 참고용이에요. 너무 걱정하지 말고 편하게 상담받아 보세요.</p></section>';
-    if (fl.mood) o += '<section class="card tertiary" id="flag-mood" role="status"><p class="t-title-m">최근 일주일 중 5일 이상 기분이 좋지 않다고 하셨어요.</p><p class="t-small mt">마음 상태에 조금 더 관심을 가져 주세요. 필요하면 가까운 정신건강복지센터나 병원에서 우울 상담을 받아 보시길 권해요. 진단이 아니에요.</p></section>';
-    // PHQ-9 9번(죽음·자해 생각)에 0보다 큰 답이 가장 최근 기록에 있으면, 답한 사람만이 아니라 가족에게도 바로 알려요.
-    const phq = isTrainee() ? null : recordsOf('phq9')[0];
-    if (phq && Array.isArray(phq.answers) && Number(phq.answers[8]) > 0) o += '<section class="card tertiary" id="flag-phq9" role="status"><p class="t-title-m">' + mdLabel(phq.date) + ' 마음 상태 설문(PHQ-9)의 9번 문항(죽음이나 자해에 대한 생각)에 \'며칠 이상\'으로 답하셨어요.</p><p class="t-body mt">오늘 꼭 안부를 묻고 이야기를 들어 주세요. 자살예방상담전화 <b>109</b>(24시간), 정신건강위기상담 <b>1577-0199</b>, 위급하면 <b>119</b>. 진단이 아니에요.</p></section>';
+    if (fl.consult.flag) o += '<section class="card tertiary" id="flag-consult" role="status"><p class="t-title-m">최근 점수가 낮아지고 있어요. 병원 상담을 권해요.</p></section>';
+    if (fl.mood) o += '<section class="card tertiary" id="flag-mood" role="status"><p class="t-title-m">최근 일주일 중 5일 이상 기분이 좋지 않다고 하셨어요.</p></section>';
     // 요약이 맨 먼저: 지난 7일을 글로 정리한 카드. 자세한 숫자는 그 아래에 있어요.
     o += '<section class="card primary" aria-labelledby="ws-h"><h2 class="t-title" id="ws-h">이번 주 요약</h2><p class="t-body mt" id="wk-text" style="white-space:pre-wrap"></p>' +
-      (chatAvail() ? '<div class="stack mt"><button class="btn filled" id="btn-share-summary" type="button" data-act="sharesummary">이번 주 요약 공유하기</button><button class="btn tonal" id="btn-fam-chat2" type="button" data-act="nav" data-to="chat">대화방 열기</button></div>' : '<p class="t-small mt">가족 대화는 가족방을 만들거나 가족 코드로 들어가면 쓸 수 있어요.</p>') + '</section>';
-    if (empty) o += '<section class="card outlined empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="' + P.leaf + '"/></svg><p class="t-title">아직 기록이 없어요</p><p class="t-body muted">첫 훈련을 마치시면 이곳에 훈련한 날과 정답률이 차곡차곡 쌓여요.</p></section>';
+      (chatAvail() ? '<div class="stack mt"><button class="btn filled" id="btn-share-summary" type="button" data-act="sharesummary">이번 주 요약 공유하기</button><button class="btn tonal" id="btn-fam-chat2" type="button" data-act="nav" data-to="chat">대화방 열기</button></div>' : '') + '</section>';
+    if (empty) o += '<section class="card outlined empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="' + P.leaf + '"/></svg><p class="t-title">아직 기록이 없어요</p></section>';
     o += '<section class="card elevated" id="nudge-card" aria-labelledby="nd-h" hidden><h2 class="t-title" id="nd-h">훈련 알림 보내기</h2><div class="mt" id="nudge-slot"></div></section>';
     o += '<section class="card elevated" aria-labelledby="wk-h"><h2 class="t-title" id="wk-h">이번 주 훈련한 날 <span class="muted t-body">(' + weekDone + '/7일 · ' + Math.round(weekDone / 7 * 100) + '%)</span></h2><div class="week mt" role="list">' +
       days.map((d, i) => { const k = ymd(d), on = ds.has(k), fut = k > today;
@@ -43,7 +40,7 @@ SCREENS.family = {
     o += '<section class="card outlined" aria-labelledby="dom-h"><h2 class="t-title" id="dom-h">영역별 평균 정답률 <span class="muted t-body">(최근 14일)</span></h2><div class="stack mt">' +
       DOMAINS.map(d => { const rs = rec14.filter(s => s.domain === d.id), avg = rs.length ? Math.round(mean(rs.map(s => (Number(s.accuracy) || 0))) * 100) : null;
         return '<div class="bar-row"><div class="bar-top"><span>' + d.name + '</span><span>' + (avg == null ? '기록 없음' : avg + '%') + '</span></div><div class="bar' + (avg == null ? ' none' : '') + '" role="img" aria-label="' + d.name + ' ' + (avg == null ? '기록 없음' : avg + '퍼센트') + '"><span style="width:' + (avg || 0) + '%"></span></div></div>'; }).join('') + '</div></section>';
-    o += '<section class="card outlined" aria-labelledby="tr-h"><h2 class="t-title" id="tr-h">4주간 정답률 흐름</h2><p class="t-small muted">주마다 평균 정답률(%)이에요. 오른쪽이 이번 주예요.</p><div class="stack mt">' +
+    o += '<section class="card outlined" aria-labelledby="tr-h"><h2 class="t-title" id="tr-h">4주간 정답률 흐름</h2><div class="stack mt">' +
       DOMAINS.map(d => { const tr = weeklyTrend(all, d.id, today);
         return '<div><div class="bar-top"><span>' + d.name + '</span></div><div class="spark" role="img" aria-label="' + d.name + ' 주별 정답률 ' + tr.map(x => x.avg == null ? '기록 없음' : Math.round(x.avg) + '퍼센트').join(', ') + '">' +
           tr.map((x, k) => '<div class="col">' + (x.avg == null ? '<span aria-hidden="true">-</span><i class="none"></i>' : '<span>' + Math.round(x.avg) + '</span><i style="height:' + Math.max(4, Math.round(x.avg * 0.6)) + 'px"></i>') + '<span class="wk" aria-hidden="true">' + WEEK_LABELS[k] + '</span></div>').join('') + '</div></div>'; }).join('') + '</div></section>';
@@ -61,8 +58,7 @@ SCREENS.family = {
     o += sleepReportHtml();
     if (!isTrainee()) o += taskReportHtml() + surveyReportHtml() + clinicalReportHtml(false);
     o += '<section class="card outlined" aria-labelledby="lv-h"><h2 class="t-title" id="lv-h">훈련별 현재 단계</h2><div class="mt">' + GAME_ORDER.filter(id => !GAMES[id].defOff || getPlan().games[id].on).map(id => '<div class="lvrow"><span>' + esc(GAMES[id].name) + '</span><span class="t-body">' + getLevel(id) + '단계 ' + levelDots(getLevel(id)) + '</span></div>').join('') + '</div></section>';
-    o += '<section class="card tertiary" id="report-disclaimer"><p class="t-body">이 리포트는 <b>진단이 아니에요.</b> 훈련 기록을 보기 쉽게 정리한 것뿐이에요. 이 앱은 두뇌 활동을 돕는 훈련용이며 의료기기나 치료를 대신하지 않아요. 걱정되는 점이 있으면 병원에서 상담하세요.</p></section>';
-    o += '<p class="t-small muted" id="family-note-static">' + (Store.shared && !S.dbError ? '이 기록은 같은 가족방에 들어온 가족만 볼 수 있어요.' : '지금은 이 기기에 저장된 기록만 보여요. (체험 모드)') + '</p><p class="sync-note" id="sync-note"></p></div>';
+    o += '<p class="sync-note" id="sync-note"></p></div>';
     return o;
   },
   bind(el) {
@@ -73,14 +69,14 @@ SCREENS.family = {
   }
 };
 
-/* 리포트가 길어서, 맨 위의 안내(주의 카드)·이번 주 요약·훈련 알림·면책 문구를 뺀 나머지 구역은
+/* 리포트가 길어서, 맨 위의 안내(주의 카드)·이번 주 요약·훈련 알림을 뺀 나머지 구역은
  * 접었다 펼 수 있는 카드(<details>)로 바꿔요. 처음에는 접혀 있고, 펼친 구역은 이 기기에 기억해요
  * (기록이 바뀌면 화면을 다시 그리므로, 기억하지 않으면 펼친 카드가 저절로 닫혀요). */
 function foldSections(el) {
   const root = el.querySelector('.stack'); if (!root) return;
   const open = S.famOpen || (S.famOpen = LS.get('bw.famOpen', {}) || {});
   [...root.children].forEach(sec => {
-    if (sec.tagName !== 'SECTION' || sec.id === 'nudge-card' || sec.id === 'report-disclaimer' || /\b(primary|tertiary|empty)\b/.test(sec.className)) return;
+    if (sec.tagName !== 'SECTION' || sec.id === 'nudge-card' || /\b(primary|tertiary|empty)\b/.test(sec.className)) return;
     const h2 = sec.querySelector(':scope > h2'); if (!h2) return;
     const key = sec.id || h2.id;
     const d = document.createElement('details');

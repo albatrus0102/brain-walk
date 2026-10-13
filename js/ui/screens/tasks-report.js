@@ -17,8 +17,8 @@ const runs = () => (S.taskRuns || []).filter(r => r && r.tasks && typeof r.ts ==
 
 export function taskReportHtml() {
   const rs = runs();
-  let o = '<section class="card outlined" aria-labelledby="tk-h" id="task-report"><h2 class="t-title" id="tk-h">점검 과제 상세</h2><p class="t-small muted">정해진 기준점은 없어요. 처음 점검(기준선)과 비교한 변화만 보여요.</p>';
-  if (!rs.length) return o + '<p class="t-body muted mt">아직 과제 기록이 없어요. 두뇌 건강 점검의 2부분을 마치면 나타나요.</p></section>';
+  let o = '<section class="card outlined" aria-labelledby="tk-h" id="task-report"><h2 class="t-title" id="tk-h">점검 과제 상세</h2>';
+  if (!rs.length) return o + '<p class="t-body muted mt">아직 기록이 없어요</p></section>';
   o += '<div class="rows mt">';
   Object.keys(INFO).forEach(id => {
     const hist = rs.filter(r => r.tasks[id]).map(r => ({ date: r.date, sc: Number(r.tasks[id].score) || 0, m: r.tasks[id].m || {} }));
@@ -29,5 +29,5 @@ export function taskReportHtml() {
       (hist.length > 1 ? '<p class="t-small muted">처음: ' + esc(INFO[id].show(first.m)) + '</p>' : '') + '<p class="t-small">' + trend + '</p>' +
       (hist.length > 1 ? barsHtml(hist.slice(-6).map(x => ({ t: mdShort(x.date), v: x.sc, s: String(x.sc) })), INFO[id].name + ' 점수 변화') : '') + '</div>';
   });
-  return o + '</div><p class="t-small muted mt">점수 환산은 이 앱 자체 눈금이며 규준이 아니에요. 진단이 아니에요.</p></section>';
+  return o + '</div></section>';
 }

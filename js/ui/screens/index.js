@@ -11,7 +11,6 @@ import './course-break.js';
 import './admin-display.js';
 import './admin-plan.js';
 import './members.js';
-import './ai-consent.js';
 import './ai-admin.js';
 import './surveys.js';
 import './clock.js';

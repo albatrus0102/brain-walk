@@ -27,12 +27,12 @@ function pushStateText() {
 }
 /* "알림 받기" 스위치 / 홈의 부드러운 안내 카드가 공통으로 써요 */
 export async function togglePush(btnEl) {
-  if (pushIsOn()) { await disablePush(); toast('알림을 껐어요.'); if (S.screen === 'settings') render(true); return; }
+  if (pushIsOn()) { await disablePush(); if (S.screen === 'settings') render(true); return; }
   if (S.pushState === 'ios-install-first') { dialog('홈 화면에 추가해 주세요', pushReasonText('ios-install-first'), [{ label: '확인', kind: 'filled' }], null, iosSteps('ios-steps-dlg')); return; }
   if (btnEl) btnEl.disabled = true;
   const r = await enablePush();
   if (btnEl) btnEl.disabled = false;
-  if (r.ok) toast('알림을 켰어요.'); else toast(pushReasonText(r.reason));
+  if (!r.ok) toast(pushReasonText(r.reason));
   render(true);
 }
 export function pushRow() {
@@ -64,7 +64,7 @@ export function openTransfer(forMember, forName) {
       const link = transferLink(code);
       slot.append(h('p', { class: 't-display center', id: 'transfer-code-show', text: code, style: 'letter-spacing:.2em;user-select:all' }),
         h('input', { class: 'input', id: 'transfer-link', readonly: '', value: link, 'aria-label': '옮기기 링크' }),
-        btn('링크 복사', 'tonal', async () => { toast((await Platform.copy(link, document.getElementById('transfer-link'))) ? '복사했어요.' : '길게 눌러 복사해 주세요.'); }, 'transfer-copy'),
+        btn('링크 복사', 'tonal', async () => { if (!(await Platform.copy(link, document.getElementById('transfer-link')))) toast('복사하지 못했어요'); }, 'transfer-copy'),
         h('p', { class: 't-small muted', text: new Date(expires).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' }) + '까지 쓸 수 있어요.' }));
     }).catch(e => { slot.textContent = ''; slot.append(h('p', { class: 't-body', id: 'transfer-err', text: forMember && e && e.code === 'permission-denied' ? '다른 가족의 새 기기 연결 코드는 관리자만 만들 수 있어요.' : Store.explain(e) })); });
     body.append(btn('닫기', 'text', closeSheet, 'transfer-close'));
@@ -74,7 +74,7 @@ export function openTransfer(forMember, forName) {
 export function openRecover() {
   openSheet('가족 기기 복구 코드', (body) => {
     const others = Object.entries(FirebaseAdapter.members()).filter(([id, m]) => id !== FirebaseAdapter.mid && m && !m.leftTs);
-    body.append(h('p', { class: 't-body muted', text: '폰을 잃어버렸거나 앱을 지운 가족의 새 기기를 연결할 코드를 만들어요. 누구의 새 기기인가요?' }));
+    body.append();
     if (!others.length) body.append(h('p', { class: 't-body', text: '다른 가족이 아직 없어요.' }));
     others.forEach(([id, m], i) => body.append(btn(String(m.name || '가족'), 'outlined menuitem', () => openTransfer(id, String(m.name || '가족')), 'recover-' + i)));
     body.append(btn('닫기', 'text', closeSheet, 'recover-close'));
@@ -86,7 +86,7 @@ export function openDevices() {
     const slot = h('div', { class: 'stack' }, h('p', { class: 't-body muted', text: '불러오는 중이에요…' })); body.append(slot);
     const load = () => listMyDevices().then(list => {
       slot.textContent = '';
-      slot.append(h('p', { class: 't-body muted', text: '내 이름으로 연결된 기기예요. 잃어버린 기기는 연결을 끊어 주세요.' }));
+      slot.append();
       list.forEach((d, i) => slot.append(h('div', { class: 'card outlined', id: 'dev-' + i },
         h('p', { class: 't-title-m', text: (d.device || '기기') + (d.current ? ' (지금 이 기기)' : '') }),
         h('p', { class: 't-small muted', text: d.addedTs ? new Date(d.addedTs).toLocaleDateString('ko-KR') + ' 연결' : '' }),
@@ -101,7 +101,7 @@ export function openRename() {
     const input = h('input', { class: 'input', id: 'rename-input', type: 'text', maxlength: '20', 'aria-label': '새 이름' }); input.value = (FirebaseAdapter.me() || {}).name || '';
     const save = async () => {
       const v = input.value.trim(); if (!v) { toast('이름을 적어 주세요.'); return; }
-      try { await renameSelf(v.slice(0, 20)); S.profiles[S.myId] = { name: v.slice(0, 20) }; if (S.me) S.me.name = v.slice(0, 20); closeSheet(); toast('이름을 바꿨어요.'); render(true); } catch (e) { toast(Store.explain(e)); }
+      try { await renameSelf(v.slice(0, 20)); S.profiles[S.myId] = { name: v.slice(0, 20) }; if (S.me) S.me.name = v.slice(0, 20); closeSheet(); render(true); } catch (e) { toast(Store.explain(e)); }
     };
     input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
     body.append(h('div', { class: 'field' }, h('label', { for: 'rename-input', text: '이름 (최대 20글자)' }), input), btn('저장', 'filled', save, 'rename-save'), btn('취소', 'text', closeSheet, 'rename-cancel'));
@@ -124,7 +124,7 @@ export async function confirmDeleteAll() {
   let owner = false; try { owner = await isOwner(); } catch (e) {}
   if (!owner) {
     dialog('내 기록을 모두 삭제할까요?', isTrainee() ? '내 훈련·점검 기록이 지워지고 되돌릴 수 없어요. 설문·잠 기록·시계 그림처럼 가족만 보는 기록은 관리자가 지울 수 있어요.' : '내 훈련·점검·생활 체크 기록이 지워지고 되돌릴 수 없어요. 가족방의 대화와 다른 가족의 기록은 그대로예요. (가족방 전체 삭제는 방을 만든 분만 할 수 있어요.)', [
-      { label: '취소', kind: 'text' }, { label: '내 기록 삭제', kind: 'filled', run: async () => { try { await deleteMyRecords(); toast('내 기록을 삭제했어요.'); setTimeout(reloadHome, 600); } catch (e) { toast(Store.explain(e)); } } }]);
+      { label: '취소', kind: 'text' }, { label: '내 기록 삭제', kind: 'filled', run: async () => { try { await deleteMyRecords(); setTimeout(reloadHome, 600); } catch (e) { toast(Store.explain(e)); } } }]);
     return;
   }
   dialog('가족방의 모든 기록을 삭제할까요?', '대화, 모든 가족의 훈련·점검·생활 체크 기록, 가족 코드와 가족방 자체가 지워지고 되돌릴 수 없어요. 다른 가족의 앱은 처음 화면으로 돌아가요. 필요하면 먼저 기록을 내려받아 두세요.', [
@@ -141,14 +141,14 @@ export function openOwnerTransfer() {
   openSheet('관리자 넘기기 (가족방 주인 바꾸기)', (body) => {
     const ms = FirebaseAdapter.members(), me = FirebaseAdapter.mid;
     const cands = Object.entries(ms).filter(([id, m]) => id !== me && m && !m.leftTs && m.role === 'family');
-    body.append(h('p', { class: 't-body muted', text: '방 주인을 다른 가족에게 넘겨요. 훈련하는 분이 방을 만들었다면, 가족 한 분이 관리를 맡으면 편해요.' }));
-    if (!cands.length) { body.append(h('p', { class: 't-body', id: 'own-none', text: '넘길 수 있는 가족이 아직 없어요. 가족이 들어오면 여기서 넘길 수 있어요.' }), btn('닫기', 'text', closeSheet, 'own-close')); return; }
+    body.append();
+    if (!cands.length) { body.append(h('p', { class: 't-body', id: 'own-none', text: '넘길 가족이 없어요' }), btn('닫기', 'text', closeSheet, 'own-close')); return; }
     const keepable = (ms[me] || {}).role === 'family';
     const keep = h('input', { type: 'checkbox', id: 'own-keep', checked: '' }); keep.checked = keepable; keep.disabled = !keepable;
     cands.forEach(([id, m], i) => body.append(btn(String(m.name || '가족'), 'outlined menuitem', () => {
       const nm = String(m.name || '가족');
       dialog(nm + '님에게 넘길까요?', nm + '님이 방 주인이 되면 관리자 지정과 가족방 전체 삭제는 ' + nm + '님만 할 수 있어요.', [{ label: '취소', kind: 'text' }, { label: '넘기기', kind: 'filled', run: async () => {
-        try { await transferOwnership(id, keep.checked); closeSheet(); toast(nm + '님이 방 주인이 되었어요.'); render(true); } catch (e) { toast(Store.explain(e, true)); }
+        try { await transferOwnership(id, keep.checked); closeSheet(); render(true); } catch (e) { toast(Store.explain(e, true)); }
       } }]);
     }, 'own-pick-' + i)));
     body.append(h('label', { class: 'checkrow', for: 'own-keep' }, keep, h('span', { text: keepable ? '나는 관리자로 남기' : '나는 훈련하는 분이라 관리자로 남을 수 없어요' })), btn('닫기', 'text', closeSheet, 'own-close'));
@@ -166,6 +166,5 @@ export function pushPromptCard() {
     return h('section', { class: 'card filled', id: 'push-card', 'aria-labelledby': 'push-h' }, h('h2', { class: 't-title', id: 'push-h', text: '알림을 받으려면 홈 화면에 추가해요' }), iosSteps(), h('div', { class: 'mt' }, dismiss));
   }
   return h('section', { class: 'card filled', id: 'push-card', 'aria-labelledby': 'push-h' }, h('h2', { class: 't-title', id: 'push-h', text: '알림을 받아 볼까요?' }),
-    h('p', { class: 't-body mt', text: '훈련 시간과 가족의 응원 메시지를 알려 드려요. 언제든 설정에서 끌 수 있어요.' }),
     h('div', { class: 'row mt' }, btn('알림 받기', 'filled', ev => togglePush(ev.currentTarget), 'push-enable'), dismiss));
 }

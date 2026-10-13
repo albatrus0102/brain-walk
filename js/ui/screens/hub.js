@@ -1,4 +1,3 @@
-import { traineeLabel } from '../../data.js';
 import { esc } from '../../util.js';
 
 /* 가족용 "점검" 탭: 한 가지씩 고르는 목록 */
@@ -11,7 +10,7 @@ export const HUB_ITEMS = [
   { to: 'aiReports', id: 'hub-ai', title: 'AI 리포트', sub: '기록의 흐름을 쉬운 말로 정리한 리포트 (관리자만 봐요)' }
 ];
 export function hubHtml() {
-  return '<div class="stack"><h1 class="t-headline" id="hub-h">점검과 기록</h1><p class="t-body muted">' + esc(traineeLabel()) + '의 변화를 살펴보는 곳이에요. 하나씩 골라 주세요.</p><div class="rows">' +
-    HUB_ITEMS.map(i => '<button type="button" class="hub-item" id="' + i.id + '" data-act="' + (i.act || 'nav') + '"' + (i.k ? ' data-k="' + i.k + '"' : ' data-to="' + i.to + '"') + '><span><strong>' + esc(i.title) + '</strong><span class="sub">' + esc(i.sub) + '</span></span><span class="t-title-m" aria-hidden="true">›</span></button>').join('') +
-    '</div>' + '<p class="t-small muted">진단이 아니에요. 걱정되는 점이 있으면 병원에서 상담하세요.</p></div>';
+  return '<div class="stack"><h1 class="t-headline" id="hub-h">점검과 기록</h1><div class="rows">' +
+    HUB_ITEMS.map(i => '<button type="button" class="hub-item" id="' + i.id + '" data-act="' + (i.act || 'nav') + '"' + (i.k ? ' data-k="' + i.k + '"' : ' data-to="' + i.to + '"') + '><span><strong>' + esc(i.title) + '</strong></span><span class="t-title-m" aria-hidden="true">›</span></button>').join('') +
+    '</div></div>';
 }

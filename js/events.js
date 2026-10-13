@@ -34,7 +34,7 @@ document.addEventListener('click', e => {
     S.prefs.sound = !S.prefs.sound; LS.set('bw.sound', S.prefs.sound); applyDisplay({ noRender: true }); if (!S.prefs.sound) stopSpeech();
     b.setAttribute('aria-checked', String(S.prefs.sound));
     const stt = $('#sound-switch-state'); if (stt) stt.textContent = S.prefs.sound ? '켜져 있어요. 문제를 읽어 드려요.' : '꺼져 있어요.';
-    toast(S.prefs.sound ? '소리 안내를 켰어요.' : '소리 안내를 껐어요.'); if (S.prefs.sound) say('소리 안내를 켰어요.');
+    if (S.prefs.sound) say('소리 안내를 켰어요.');
   }
   else if (a === 'contrast') { S.prefs.contrast = !S.prefs.contrast; LS.set('bw.contrast', S.prefs.contrast); applyDisplay({ noRender: true }); b.setAttribute('aria-checked', String(S.prefs.contrast)); const stt = $('#contrast-switch-state'); if (stt) stt.textContent = S.prefs.contrast ? '켜져 있어요. 글자와 테두리가 더 진해요.' : '꺼져 있어요.'; }
   else if (a === 'notify') { S.notifyFamily = !S.notifyFamily; b.setAttribute('aria-checked', String(S.notifyFamily)); const stt = $('#notify-switch-state'); if (stt) stt.textContent = S.notifyFamily ? '켜져 있어요. 나갈 때 가족 대화방에 알려요.' : '꺼져 있어요.'; }
@@ -64,7 +64,7 @@ document.addEventListener('click', e => {
   else if (a === 'assessstart') startAssessment();
   else if (a === 'assessbegin') beginAssessStep();
   else if (a === 'assesscontinue') go('assessStep');
-  else if (a === 'assesslater') { saveAssessLater(); toast('여기까지 저장했어요. 내일 이어서 해 주세요.'); go('home'); }
+  else if (a === 'assesslater') { saveAssessLater(); go('home'); }
   else if (a === 'assessend') completeAssessment();
   else if (a === 'assessresume') resumeAssessment();
   else if (a === 'ci') {
@@ -75,7 +75,7 @@ document.addEventListener('click', e => {
     const c = S.ci, date = todayS(), doc = { date, ts: Date.now(), mood: c.mood, sleepHours: c.sleepHours, exercise: !!c.exercise, social: !!c.social, meals: !!c.meals, userId: S.myId || null };
     S.ciLocal[date] = doc; LS.set('bw.checkins', S.ciLocal); remoteSet('checkins/' + date + '-' + (S.myId || 'local'), doc, true);
     if (/^\d{2}:\d{2}$/.test(c.bed || '') && /^\d{2}:\d{2}$/.test(c.wake || '')) remoteSet('sleeplogs/' + date + '-' + (S.myId || 'local'), { date, ts: doc.ts, userId: S.myId || null, bed: c.bed, wake: c.wake, wakings: c.wakings == null ? 0 : c.wakings }, true);
-    S.ci = {}; toast('저장했어요. 잘하셨어요!');
+    S.ci = {};
     if (S.ciFlow) { S.ciFlow = false; go('courseDone'); } else go('home');
   }
   else if (a === 'nudgego') { go('family'); setTimeout(() => { const n = $('#nudge-card'); if (n) n.scrollIntoView({ block: 'center' }); }, 60); }
@@ -85,7 +85,7 @@ document.addEventListener('click', e => {
   else if (a === 'remsw') { S.remDraft.enabled = !S.remDraft.enabled; render(true); const nb = $('#rem-switch'); if (nb) nb.focus(); }
   else if (a === 'remsave') {
     const doc = { time: S.remDraft.time, enabled: !!S.remDraft.enabled }; S.myReminder = doc; LS.set('bw.reminder', doc);
-    remoteSet('reminders/' + S.myId, doc, true).then(ok => toast(ok ? '저장했어요.' : NO_WRITE_MSG)); alarmTick();
+    remoteSet('reminders/' + S.myId, doc, true).then(ok => { if (!ok) toast(NO_WRITE_MSG); }); alarmTick();
   }
 });
 document.addEventListener('toggle', e => { if (e.target && e.target.dataset && e.target.dataset.xp) S.xpOpen[e.target.dataset.xp] = e.target.open; else if (e.target && e.target.id === 'sl-details') S.ci._sl = e.target.open; else if (e.target && e.target.id === 'cl-more' && S.cl) S.cl.open = e.target.open; }, true);

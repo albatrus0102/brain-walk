@@ -14,7 +14,7 @@ export const CLOCK_PROMPT = '11시 10분을 가리키는 시계를 그려 주세
 SCREENS.clock = {
   html() {
     return '<div class="stack"><h1 class="t-headline" id="clk-h">시계 그리기</h1>' +
-      '<section class="card primary"><p class="t-title" id="clk-prompt">' + CLOCK_PROMPT + '</p><p class="t-body mt">손가락으로 동그라미, 숫자, 바늘을 그려 보세요. 틀려도 괜찮아요.</p></section>' +
+      '<section class="card primary"><p class="t-title" id="clk-prompt">' + CLOCK_PROMPT + '</p></section>' +
       '<div class="canvas-wrap"><canvas id="clock-canvas" width="720" height="720" role="img" aria-label="시계를 그리는 칸"></canvas></div>' +
       '<div class="row"><button class="btn outlined" id="btn-clock-clear" type="button">지우고 다시 그리기</button><button class="btn text" id="btn-clock-cancel" type="button">그만두기</button></div>' +
       '<div class="cta"><button class="btn filled" id="btn-clock-done" type="button" disabled>다 그렸어요</button></div></div>';
@@ -53,7 +53,7 @@ export function shrink(cv) {
 
 SCREENS.clockDone = {
   html() {
-    return '<div class="stack"><h1 class="t-headline center" id="cd-h">오늘도 수고하셨어요</h1><section class="card primary center"><p class="t-title">그려 주셔서 고마워요.</p><p class="t-body mt">그림은 가족이 함께 보관해 둘게요.</p></section>' +
+    return '<div class="stack"><h1 class="t-headline center" id="cd-h">오늘도 수고하셨어요</h1><section class="card primary center"><p class="t-title">그려 주셔서 고마워요.</p></section>' +
       '<div class="cta"><button class="btn filled" id="btn-cd-home" type="button" data-act="home">처음으로</button></div></div>';
   }
 };
@@ -68,8 +68,8 @@ const clockList = () => (S.clocks || []).filter(c => c && typeof c.img === 'stri
 SCREENS.clocks = {
   html() {
     const list = clockList();
-    let o = '<div class="stack"><h1 class="t-headline" id="clks-h">시계 그림</h1><p class="t-body muted">' + esc(traineeLabel()) + '이(가) 그린 시계예요. 채점하지 않고 변화를 나란히 살펴보는 기록이에요. 가족만 볼 수 있어요.</p>';
-    if (!list.length) o += '<section class="card outlined empty"><p class="t-title">아직 그림이 없어요</p><p class="t-body muted">"' + CLOCK_PROMPT + '"라고 부탁해 보세요.</p></section>';
+    let o = '<div class="stack"><h1 class="t-headline" id="clks-h">시계 그림</h1>';
+    if (!list.length) o += '<section class="card outlined empty"><p class="t-title">아직 그림이 없어요</p></section>';
     else {
       const first = list[list.length - 1], lastc = list[0];
       if (list.length > 1) o += '<section class="card elevated" id="clk-compare" aria-labelledby="cmp-h"><h2 class="t-title" id="cmp-h">처음과 가장 최근</h2><div class="thumbs mt"><figure><img alt="처음 시계 그림 ' + label(first) + '" src="' + esc(first.img) + '"><figcaption>처음 · ' + esc(longDate(first.date)) + '</figcaption></figure><figure><img alt="가장 최근 시계 그림 ' + label(lastc) + '" src="' + esc(lastc.img) + '"><figcaption>최근 · ' + esc(longDate(lastc.date)) + '</figcaption></figure></div></section>';

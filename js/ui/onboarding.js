@@ -24,10 +24,6 @@ const big = (label, cls, onclick, id) => h('button', { class: 'btn ' + cls, type
 const errP = () => h('p', { class: 'fb soft', role: 'alert', id: 'ob-err', hidden: true });
 const showErr = (msg) => { const e = document.getElementById('ob-err'); if (e) { e.textContent = msg; e.hidden = !msg; } };
 
-const disclaimerCard = () => card('tertiary', h('p', { class: 't-body', text: '이 앱은 두뇌 활동을 돕는 훈련용이며 의료기기나 치료를 대신하지 않아요. 걱정되는 점이 있으면 병원에서 상담하세요.' }));
-const privacyCard = () => card('outlined', h('h2', { class: 't-title-m', text: '저장되는 정보' }),
-  h('p', { class: 't-small muted mt', text: '이름, 훈련·점검 기록, 생활 체크, 대화가 저장돼요. 같은 가족방에 들어온 가족만 볼 수 있고, 설정에서 언제든 삭제할 수 있어요. 데이터는 Google Firebase(서울 리전)에 저장되며, 알림과 로그인에 쓰이는 Google 서비스는 해외에서 처리될 수 있어요.' }));
-
 /* 홈 화면 설치 안내 자리 (아이폰·앱 안 브라우저·설치 버튼). where: 'start' | 'join' */
 const iosCard = (code, where) => installSlot(where || 'join', code);
 
@@ -37,11 +33,7 @@ SCREENS.setup = {
   bind() {
     fill(
       h('h1', { class: 't-headline', id: 'setup-h', text: '관리자 설정이 필요해요' }),
-      card('outlined', h('p', { class: 't-body', text: '가족과 함께 쓰려면 먼저 Firebase 연결 정보(firebase-config.js)를 채워야 해요. 이 앱을 설치한 분(관리자)이 한 번만 설정하면 돼요.' }),
-        h('p', { class: 't-body mt', text: '자세한 순서는 저장소의 README.md 를 따라 주세요. (Firebase 프로젝트 만들기 → 설정값 붙여넣기 → GitHub Pages 켜기)' })),
-      card('primary', h('h2', { class: 't-title', text: '먼저 둘러보고 싶으세요?' }), h('p', { class: 't-body mt', text: '체험 모드에서는 모든 훈련을 써 볼 수 있어요. 기록은 이 기기에만 저장되고, 가족 대화와 알림은 쓸 수 없어요.' }),
-        h('div', { class: 'mt' }, big('체험 모드 (이 기기에만 저장)', 'filled', () => startLocalDemo(), 'btn-demo'))),
-      disclaimerCard());
+      big('체험 모드 (이 기기에만 저장)', 'filled', () => startLocalDemo(), 'btn-demo'));
   }
 };
 
@@ -50,7 +42,6 @@ SCREENS['ob-error'] = {
   html() { return '<div class="stack" id="ob-root"></div>'; },
   bind() {
     fill(h('h1', { class: 't-headline', id: 'err-h', text: '연결하지 못했어요' }),
-      card('outlined', h('p', { class: 't-body', text: '인터넷 연결을 확인하고 다시 시도해 주세요. 계속 안 되면 관리자에게 Firebase 설정(README 의 문제 해결)을 확인해 달라고 해 주세요.' })),
       big('다시 시도', 'filled', async () => { const r = await Store.retry(); await afterInit(r); }, 'btn-retry'),
       big('체험 모드 (이 기기에만 저장)', 'tonal', () => startLocalDemo(false), 'btn-demo'));
   }
@@ -74,12 +65,10 @@ SCREENS['ob-start'] = {
   bind() {
     fill(
       h('h1', { class: 't-headline', id: 'ob-start-h', text: '오늘의 두뇌 산책에 오신 걸 환영해요' }),
-      h('p', { class: 't-body muted', text: '가족이 함께 응원하는 두뇌 훈련 앱이에요. 먼저 가족방을 만들거나, 받은 코드로 들어가 주세요.' }),
       installSlot('start'),
       big('새 가족 만들기', 'filled', () => { ob().flow = 'create'; go('ob-name'); }, 'btn-create'),
       big('가족 코드로 들어가기', 'tonal', () => { ob().code = ''; go('ob-join'); }, 'btn-join'),
-      h('button', { class: 'btn text', type: 'button', id: 'btn-have-transfer', onclick: () => { ob().tcode = ''; go('ob-transfer'); } }, '기기 옮기기 코드가 있어요'),
-      privacyCard(), disclaimerCard());
+      h('button', { class: 'btn text', type: 'button', id: 'btn-have-transfer', onclick: () => { ob().tcode = ''; go('ob-transfer'); } }, '기기 옮기기 코드가 있어요'));
   }
 };
 
@@ -101,7 +90,6 @@ SCREENS['ob-join'] = {
     input.addEventListener('keydown', e => { if (e.key === 'Enter') next(); });
     fill(
       h('h1', { class: 't-headline', id: 'join-h', text: '가족 코드를 입력해 주세요' }),
-      o.fromLink ? card('primary', h('p', { class: 't-body', text: '초대 링크로 오셨네요. 코드가 미리 입력되어 있어요.' })) : null,
       iosCard(o.code || null),
       h('div', { class: 'field' }, h('label', { for: 'join-code', text: '가족 코드 (6글자)' }), input),
       errP(), btn,
@@ -120,12 +108,11 @@ SCREENS['ob-transfer'] = {
       const n = normalizeCode(input.value);
       if (!n.valid) { showErr(n.bad ? '0(영)·O, 1·I는 코드에 쓰지 않아요.' : '코드는 6글자예요.'); return; }
       btn.disabled = true; showErr('');
-      try { await redeemTransfer(n.code); Store.becomeMember(); toast('이 기기를 연결했어요.'); await enterApp(); }
+      try { await redeemTransfer(n.code); Store.becomeMember(); await enterApp(); }
       catch (e) { showErr('코드가 맞지 않거나 기간이 지났어요. 이전 기기에서 새 코드를 만들어 주세요.'); btn.disabled = false; }
     };
     const btn = big('이 기기로 옮기기', 'filled', go1, 'btn-transfer-go');
     fill(h('h1', { class: 't-headline', id: 'tr-h', text: '기기 옮기기 코드를 입력해 주세요' }),
-      h('p', { class: 't-body muted', text: '이전 기기의 설정에서 "다른 기기로 옮기기"를 누르면 코드가 나와요. 코드는 잠깐만 쓸 수 있고 한 번만 쓸 수 있어요.' }),
       h('div', { class: 'field' }, h('label', { for: 'transfer-code', text: '옮기기 코드 (6글자)' }), input), errP(), btn,
       h('button', { class: 'btn text', type: 'button', onclick: () => go('ob-start') }, '처음으로'));
     input.focus();
@@ -141,7 +128,6 @@ SCREENS['ob-name'] = {
     const next = () => { const v = input.value.trim(); if (!v) { showErr('이름을 적어 주세요.'); return; } o.name = v.slice(0, 20); go('ob-role'); };
     input.addEventListener('keydown', e => { if (e.key === 'Enter') next(); });
     fill(h('h1', { class: 't-headline', id: 'ob-name-h', text: '이름을 알려 주세요' }),
-      h('p', { class: 't-body muted', text: '가족방에서 보이는 이름이에요. (최대 20글자)' }),
       h('div', { class: 'field' }, h('label', { for: 'ob-name-input', text: '내 이름' }), input),
       h('div', { class: 'chips', 'aria-label': '이름 예시' }, NAMES.map((n, i) => h('button', { class: 'chip', type: 'button', id: 'name-chip-' + i, onclick: () => { input.value = n; input.focus(); } }, n))),
       errP(), big('다음', 'filled', next, 'btn-name-next'),
@@ -176,9 +162,8 @@ SCREENS['ob-role'] = {
         showErr(e && e.code === 'bad-code' ? '코드가 맞지 않거나 기간이 지났어요.' : '만들지 못했어요. 인터넷 연결을 확인하고 다시 해 보세요.');
       }
     };
-    const choice = (id, title, desc, role) => h('button', { class: 'gamebtn', type: 'button', id, onclick: () => pick(role) }, h('span', {}, h('strong', { text: title }), h('span', { class: 't-small muted', text: desc })));
+    const choice = (id, title, desc, role) => h('button', { class: 'gamebtn', type: 'button', id, onclick: () => pick(role) }, h('span', {}, h('strong', { text: title })));
     fill(h('h1', { class: 't-headline', id: 'ob-role-h', text: o.name + '님은 어떻게 쓰세요?' }),
-      h('p', { class: 't-body muted', text: '나중에 설정에서 바꿀 수 있어요.' }),
       h('div', { class: 'pick-list' },
         choice('role-trainee', '훈련하는 분', '매일 두뇌 훈련을 하는 분이에요', 'trainee'),
         choice('role-family', '가족', '훈련하는 분의 기록을 보고 응원해요', 'family')),
@@ -192,7 +177,7 @@ export function inviteBlock(code, opts) {
   const link = inviteLink(code), label = (S.trainee && S.trainee.displayLabel) || '아버지';
   const linkBox = h('input', { class: 'input', id: (opts.prefix || 'inv') + '-link', readonly: '', value: link, 'aria-label': '초대 링크' });
   const textBox = h('textarea', { class: 'input copybox', id: (opts.prefix || 'inv') + '-textbox', readonly: '', hidden: '', rows: '4', 'aria-label': '복사할 초대 문구' });
-  const copy = async (text, el, okMsg, id) => { const ok = await Platform.copy(text, el); toast(ok ? okMsg : '길게 눌러 직접 복사해 주세요.'); };
+  const copy = async (text, el, okMsg, id) => { const ok = await Platform.copy(text, el); if (!ok) toast('길게 눌러 직접 복사해 주세요.'); };
   const codeBtn = h('button', { class: 'btn tonal', type: 'button', id: (opts.prefix || 'inv') + '-copy-code', onclick: () => copy(code, textBox, '코드를 복사했어요.') }, '코드 복사');
   codeBtn.onclick = () => { textBox.value = code; copy(code, textBox, '코드를 복사했어요.'); };
   const linkBtn = h('button', { class: 'btn tonal', type: 'button', id: (opts.prefix || 'inv') + '-copy-link', onclick: () => copy(link, linkBox, '링크를 복사했어요.') }, '링크 복사');
@@ -208,9 +193,7 @@ SCREENS['ob-invite'] = {
   bind() {
     const code = (ob().invite || {}).code;
     fill(h('h1', { class: 't-headline', id: 'inv-h', text: '가족방을 만들었어요!' }),
-      h('p', { class: 't-body muted', text: '아래 코드나 링크를 가족에게 보내 주세요. 코드는 7일 동안 쓸 수 있고, 설정에서 다시 보거나 새로 만들 수 있어요.' }),
       card('primary', inviteBlock(code, { prefix: 'inv' })),
-      ob().role === 'trainee' ? card('tertiary', h('p', { class: 't-title-m', id: 'inv-admin-tip', text: '가족 중 한 분이 관리를 맡으면 편해요 — 설정 > 관리자 넘기기' }), h('p', { class: 't-small mt', text: '글자 크기, 훈련 분량, 가족 구성원은 관리자가 정해요. 가족이 들어오면 방 주인을 넘길 수 있어요.' })) : null,
       big('시작하기', 'filled', () => { LS.set('bw.roleAsked', true); go('home'); startFlow(); }, 'btn-inv-done'));
   }
 };

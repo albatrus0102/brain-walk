@@ -20,14 +20,14 @@ export function nudgePanel(prefix) {
   const copyBtn = btnEl('카톡으로도 보내기', 'outlined', () => {
     copyBox.value = KAKAO_TEXT;
     Platform.copy(KAKAO_TEXT, copyBox).then(ok => {
-      if (ok) { copyBox.hidden = true; toast('복사했어요. 카톡에 붙여넣어 보내세요'); }
-      else { copyBox.hidden = false; copyBox.focus(); copyBox.select(); toast('아래 문구를 길게 눌러 복사해 주세요.'); }
+      if (ok) { copyBox.hidden = true; }
+      else { copyBox.hidden = false; copyBox.focus(); copyBox.select(); }
     });
   }, prefix + '-copy');
   send.onclick = async () => {
     const cd = nudgeCooldown(S.messages, S.myId, Date.now()); if (!cd.ok) return;
     const text = ta.value.trim(); if (!text) { toast('알림 문구를 적어 주세요.'); return; }
-    if (await sendMessage({ kind: 'nudge', text })) toast('알림을 보냈어요.'); update();
+    await sendMessage({ kind: 'nudge', text }); update();
   };
   function update() {
     const cd = nudgeCooldown(S.messages, S.myId, Date.now());

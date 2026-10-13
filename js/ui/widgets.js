@@ -22,7 +22,7 @@ export function segHtml(label, labelId, opts, cur, act, idp, disabled, extra) {
 }
 /* 이 기기에서만 쓰는 보기 설정 (글꼴·크기·소리·고대비). 훈련하는 분 기기에서 관리자가 정해 두었으면 그 안내만 보여요. */
 export const prefsCard = () => followsAdmin()
-  ? '<section class="card outlined" aria-labelledby="set-h" id="prefs-remote"><h2 class="t-title" id="set-h">화면과 소리</h2><p class="t-body mt">글자 크기와 소리 안내는 가족(관리자)이 정해요. 바꾸려면 가족에게 말씀해 주세요.</p></section>'
+  ? '<section class="card outlined" aria-labelledby="set-h" id="prefs-remote"><h2 class="t-title" id="set-h">화면과 소리</h2></section>'
   : '<section class="card outlined" aria-labelledby="set-h"><h2 class="t-title" id="set-h">보기 설정</h2>' +
     '<div class="mt">' + segHtml('글꼴', 'font-label', FONT_OPTS, S.prefs.font, 'font', 'font') + '</div>' +
     '<div class="mt">' + segHtml('글자 크기', 'size-label', SIZE_OPTS, S.prefs.size, 'size', 'size') + '</div><div class="mt">' + soundRow() + '</div><div class="mt">' + contrastRow() + '</div></section>';
@@ -33,7 +33,7 @@ export function xpCard(key, title, summary, bodyHtml, defaultOpen) {
     (summary != null ? '<span class="t-small muted xp-v" id="xpv-' + key + '">' + summary + '</span>' : '') + '</span>' + ic('expand') + '</summary><div class="xp-body stack">' + bodyHtml + '</div></details>';
 }
 /* 관리자가 아니면: 값은 보이되 바꿀 수 없고, 이유를 한 줄로 알려요 */
-export const adminOnlyNote = () => isAdmin() ? '' : '<p class="t-body muted adminonly" id="admin-note">관리자만 바꿀 수 있어요. 관리자: ' + esc(adminNames().join(', ') || '방 주인') + '</p>';
+export const adminOnlyNote = () => isAdmin() ? '' : '';
 export const levelDots = l => '<span class="lv" role="img" aria-label="' + l + '단계">' + [1, 2, 3, 4, 5].map(i => '<i class="' + (i <= l ? 'f' : '') + '"></i>').join('') + '</span>';
 export const slotText = (root, name, text) => root.querySelectorAll('[data-slot="' + name + '"]').forEach(e => { e.textContent = text; });
 export function statusChip() {
