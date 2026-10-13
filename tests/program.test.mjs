@@ -322,7 +322,8 @@ test('서비스 워커 업데이트: 안전한 화면에서만, 처음 설치는
   const base = { hadController: true, screen: 'home', lastReloadAt: 0, now: 1e9, alreadyReloaded: false };
   assert.equal(shouldReload(base), true);
   for (const s of SAFE_SCREENS) assert.equal(shouldReload({ ...base, screen: s }), true, s);
-  for (const s of ['game', 'pick', 'survey', 'surveyQ', 'assess', 'course', 'chat', 'settings', 'ob-name', 'ob-join', 'aiConsent']) assert.equal(shouldReload({ ...base, screen: s }), false, s);
+  for (const s of ['game', 'surveyQ', 'courseBreak', 'assessStep', 'clock', 'chat', 'ob-name', 'ob-join']) assert.equal(shouldReload({ ...base, screen: s }), false, s);
+  for (const s of ['pick', 'settings', 'family', 'assess']) assert.equal(shouldReload({ ...base, screen: s }), true, s);
   assert.equal(shouldReload({ ...base, hadController: false }), false, '처음 설치');
   assert.equal(shouldReload({ ...base, alreadyReloaded: true }), false, '이미 새로고침함');
   assert.equal(shouldReload({ ...base, lastReloadAt: 1e9 - 59000 }), false, '60초 안');
