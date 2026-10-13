@@ -72,14 +72,14 @@ await page.click('#btn-gear'); await page.click('#dlg-btn-1'); await page.waitFo
 await page.click('#btn-role-switch'); await page.click('#dlg-btn-1'); await page.waitForSelector('#btn-settings');
 await page.click('#btn-settings'); await page.waitForSelector('#set-main-h');
 await must(await vis('#btn-delete-local'), '설정: 체험 모드 안내/삭제 버튼');
-await page.click('#xp-mgmt'); await page.click('#row-plan'); await page.waitForSelector('#plan-h');
+await page.click('#row-plan'); await page.waitForSelector('#plan-h');
 await page.click('#xp-p2');
 await must(await vis('#btn-ics'), '훈련 계획: ICS 버튼');
 const dl = page.waitForEvent('download');
 await page.click('#btn-ics'); const d = await dl; await must(d.suggestedFilename().endsWith('.ics'), 'ICS 실제 다운로드 ' + d.suggestedFilename());
 await page.click('#btn-back'); await page.waitForSelector('#set-main-h');
 await page.click('#btn-delete-local'); await must(await vis('#dlg-title'), '삭제 확인 대화상자(M3)'); await page.click('#dlg-btn-0');
-await page.click('#btn-back'); await page.click('#nav-chat'); await page.waitForSelector('#chat-h'); must(!(await page.innerText('#screen')).includes('claude.ai') && (await page.innerText('#screen')).includes('가족방이 없어요'), '채팅(체험 모드): 짧은 안내만, claude.ai 없음');
+await page.click('#nav-chat'); await page.waitForSelector('#chat-h'); must(!(await page.innerText('#screen')).includes('claude.ai') && (await page.innerText('#screen')).includes('가족방이 없어요'), '채팅(체험 모드): 짧은 안내만, claude.ai 없음');
 out('ERRORS:', JSON.stringify(errors));
 await browser.close();
 process.exit(errors.length ? 1 : 0);

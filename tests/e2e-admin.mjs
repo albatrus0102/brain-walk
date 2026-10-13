@@ -5,7 +5,7 @@ const browser = await launch();
 const db = page => page.evaluate(() => JSON.parse(localStorage.getItem('bw.localdb') || '{}'));
 const mod = (page, f) => page.evaluate(async f => import(new URL('js/' + f, document.baseURI).href).then(m => Object.keys(m)), f);
 const text = (page, sel) => page.innerText(sel).then(t => t.replace(/\s+/g, ' ').trim());
-const openPlan = async page => { await page.click('#btn-settings'); await page.waitForSelector('#set-main-h'); if (!(await page.getAttribute('#xpc-mgmt', 'open') !== null)) await page.click('#xp-mgmt'); await page.click('#row-plan'); await page.waitForSelector('#plan-h'); };
+const openPlan = async page => { await page.click('#btn-settings'); await page.waitForSelector('#set-main-h'); await page.click('#row-plan'); await page.waitForSelector('#plan-h'); };
 const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 'open')) === null) await page.click('#xp-' + k); };
 
 /* ---------- 1) 설정 칸과 훈련 계획 ---------- */
@@ -13,9 +13,8 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   const { page } = await newPage(browser, { tag: 'plan', seed: { 'bw.role': 'family' } });
   await startDemo(page);
   await page.click('#btn-settings'); await page.waitForSelector('#set-main-h');
-  must((await page.locator('details.xp').count()) >= 2 && (await page.getAttribute('#xpc-mine', 'open')) !== null, '설정: 펼치는 카드 (내 화면은 펼쳐져 있어요)');
-  must((await text(page, '#xpv-mgmt')) === '하루 5개 · 약 15분 · 매일 · 난이도 자동 · 점검 4주마다', '아버지 기기 관리 요약 한 줄');
-  await page.click('#xp-mgmt');
+  must((await page.locator('.subhead').count()) >= 4 && (await page.locator('.list .li').count()) >= 6, '설정: M3 목록 (소제목으로 묶인 줄)');
+  must((await text(page, '#plan-summary')) === '하루 5개 · 약 15분 · 매일 · 난이도 자동 · 점검 4주마다', '훈련 계획 줄의 요약 한 줄');
   must(await vis(page, '#row-display') && await vis(page, '#row-plan') && await vis(page, '#btn-role-switch'), '화면·계획 줄과 체험 모드 미리보기 전환');
   await page.click('#row-plan'); await page.waitForSelector('#plan-h');
   must((await text(page, '#plan-sum')).startsWith('하루 5개 · 약 15분 · 매일'), '계획 요약 카드');
@@ -107,7 +106,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
 {
   const { page } = await newPage(browser, { tag: 'display', seed: { 'bw.role': 'family' } });
   await startDemo(page);
-  await page.click('#btn-settings'); await page.click('#xp-mgmt'); await page.click('#row-display'); await page.waitForSelector('#dd-h');
+  await page.click('#btn-settings'); await page.click('#row-display'); await page.waitForSelector('#dd-h');
   must(!(await page.locator('#dd-nodoc, #dd-lead, #dd-foot').count()), '화면 설정: 안내 글 없음');
   const fs0 = await page.evaluate(() => parseFloat(document.querySelector('#disp-preview').style.fontSize));
   await page.click('#dd-font-noto'); await page.click('#dd-size-max');
@@ -143,11 +142,11 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
 /* ---------- 4) 내 화면(이 기기만): 글꼴·크기 ---------- */
 {
   const { page } = await newPage(browser, { tag: 'mine', seed: { 'bw.role': 'family' } });
-  await startDemo(page); await page.click('#btn-settings'); await page.waitForSelector('#size-max');
+  await startDemo(page); await page.click('#btn-settings'); await page.click('#row-mine'); await page.waitForSelector('#size-max');
   await page.click('#font-noto'); await page.click('#size-max');
   const a = await page.evaluate(() => [document.documentElement.dataset.font, document.documentElement.dataset.size, localStorage.getItem('bw.font'), localStorage.getItem('bw.size')]);
   must(a.join() === 'noto,max,"noto","max"', '내 화면: 글꼴·크기가 이 기기에 저장');
-  await noHScroll(page, '최대: 가족 설정'); await page.click('#xp-mgmt'); await page.click('#row-plan'); await page.waitForSelector('#plan-h');
+  await noHScroll(page, '최대: 내 화면'); await page.click('#btn-back'); await page.waitForSelector('#row-plan'); await noHScroll(page, '최대: 가족 설정'); await page.click('#row-plan'); await page.waitForSelector('#plan-h');
   for (const k of ['p1', 'p2', 'p3', 'p4', 'p5']) await openCard(page, k);
   await noHScroll(page, '최대: 훈련 계획'); await page.screenshot({ path: SHOTS + '/admin-plan-max.png', fullPage: true });
   await page.close();
@@ -158,7 +157,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   const { page } = await newPage(browser, { tag: 'readonly', seed: { 'bw.role': 'family' } });
   await startDemo(page);
   await page.evaluate(() => { window.__S.debugNonAdmin = true; });
-  await page.click('#btn-settings'); await page.click('#xp-mgmt');
+  await page.click('#btn-settings'); await page.waitForSelector('#row-plan');
   must(!(await page.locator('#admin-note').count()), '설정: 관리자 안내 글 없음');
   await page.click('#row-plan'); await page.waitForSelector('#plan-h');
   must(!(await page.locator('#admin-note').count()), '계획: 안내 글 없음 (읽기 전용은 막힌 버튼으로)');
@@ -251,7 +250,7 @@ for (const size of ['xlarge', 'max']) {
   const { page } = await newPage(browser, { tag: 'dark-' + size, dark: true, seed: { 'bw.role': 'family', 'bw.size': size } });
   await startDemo(page);
   await noHScroll(page, size + ' 다크 가족 홈'); await page.screenshot({ path: SHOTS + '/dashboard-dark-' + size + '.png' });
-  await page.click('#btn-settings'); await page.click('#xp-mgmt'); await noHScroll(page, size + ' 다크 설정'); await page.screenshot({ path: SHOTS + '/admin-settings-dark-' + size + '.png', fullPage: true });
+  await page.click('#btn-settings'); await page.waitForSelector('#row-plan'); await noHScroll(page, size + ' 다크 설정'); await page.screenshot({ path: SHOTS + '/admin-settings-dark-' + size + '.png', fullPage: true });
   await page.click('#row-display'); await page.waitForSelector('#dd-h'); await noHScroll(page, size + ' 다크 화면 설정'); await page.screenshot({ path: SHOTS + '/admin-display-dark-' + size + '.png', fullPage: true });
   await page.click('#btn-back'); await page.click('#row-plan'); await page.waitForSelector('#plan-h');
   for (const k of ['p1', 'p2', 'p3', 'p4', 'p5']) await openCard(page, k);

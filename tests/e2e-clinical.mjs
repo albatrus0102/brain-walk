@@ -16,7 +16,7 @@ const must = (c, msg) => { if (!c) { errors.push('ASSERT ' + msg); out('FAIL', m
 await page.goto(BASE); await page.waitForSelector('#btn-demo'); await page.click('#btn-demo');
 await page.waitForSelector('.dialog'); await page.click('#dlg-btn-0'); if (await vis('.dialog')) await page.click('#dlg-btn-1');
 await page.evaluate(() => { localStorage.setItem('bw.role', JSON.stringify('family')); }); await page.goto(BASE); await page.waitForSelector('#appbar-title'); if (await vis('.dialog')) await page.click('#dlg-btn-1').catch(() => {});
-await page.click('#nav-assess'); await page.waitForSelector('#hub-clinical');
+await page.click('#nav-family'); await page.waitForSelector('#tab-assess'); await page.click('#tab-assess'); await page.waitForSelector('#hub-clinical');
 must(!(await page.locator('#center-card').count()) && !(await page.locator('#cist-banner').count()), '센터 카드·재검 배너 없음');
 must(!/센터|nid\.or|\d{4}-\d{4}/.test(await page.innerText('#screen')), '점검 탭에 기관·번호 언급 없음');
 must((await page.innerText('#hub-clinical')).includes('병원 검사 기록'), '허브 항목 이름: 병원 검사 기록');

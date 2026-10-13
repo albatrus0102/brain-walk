@@ -69,7 +69,7 @@ await admin.screenshot({ path: (process.env.SHOT_DIR || '/tmp') + '/live-dashboa
 
 /* 3) 관리자: 화면 설정 → 훈련하는 분 기기에 눌러 보지 않아도 적용 */
 await admin.click('#btn-settings'); await admin.waitForSelector('#set-main-h');
-await admin.click('#xp-mgmt'); await admin.click('#row-display'); await admin.waitForSelector('#dd-h');
+await admin.click('#row-display'); await admin.waitForSelector('#dd-h');
 await admin.click('#dd-font-noto'); await admin.click('#dd-size-max'); await admin.click('#dd-save');
 must(await until(learner, () => document.documentElement.dataset.size === 'max' && document.documentElement.dataset.font === 'noto', null, 5000), '훈련하는 분 기기에 글꼴·최대 글자가 3초 안에 저절로 적용 (입력 없음)');
 must(await learner.evaluate(() => getComputedStyle(document.body).fontFamily.includes('Noto Sans KR')), '글꼴이 타이포 토큰으로 바뀌었어요');
@@ -150,7 +150,7 @@ await fam.click('#btn-join-next'); await fam.fill('#ob-name-input', '동생'); a
 await fam.click('#role-family'); await fam.waitForSelector('#dash', { timeout: 20000 });
 await fam.click('#btn-settings'); await fam.waitForSelector('#set-main-h');
 must(!(await fam.locator('#admin-chip').count()) && !(await fam.locator('#owner-slot').count()), '관리자 표시·방 주인 전용 칸이 없어요');
-await fam.click('#xp-mgmt'); await fam.click('#row-plan'); await fam.waitForSelector('#plan-h');
+await fam.click('#row-plan'); await fam.waitForSelector('#plan-h');
 must(!(await fam.locator('#admin-note').count()), '관리자가 아닌 가족: 안내 글 없이 막힌 버튼만');
 for (const k of ['p1', 'p2', 'p3', 'p4', 'p5']) if ((await fam.getAttribute('#xpc-' + k, 'open')) === null) await fam.click('#xp-' + k);
 const live = await fam.evaluate(() => [...document.querySelectorAll('#screen button[data-act^="pl-"], #screen select, #screen input[type=time]')].filter(e => !e.disabled).length);

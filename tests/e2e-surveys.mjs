@@ -18,7 +18,7 @@ await page.waitForSelector('.dialog'); await page.click('#dlg-btn-0'); if (await
 await page.evaluate(() => localStorage.setItem('bw.role', JSON.stringify('family')));
 await page.click('#btn-back').catch(() => {});
 await page.goto(BASE); await page.waitForSelector('#appbar-title'); if (await vis('.dialog')) await page.click('#dlg-btn-1').catch(() => {});
-await page.click('#nav-assess'); await page.waitForSelector('#hub-h'); must(true, '가족 점검 탭(목록)');
+await page.click('#nav-family'); await page.waitForSelector('#tab-assess'); await page.click('#tab-assess'); await page.waitForSelector('#hub-h'); must(true, '가족 점검 탭(목록)');
 await page.click('#hub-surveys'); await page.waitForSelector('#sv-h');
 must(await vis('#sv-open-iqcode') && await vis('#sv-open-phq9'), '설문 목록 5종');
 // KDSQ-C 가족 응답

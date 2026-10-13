@@ -66,7 +66,7 @@ await ios.screenshot({ path: SHOTS + '/onboarding-ios.png' });
   must((await fam.innerText('#ob-err')) === '만들기 코드가 맞지 않아요.' && !(await vis('#ob-name-input')), '코드를 정하기 전에는 어떤 코드도 거절');
   // 설정에서 방 주인이 코드를 정해요 (8글자 이상)
   await fam.evaluate(() => window.__go('settings')); await fam.waitForSelector('#set-main-h');
-  await fam.click('#xp-owner'); await fam.click('#btn-create-code'); await fam.waitForSelector('#ccset-input');
+  await fam.click('#btn-create-code'); await fam.waitForSelector('#ccset-input');
   await fam.fill('#ccset-input', 'short7!'); await fam.click('#ccset-save'); await fam.waitForTimeout(150);
   must(await vis('#ccset-input') && (await fam.innerText('#snackbar')).includes('8글자 이상'), '8글자보다 짧으면 저장하지 않아요');
   await fam.fill('#ccset-input', 'family-key-2026'); await fam.click('#ccset-save'); await fam.waitForSelector('#ccset-input', { state: 'detached' });

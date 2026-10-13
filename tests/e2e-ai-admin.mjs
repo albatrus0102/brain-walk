@@ -2,7 +2,7 @@
 import { SHOTS, done, launch, must, newPage, noHScroll, readDb, startDemo, vis } from './e2e-ai-lib.mjs';
 const browser = await launch();
 const seed = o => Object.assign({ 'bw.aiDemo': true, 'bw.role': 'family' }, o || {});
-const openAi = async page => { await startDemo(page); await page.waitForSelector('#nav-assess'); await page.click('#nav-assess'); await page.waitForSelector('#hub-ai'); await page.click('#hub-ai'); await page.waitForSelector('#ai-rows, .airow-btn, #ai-blocked'); };
+const openAi = async page => { await startDemo(page); await page.waitForSelector('#nav-family'); await page.click('#nav-family'); await page.waitForSelector('#tab-assess'); await page.click('#tab-assess'); await page.waitForSelector('#hub-ai'); await page.click('#hub-ai'); await page.waitForSelector('#ai-rows, .airow-btn, #ai-blocked'); };
 const go = async (page, to) => { await page.evaluate(t => window.__go(t), to); await page.waitForTimeout(500); };
 const hue = rgb => { const m = rgb.match(/[\d.]+/g); if (!m) return null; const [r, g, b] = m.slice(0, 3).map(Number).map(x => x / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; if (!d) return null; let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; return { h, s: d / (mx || 1), l: (mx + mn) / 2 }; };
 const lum = rgb => { const [r, g, b] = rgb.match(/[\d.]+/g).slice(0, 3).map(Number).map(x => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
@@ -161,9 +161,11 @@ for (const dark of [false, true]) {
 /* ---------- 7) 관리자가 아니면 막아요 ---------- */
 {
   const { page } = await newPage(browser, { tag: 'nonadmin', seed: seed() });
-  await startDemo(page); await page.waitForSelector('#nav-assess');
+  await startDemo(page); await page.waitForSelector('#nav-family');
   await page.evaluate(() => { window.__S.debugNonAdmin = true; });
-  await page.click('#nav-assess'); await page.waitForSelector('#hub-ai'); await page.click('#hub-ai'); await page.waitForSelector('#ai-blocked');
+  await page.click('#nav-family'); await page.waitForSelector('#tab-assess'); await page.click('#tab-assess'); await page.waitForTimeout(100);
+  must(!(await page.locator('#hub-ai').count()), '관리자가 아니면 점검 탭에 AI 리포트 줄이 없어요');
+  await go(page, 'aiReports'); await page.waitForSelector('#ai-blocked');
   must((await page.innerText('#ai-blocked-t')) === '관리자만 볼 수 있어요' && (await page.locator('.airow-btn, #ai-rows, svg.ai-chart').count()) === 0, '관리자가 아니면 "관리자만 볼 수 있어요" (리포트·그래프 없음)');
   for (const to of ['aiReport', 'aiTrend', 'aiAnchor', 'aiNotes', 'aiBank', 'aiOps', 'aiSettings']) { await go(page, to); must(await vis(page, '#ai-blocked'), to + ': 막혀요'); }
   await page.close();
@@ -173,7 +175,7 @@ for (const dark of [false, true]) {
 {
   const evil = '<img src=x onerror="window.__xss=1">';
   const { page } = await newPage(browser, { tag: 'xss', seed: seed({ 'bw.aiDemo': true }) });
-  await startDemo(page); await page.waitForSelector('#nav-assess');
+  await startDemo(page); await page.waitForSelector('#nav-family');
   await page.evaluate(async evil => {
     const db = JSON.parse(localStorage.getItem('bw.localdb'));
     const k = Object.keys(db).find(x => x.startsWith('aiReports/') && db[x].kind === 'daily' && db[x].generatedBy === 'routine');
@@ -183,7 +185,7 @@ for (const dark of [false, true]) {
     db['aiNotes/nexample1'].text = evil;
     localStorage.setItem('bw.localdb', JSON.stringify(db));
   }, evil);
-  await page.reload(); await page.waitForSelector('#nav-assess'); await page.click('#nav-assess'); await page.click('#hub-ai'); await page.waitForSelector('.airow-btn');
+  await page.reload(); await page.waitForSelector('#nav-family'); await page.click('#nav-family'); await page.waitForSelector('#tab-assess'); await page.click('#tab-assess'); await page.click('#hub-ai'); await page.waitForSelector('.airow-btn');
   await page.locator('.airow-btn', { hasText: '아침 리포트' }).first().click(); await page.waitForSelector('#ai-rows');
   await page.click('#ai-d-composite > summary'); await page.click('#ai-gloss > summary'); await page.waitForTimeout(200);
   const t = await page.innerText('#screen');
