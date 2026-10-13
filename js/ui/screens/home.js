@@ -61,11 +61,11 @@ function bindTrainee(el) {
   slot.append(h('section', { class: 'card primary cheer', id: 'cheer-card', 'aria-label': '가족' }, line,
     h('button', { class: 'btn tonal big', id: 'btn-family-chat', type: 'button', onclick: () => go('chat') }, '가족 대화', un > 0 ? h('span', { class: 'new-badge', text: '새 글 ' + (un > 99 ? '99+' : un) }) : null)));
 }
+/* 가족 홈 = 대시보드 (ui/dashboard.js): 요약 타일 · 오늘의 훈련 · 최근 7일 · 대화 · 빠른 동작 칩 */
 function familyHtml() {
   const now = new Date(), hr = now.getHours();
-  const hero = '<header class="hero" aria-labelledby="hello"><p class="greet">' + (hr < 12 ? '좋은 아침이에요' : hr < 18 ? '편안한 오후예요' : '편안한 저녁이에요') + '</p><h1 class="date" id="hello">' + (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' + WD[now.getDay()] + '요일</h1></header>';
-  return '<div class="stack"><div id="home-banner"></div>' + hero + dashboardHtml() +
-    '<button class="btn outlined" id="btn-pick" type="button" data-act="nav" data-to="pick">나도 훈련해 보기</button></div>';
+  const hero = '<header class="hero" aria-labelledby="hello"><h1 class="date" id="hello">' + (now.getMonth() + 1) + '월 ' + now.getDate() + '일 ' + WD[now.getDay()] + '요일</h1><p class="greet muted">' + (hr < 12 ? '좋은 아침이에요' : hr < 18 ? '편안한 오후예요' : '편안한 저녁이에요') + '</p></header>';
+  return '<div class="stack"><div id="home-banner"></div>' + hero + dashboardHtml() + '</div>';
 }
 SCREENS.home = {
   html() { return isTrainee() ? traineeHtml() : familyHtml(); },
@@ -76,7 +76,7 @@ SCREENS.home = {
     const pc = pushPromptCard(); if (pc) bn.append(pc);
     if (S.remDue) {
       bn.append(h('div', { class: 'banner', role: 'status', id: 'reminder-banner' }, h('div', { class: 't-title' }, svgIcon('alarm'), traineeLabel() + iga(traineeLabel()) + ' 아직 훈련 전이에요'),
-        h('div', { class: 'row' }, btnEl('알림 보내기', 'filled', () => { go('family'); setTimeout(() => { const n = $('#nudge-slot'); if (n) n.scrollIntoView({ block: 'center' }); }, 50); }, 'rem-send'), btnEl('닫기', 'text', () => { LS.set('bw.remDismiss', todayS()); alarmTick(); render(true); }, 'rem-close'))));
+        h('div', { class: 'row' }, btnEl('알림 보내기', 'filled fit', () => { go('family'); setTimeout(() => { const n = $('#nudge-slot'); if (n) n.scrollIntoView({ block: 'center' }); }, 50); }, 'rem-send'), btnEl('닫기', 'text', () => { LS.set('bw.remDismiss', todayS()); alarmTick(); render(true); }, 'rem-close'))));
     }
     startDashboardTicker(render);
   }

@@ -12,7 +12,7 @@ import { surveyReportHtml } from './surveys.js';
 import { recordsOf } from '../../surveys/engine.js';
 import { SCREENS } from '../registry.js';
 import { arrowHtml } from './assess.js';
-import { levelDots, progressBar, statusChip } from '../widgets.js';
+import { RECORD_TABS, levelDots, progressBar, statusChip, tabsHtml } from '../widgets.js';
 import { $, LS, WD, addDays, daysBetween, esc, fmtDur, mean, parseYmd, ymd } from '../../util.js';
 
 const WEEK_LABELS = ['3주 전', '2주 전', '지난주', '이번 주'];
@@ -24,12 +24,12 @@ SCREENS.family = {
     const pi = programInfo(S.program.startDate, today, ds);
     const last = all[0], lastTxt = !last ? '기록 없음' : last.date === today ? '오늘' : daysBetween(last.date, today) + '일 전';
     const avgDur = all.length ? fmtDur(Math.round(mean(all.map(s => Number(s.durationSec) || 0)))) : '-';
-    let o = '<div class="stack"><h1 class="t-headline" id="fam-h">가족이 보는 기록</h1><div id="fam-status"></div>';
+    let o = '<div class="stack">' + (isTrainee() ? '' : tabsHtml(RECORD_TABS, 'family', '기록')) + '<h1 class="t-headline' + (isTrainee() ? '' : ' dup') + '" id="fam-h">가족이 보는 기록</h1><div id="fam-status"></div>';
     if (fl.consult.flag) o += '<section class="card tertiary" id="flag-consult" role="status"><p class="t-title-m">최근 점수가 낮아지고 있어요. 병원 상담을 권해요.</p></section>';
     if (fl.mood) o += '<section class="card tertiary" id="flag-mood" role="status"><p class="t-title-m">최근 일주일 중 5일 이상 기분이 좋지 않다고 하셨어요.</p></section>';
     // 요약이 맨 먼저: 지난 7일을 글로 정리한 카드. 자세한 숫자는 그 아래에 있어요.
     o += '<section class="card primary" aria-labelledby="ws-h"><h2 class="t-title" id="ws-h">이번 주 요약</h2><p class="t-body mt" id="wk-text" style="white-space:pre-wrap"></p>' +
-      (chatAvail() ? '<div class="stack mt"><button class="btn filled" id="btn-share-summary" type="button" data-act="sharesummary">이번 주 요약 공유하기</button><button class="btn tonal" id="btn-fam-chat2" type="button" data-act="nav" data-to="chat">대화방 열기</button></div>' : '') + '</section>';
+      (chatAvail() ? '<div class="row mt"><button class="btn filled" id="btn-share-summary" type="button" data-act="sharesummary">이번 주 요약 공유하기</button><button class="btn tonal" id="btn-fam-chat2" type="button" data-act="nav" data-to="chat">대화방 열기</button></div>' : '') + '</section>';
     if (empty) o += '<section class="card outlined empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="' + P.leaf + '"/></svg><p class="t-title">아직 기록이 없어요</p></section>';
     o += '<section class="card elevated" id="nudge-card" aria-labelledby="nd-h" hidden><h2 class="t-title" id="nd-h">훈련 알림 보내기</h2><div class="mt" id="nudge-slot"></div></section>';
     o += '<section class="card elevated" aria-labelledby="wk-h"><h2 class="t-title" id="wk-h">이번 주 훈련한 날 <span class="muted t-body">(' + weekDone + '/7일 · ' + Math.round(weekDone / 7 * 100) + '%)</span></h2><div class="week mt" role="list">' +
@@ -44,10 +44,9 @@ SCREENS.family = {
       DOMAINS.map(d => { const tr = weeklyTrend(all, d.id, today);
         return '<div><div class="bar-top"><span>' + d.name + '</span></div><div class="spark" role="img" aria-label="' + d.name + ' 주별 정답률 ' + tr.map(x => x.avg == null ? '기록 없음' : Math.round(x.avg) + '퍼센트').join(', ') + '">' +
           tr.map((x, k) => '<div class="col">' + (x.avg == null ? '<span aria-hidden="true">-</span><i class="none"></i>' : '<span>' + Math.round(x.avg) + '</span><i style="height:' + Math.max(4, Math.round(x.avg * 0.6)) + 'px"></i>') + '<span class="wk" aria-hidden="true">' + WEEK_LABELS[k] + '</span></div>').join('') + '</div></div>'; }).join('') + '</div></section>';
-    o += '<section class="card elevated" aria-labelledby="as-hh"><h2 class="t-title" id="as-hh">두뇌 건강 점검 기록</h2>' + (asm.length ? '<ul class="slist">' + asm.slice(0, 8).map((a, i) => '<li><span class="t-small muted">' + mdLabel(a.date) + '</span><span class="t-title-m">총점 ' + a.total + '점' + (asm[i + 1] ? ' ' + arrowHtml(a.total - asm[i + 1].total) : '') + '</span></li>').join('') + '</ul>' : '<p class="t-body muted mt">아직 점검 기록이 없어요.</p>') + '</section>';
+    o += '<section class="card elevated" aria-labelledby="as-hh"><h2 class="t-title" id="as-hh">두뇌 건강 점검 기록</h2>' + (asm.length ? '<ul class="slist">' + asm.slice(0, 8).map((a, i) => '<li><span class="li-main"><span class="t-title-m">총점 ' + a.total + '점</span><span class="t-small muted">' + mdLabel(a.date) + '</span></span><span class="li-val">' + (asm[i + 1] ? arrowHtml(a.total - asm[i + 1].total) : '') + '</span></li>').join('') + '</ul>' : '<p class="t-body muted mt">아직 점검 기록이 없어요.</p>') + '</section>';
     o += '<section class="card elevated" aria-labelledby="rec-h"><h2 class="t-title" id="rec-h">최근 훈련 <span class="muted t-body">(최근 10개)</span></h2>' + (empty ? '<p class="t-body muted mt">아직 없어요.</p>' :
-      '<ul class="slist">' + all.slice(0, 10).map(s => { const d = parseYmd(s.date); return '<li><span class="t-small muted">' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')</span><span class="t-title-m">' + esc(s.gameName || (GAMES[s.gameId] && GAMES[s.gameId].name) || s.gameId) + ' · ' + esc(s.level) + '단계</span><span class="t-body">정답 ' + esc(s.correct) + '/' + esc(s.total) + ' · ' + fmtDur(Number(s.durationSec) || 0) + '</span>' +
-        (chatAvail() ? '<span><button class="btn text fit" type="button" id="talk-' + esc(s.id) + '" data-act="talk" data-id="' + esc(s.id) + '">이 기록에 대해 이야기하기</button></span>' : '') + '</li>'; }).join('') + '</ul>') + '</section>';
+      '<ul class="slist">' + all.slice(0, 10).map(s => { const d = parseYmd(s.date); return '<li><span class="li-main"><span class="t-title-m">' + esc(s.gameName || (GAMES[s.gameId] && GAMES[s.gameId].name) || s.gameId) + ' · ' + esc(s.level) + '단계</span><span class="t-small muted">' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')' + (chatAvail() ? ' <button class="btn text fit" type="button" id="talk-' + esc(s.id) + '" data-act="talk" data-id="' + esc(s.id) + '">이야기하기</button>' : '') + '</span></span><span class="li-val">정답 ' + esc(s.correct) + '/' + esc(s.total) + '<br>' + fmtDur(Number(s.durationSec) || 0) + '</span></li>'; }).join('') + '</ul>') + '</section>';
     // 생활 체크 추세
     const l7 = Array.from({ length: 7 }, (_, i) => addDays(today, -(6 - i))), c7 = l7.map(d => cis[d]), c14 = Array.from({ length: 14 }, (_, i) => cis[addDays(today, -i)]).filter(Boolean);
     const sl = c14.map(c => Number(c.sleepHours)).filter(x => x > 0), cnt = k => c7.filter(c => c && c[k]).length;
@@ -100,5 +99,5 @@ function foldSections(el) {
 function sleepReportHtml() {
   const rows = (S.sleeplogs || []).filter(x => x && x.date).sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 7);
   if (!rows.length) return '';
-  return '<section class="card outlined" id="sleep-report" aria-labelledby="slp-h"><h2 class="t-title" id="slp-h">잠 기록</h2><ul class="slist">' + rows.map(r => { const d = parseYmd(r.date); return '<li><span class="t-small muted">' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')</span><span class="t-title-m">' + esc(r.bed) + ' → ' + esc(r.wake) + '</span><span class="t-body">' + (r.wakings ? '밤에 ' + esc(r.wakings) + '번 깼어요' : '깨지 않고 잤어요') + '</span></li>'; }).join('') + '</ul></section>';
+  return '<section class="card outlined" id="sleep-report" aria-labelledby="slp-h"><h2 class="t-title" id="slp-h">잠 기록</h2><ul class="slist">' + rows.map(r => { const d = parseYmd(r.date); return '<li><span class="li-main"><span class="t-title-m">' + esc(r.bed) + ' → ' + esc(r.wake) + '</span><span class="t-small muted">' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + WD[d.getDay()] + ')</span></span><span class="li-val">' + (r.wakings ? '밤에 ' + esc(r.wakings) + '번 깸' : '깨지 않음') + '</span></li>'; }).join('') + '</ul></section>';
 }

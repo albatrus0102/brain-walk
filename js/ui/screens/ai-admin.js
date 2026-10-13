@@ -1,7 +1,7 @@
 import { AD, aiAccess, ensureAdminSubs, isExample, msOf, parseItems, weekDoc } from '../../ai/admin-data.js';
 import { noteDoc, noteId, reviewDoc, switchDoc, themesDoc } from '../../ai/admin-docs.js';
 import { mean, movingAvg, sd, trendChart } from '../../ai/charts.js';
-import { CONFIDENCE, DOMAIN_NAMES, KIND_NAMES, NOTE_CODES, NOTE_NAME, PHASE, REJECT_CODES_REPORT, TREND_DOMAINS, BANK_ROWS, FORMAT_NAMES, errLabel, lightOf, numLabel, rejectLabel } from '../../ai/labels.js';
+import { CONFIDENCE, DOMAIN_NAMES, KIND_NAMES, NOTE_CODES, NOTE_NAME, PHASE, REJECT_CODES_REPORT, TREND_DOMAINS, BANK_ROWS, FORMAT_NAMES, errLabel, lightOf, numLabel, rejectLabel, topLight } from '../../ai/labels.js';
 import { weekKey, weekStart } from '../../ai/kdate.js';
 import { observationState, setObservation } from '../../ai/consent.js';
 import { adminNames, traineeId, traineeLabel } from '../../data.js';
@@ -52,27 +52,24 @@ function blocked(acc) {
 
 /* ---------------- 리포트 목록 ---------------- */
 const TABS = [['all', '모두'], ['daily', '아침'], ['weekly', '주간'], ['alert', '알림']];
-function topLight(r) {
-  const order = ['orange', 'yellow', 'blue', 'green', 'gray'];
-  const ls = Object.keys(r.lights || {}).map(k => (r.lights || {})[k]);
-  return order.find(o => ls.includes(o)) || (r.lights && r.lights.composite) || 'gray';
-}
 const attentionCount = r => Object.keys(r.lights || {}).filter(k => k !== 'composite' && ['yellow', 'orange'].includes((r.lights || {})[k])).length;
 SCREENS.aiReports = screen('AI 리포트', root => {
   const tab = S.aiTab || 'all', rs = AD.reports.filter(r => tab === 'all' || r.kind === tab);
   root.append(h('div', { class: 'seg many', role: 'radiogroup', 'aria-label': '리포트 종류' }, TABS.map(t => h('button', { type: 'button', id: 'ai-tab-' + t[0], role: 'radio', 'aria-checked': String(tab === t[0]), 'data-act': 'ai-tab', 'data-v': t[0], text: t[1] }))));
   if (!rs.length) root.append(section(null, note(AD.ready.reports ? '아직 리포트가 없어요' : '불러오는 중이에요…')));
+  const wrap = h('div', { class: 'ai-list-wrap', id: 'ai-list' });
   rs.forEach(r => {
     const tpl = r.generatedBy === 'template', rp = r.report || {}, n = attentionCount(r);
-    root.append(h('button', { type: 'button', class: 'airow-btn', id: 'ai-r-' + r.id, 'data-act': 'ai-open', 'data-id': r.id },
+    wrap.append(h('button', { type: 'button', class: 'airow-btn', id: 'ai-r-' + r.id, 'data-act': 'ai-open', 'data-id': r.id },
       h('span', { class: 'ai-r-main' },
         h('span', { class: 'ai-r-top' }, h('strong', { text: mdw(r.date) + ' ' + (KIND_NAMES[r.kind] || '리포트') + (tpl ? ' (간단판) ⓘ' : '') }), pill(topLight(r)), n ? h('span', { class: 'ai-count', text: n + '개 살펴봐요' }) : null),
         h('span', { class: 'ai-r-line', text: tpl ? 'AI 설명이 빠진 날이에요. 숫자와 신호등만 보여 드려요.' : (rp.headline || '') })),
-      h('span', { class: 't-title-m', 'aria-hidden': 'true', text: '›' })));
+      svgIcon('chevron')));
   });
+  if (rs.length) root.append(wrap);
   root.append(h('h2', { class: 't-title', text: '더 보기' }),
-    h('div', { class: 'rows' }, [['aiTrend', 'hub-ai-trend', '흐름 그래프', '4주 평균, 평소 선, 평소 범위, 메모 표시'], ['aiAnchor', 'hub-ai-anchor', '같은 문제 다시 풀기', '12주 전과 같은 문제를 나란히 봐요'], ['aiNotes', 'hub-ai-notes', '메모 더하기', '감기·약 변경 같은 일을 날짜와 함께 남겨요'], ['aiBank', 'hub-ai-bank', '문제 은행', '문제 개수, 검토 기다림, 버린 이유'], ['aiOps', 'hub-ai-ops', '루틴 상태', '문제 만들기·리포트가 잘 돌고 있는지'], ['aiSettings', 'hub-ai-settings', '설정', '관심사 낱말, AI 리포트 끄기']].map(i =>
-      h('button', { type: 'button', class: 'hub-item', id: i[1], 'data-act': 'nav', 'data-to': i[0] }, h('span', null, h('strong', { text: i[2] }), h('span', { class: 'sub', text: i[3] })), h('span', { class: 't-title-m', 'aria-hidden': 'true', text: '›' })))));
+    h('div', { class: 'rows' }, [['aiTrend', 'hub-ai-trend', '흐름 그래프', 'trend'], ['aiAnchor', 'hub-ai-anchor', '같은 문제 다시 풀기', 'swap'], ['aiNotes', 'hub-ai-notes', '메모 더하기', 'edit'], ['aiBank', 'hub-ai-bank', '문제 은행', 'list'], ['aiOps', 'hub-ai-ops', '루틴 상태', 'flag'], ['aiSettings', 'hub-ai-settings', '설정', 'tune']].map(i =>
+      h('button', { type: 'button', class: 'hub-item', id: i[1], 'data-act': 'nav', 'data-to': i[0] }, h('span', { class: 'lead' }, svgIcon(i[3])), h('span', { style: 'flex:1;min-width:0' }, h('strong', { text: i[2] })), svgIcon('chevron')))));
 });
 ACTS['ai-tab'] = b => { S.aiTab = b.dataset.v; render(true); const nb = document.getElementById('ai-tab-' + S.aiTab); if (nb) nb.focus(); };
 ACTS['ai-open'] = b => { S.aiSel = b.dataset.id; go('aiReport'); };

@@ -7,6 +7,12 @@ export const LIGHTS = {
   gray: { word: '판단 보류', glyph: '○', cls: 'gray' }
 };
 export const lightOf = k => LIGHTS[k] || LIGHTS.gray;
+/* 리포트 하나의 대표 신호등: 가장 센 것 (주황 > 노랑 > 파랑 > 초록 > 회색) */
+export function topLight(r) {
+  const order = ['orange', 'yellow', 'blue', 'green', 'gray'];
+  const ls = Object.keys(r.lights || {}).map(k => (r.lights || {})[k]);
+  return order.find(o => ls.includes(o)) || (r.lights && r.lights.composite) || 'gray';
+}
 export const CONFIDENCE = { insufficient: '아직 판단하기 일러요', weak: '약한 신호예요', concordant: '여러 지표가 같은 방향이에요' };
 export const PHASE = { familiarization: '익히는 주', baseline: '평소 실력 재는 중', monitoring: '살펴보는 중' };
 export const DOMAIN_NAMES = { composite: '전체', memory: '기억', attention: '주의', executive: '계산·순서', language: '언어', visuospatial: '모양·공간', speed: '반응 속도', participation: '참여', anchor: '같은 문제 다시 풀기', orientation: '날짜', reminiscence: '옛날 이야기' };
