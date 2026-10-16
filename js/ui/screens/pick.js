@@ -1,4 +1,4 @@
-import { allAssessments, dateSet, allSessions, getLevel, getPlan, isTrainee } from '../../data.js';
+import { allAssessments, dateSet, allSessions, getLevel, getPlan, isTrainee, programStart } from '../../data.js';
 import { DOMAINS, GAMES, gamesOf } from '../../games/registry.js';
 import { programInfo } from '../../logic.js';
 import { checkDue, effectiveLevel } from '../../program.js';
@@ -17,7 +17,7 @@ function monthlyCard() {
   return '<section class="card ' + t[3] + '" aria-labelledby="nc-h"><h2 class="t-title" id="nc-h">' + t[0] + '</h2><p class="t-body mt">' + t[1] + '</p><div class="mt"><button class="btn ' + (t[3] === 'tertiary' ? 'filled' : 'tonal') + '" id="btn-nextcheck" type="button" data-act="nav" data-to="assess">' + t[2] + '</button></div></section>';
 }
 function programCard() {
-  const today = ymd(new Date()), pi = programInfo(S.program.startDate, today, dateSet(allSessions()));
+  const today = ymd(new Date()), pi = programInfo(programStart(), today, dateSet(allSessions()));
   return '<section class="card filled" aria-labelledby="prog-h"><h2 class="t-title" id="prog-h">12주 프로그램 · ' + pi.week + '주차</h2><div class="mt">' + progressBar(pi.overall * 100, '12주 프로그램 진행') + '</div>' +
     '<p class="t-body mt">이번 주 ' + pi.weekDays + '/' + pi.goal + '일 훈련 (목표 주 5일)</p>' + progressBar(Math.min(100, pi.weekDays / pi.goal * 100), '이번 주 목표') +
     (pi.done ? '<p class="t-title-m mt">12주 프로그램을 끝까지 해내셨어요! 완주 배지를 드려요.</p>' : '') + '</section>';

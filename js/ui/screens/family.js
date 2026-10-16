@@ -1,4 +1,4 @@
-import { allAssessments, allCheckins, allSessions, chatAvail, dateSet, getLevel, getPlan, isTrainee, streakOf } from '../../data.js';
+import { allAssessments, allCheckins, allSessions, chatAvail, dateSet, getLevel, getPlan, isTrainee, programStart, streakOf } from '../../data.js';
 import { DOMAINS, GAMES, GAME_ORDER } from '../../games/registry.js';
 import { P, ic } from '../../icons.js';
 import { programInfo, weeklyTrend } from '../../logic.js';
@@ -12,7 +12,7 @@ import { surveyReportHtml } from './surveys.js';
 import { recordsOf } from '../../surveys/engine.js';
 import { SCREENS } from '../registry.js';
 import { arrowHtml } from './assess.js';
-import { RECORD_TABS, levelDots, progressBar, statusChip, tabsHtml } from '../widgets.js';
+import { RECORD_TABS, levelDots, progressBar, statusChip, tabsHtml, traineeChipsHtml } from '../widgets.js';
 import { $, LS, WD, addDays, daysBetween, esc, fmtDur, mean, parseYmd, ymd } from '../../util.js';
 
 const WEEK_LABELS = ['3주 전', '2주 전', '지난주', '이번 주'];
@@ -21,10 +21,10 @@ SCREENS.family = {
     const now = new Date(), today = ymd(now), all = allSessions(), ds = dateSet(all), st = streakOf(all, now), asm = allAssessments(), cis = allCheckins(), fl = currentFlags();
     const off = (now.getDay() + 6) % 7, days = Array.from({ length: 7 }, (_, i) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - off + i)), names = ['월', '화', '수', '목', '금', '토', '일'];
     const start14 = addDays(today, -13), rec14 = all.filter(s => s.date >= start14), weekDone = days.filter(d => ds.has(ymd(d))).length, empty = all.length === 0;
-    const pi = programInfo(S.program.startDate, today, ds);
+    const pi = programInfo(programStart(), today, ds);
     const last = all[0], lastTxt = !last ? '기록 없음' : last.date === today ? '오늘' : daysBetween(last.date, today) + '일 전';
     const avgDur = all.length ? fmtDur(Math.round(mean(all.map(s => Number(s.durationSec) || 0)))) : '-';
-    let o = '<div class="stack">' + (isTrainee() ? '' : tabsHtml(RECORD_TABS, 'family', '기록')) + '<h1 class="t-headline' + (isTrainee() ? '' : ' dup') + '" id="fam-h">가족이 보는 기록</h1><div id="fam-status"></div>';
+    let o = '<div class="stack">' + (isTrainee() ? '' : tabsHtml(RECORD_TABS, 'family', '기록') + traineeChipsHtml(false)) + '<h1 class="t-headline' + (isTrainee() ? '' : ' dup') + '" id="fam-h">가족이 보는 기록</h1><div id="fam-status"></div>';
     if (fl.consult.flag) o += '<section class="card tertiary" id="flag-consult" role="status"><p class="t-title-m">최근 점수가 낮아지고 있어요. 병원 상담을 권해요.</p></section>';
     if (fl.mood) o += '<section class="card tertiary" id="flag-mood" role="status"><p class="t-title-m">최근 일주일 중 5일 이상 기분이 좋지 않다고 하셨어요.</p></section>';
     // 요약이 맨 먼저: 지난 7일을 글로 정리한 카드. 자세한 숫자는 그 아래에 있어요.

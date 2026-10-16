@@ -1,11 +1,11 @@
 import { Platform } from '../platform.js';
 import { S } from '../state.js';
 import { Store } from '../store/store.js';
-import { FirebaseAdapter } from '../store/firebase-adapter.js';
 import { checkCreateCode, clearCreateProof, createFamily, inviteLink, inviteText, joinFamily, normalizeCode, previewJoinCode, redeemTransfer } from '../store/membership.js';
 import { enterApp, startFlow, startLocalDemo } from '../boot.js';
-import { LS, iga } from '../util.js';
-import { dialog, h, toast } from './dom.js';
+import { LS } from '../util.js';
+import { h, toast } from './dom.js';
+import { joinLabels } from '../trainees.js';
 import { installSlot } from './install.js';
 import { SCREENS } from './registry.js';
 import { go } from './shell.js';
@@ -168,13 +168,9 @@ SCREENS['ob-role'] = {
       try {
         if (o.flow === 'join') {
           const r = await joinFamily({ code: o.code, name: o.name, role });
+          // 훈련하는 분으로 들어왔는데 이미 목록이 있으면 역할은 그대로, 관리자가 목록에 넣어 줄 때까지 "준비 중"이에요
           Store.becomeMember(); S.roleLocal = role; LS.set('bw.role', role); LS.set('bw.roleAsked', true);
-          if (r.traineeTaken) {
-            // 훈련하는 분은 가족방에 한 명이에요. 바꾸는 것은 관리자가 해요 (새로 들어온 사람이 마음대로 바꾸지 못해요).
-            S.roleLocal = 'family'; LS.set('bw.role', 'family');
-            let label = '아버지'; try { const t = await FirebaseAdapter.getDoc('state/trainee'); if (t && t.displayLabel) label = t.displayLabel; } catch (e) {}
-            dialog('이미 훈련하는 분이 있어요', '이 가족방에는 ' + label + iga(label) + ' 훈련하는 분으로 등록되어 있어요. 우선 가족으로 들어갈게요. 훈련하는 분을 바꾸려면 관리자에게 부탁해 주세요.', [{ label: '확인', kind: 'filled' }], () => enterApp());
-          } else await enterApp();
+          void r; await enterApp();
         } else {
           const r = await createFamily({ name: o.name, role, createCode: o.ccode }); o.ccode = '';
           Store.becomeMember(); S.roleLocal = role; LS.set('bw.role', role); LS.set('bw.roleAsked', true); o.invite = { code: r.code }; await enterApp({ stayOn: 'ob-invite' });
@@ -197,7 +193,7 @@ SCREENS['ob-role'] = {
 /* ---------- 5. 초대 (만들기 직후, 설정에서도 재사용) ---------- */
 export function inviteBlock(code, opts) {
   opts = opts || {};
-  const link = inviteLink(code), label = (S.trainee && S.trainee.displayLabel) || '아버지';
+  const link = inviteLink(code), label = joinLabels(S.trainees) || '';
   const linkBox = h('input', { class: 'input', id: (opts.prefix || 'inv') + '-link', readonly: '', value: link, 'aria-label': '초대 링크' });
   const textBox = h('textarea', { class: 'input copybox', id: (opts.prefix || 'inv') + '-textbox', readonly: '', hidden: '', rows: '4', 'aria-label': '복사할 초대 문구' });
   const copy = async (text, el, okMsg, id) => { const ok = await Platform.copy(text, el); if (!ok) toast('길게 눌러 직접 복사해 주세요.'); };

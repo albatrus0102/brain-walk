@@ -1,6 +1,7 @@
 import { Store } from '../../store/store.js';
 import { S } from '../../state.js';
 import { traineeLabel, writeErrMsg } from '../../data.js';
+import { traineeChipsHtml } from '../widgets.js';
 import { esc, ymd } from '../../util.js';
 import { h, openSheet, closeSheet, toast, btnEl } from '../dom.js';
 import { SCREENS } from '../registry.js';
@@ -68,7 +69,7 @@ const clockList = () => (S.clocks || []).filter(c => c && typeof c.img === 'stri
 SCREENS.clocks = {
   html() {
     const list = clockList();
-    let o = '<div class="stack"><h1 class="t-headline" id="clks-h">시계 그림</h1>';
+    let o = '<div class="stack"><h1 class="t-headline" id="clks-h">시계 그림</h1>' + traineeChipsHtml(false);
     if (!list.length) o += '<section class="card outlined empty"><p class="t-title">아직 그림이 없어요</p></section>';
     else {
       const first = list[list.length - 1], lastc = list[0];

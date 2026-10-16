@@ -2,11 +2,11 @@ import { ensureProfiles, isTrainee, nameOf, traineeLabel } from '../../data.js';
 import { S } from '../../state.js';
 import { RELATIONS, SURVEYS, SURVEY_ORDER } from '../../surveys/content.js';
 import { saveSurvey, summaryOf } from '../../surveys/engine.js';
-import { LS, esc } from '../../util.js';
+import { LS, esc, iga } from '../../util.js';
 import { dialog, h } from '../dom.js';
 import { SCREENS } from '../registry.js';
 import { go, render } from '../shell.js';
-import { barsHtml, mdShort, progressBar } from '../widgets.js';
+import { barsHtml, mdShort, progressBar, traineeChipsHtml } from '../widgets.js';
 
 /* 설문: 한 화면에 한 문항. 문항 글은 surveys/content.js (원문 그대로). */
 const visibleKinds = () => SURVEY_ORDER.filter(k => SURVEYS[k].enabled !== false && (!isTrainee() || SURVEYS[k].modes.includes('self')));
@@ -14,7 +14,7 @@ const visibleKinds = () => SURVEY_ORDER.filter(k => SURVEYS[k].enabled !== false
 SCREENS.surveys = {
   html() {
     const fam = !isTrainee(), kinds = visibleKinds();
-    let o = '<div class="stack"><h1 class="t-headline" id="sv-h">' + (fam ? '설문' : '마음·기억 설문 (선택)') + '</h1>' +
+    let o = '<div class="stack"><h1 class="t-headline" id="sv-h">' + (fam ? '설문' : '마음·기억 설문 (선택)') + '</h1>' + (fam ? traineeChipsHtml(false) : '') +
       '<div class="rows">';
     kinds.forEach(k => {
       const sv = SURVEYS[k], sm = fam ? summaryOf(k) : null;
@@ -31,7 +31,7 @@ SCREENS.surveyIntro = {
     const both = fam && sv.modes.length > 1;
     let o = '<div class="stack"><h1 class="t-headline" id="svi-h">' + esc(sv.name) + '</h1><p class="t-small muted">' + esc(sv.formal) + ' · ' + sv.items.length + '문항 · 약 ' + sv.minutes + '분</p>';
     if (both) o += '<section class="card outlined"><h2 class="t-title-m" id="mode-h">누가 답하나요?</h2><div class="chips mt" role="radiogroup" aria-labelledby="mode-h">' +
-      [['family', '가족이 대신 답해요'], ['self', '아버지가 직접 답해요']].map(m => '<button type="button" class="chip" id="mode-' + m[0] + '" role="radio" aria-checked="' + (v.mode === m[0]) + '" aria-pressed="' + (v.mode === m[0]) + '" data-act="svmode" data-v="' + m[0] + '">' + m[1] + '</button>').join('') + '</div></section>';
+      [['family', '가족이 대신 답해요'], ['self', esc(traineeLabel()) + iga(traineeLabel()) + ' 직접 답해요']].map(m => '<button type="button" class="chip" id="mode-' + m[0] + '" role="radio" aria-checked="' + (v.mode === m[0]) + '" aria-pressed="' + (v.mode === m[0]) + '" data-act="svmode" data-v="' + m[0] + '">' + m[1] + '</button>').join('') + '</div></section>';
     if (fam && v.mode === 'family') o += '<section class="card outlined"><h2 class="t-title-m" id="rel-h">나는 ' + esc(traineeLabel()) + '의…</h2><div class="chips mt" role="radiogroup" aria-labelledby="rel-h">' +
       RELATIONS.map((r, i) => '<button type="button" class="chip" id="rel-' + i + '" role="radio" aria-checked="' + (v.relation === r) + '" aria-pressed="' + (v.relation === r) + '" data-act="svrel" data-v="' + esc(r) + '">' + r + '</button>').join('') + '</div></section>';
     o += '<section class="card elevated"><p class="t-body" style="white-space:pre-wrap">' + esc(sv.intro) + '</p></section>';

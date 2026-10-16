@@ -1,5 +1,5 @@
 import { alarmTick } from '../alarm.js';
-import { NO_WRITE_MSG, allAssessments, allCheckins, allSessions, chatAvail, dbReady, ensureProfiles, isTrainee, nameOf, subscribeMessages, todayS, traineeId, traineeLabel } from '../data.js';
+import { NO_WRITE_MSG, allAssessments, allCheckins, allSessions, chatAvail, dbReady, ensureProfiles, isTrainee, nameOf, isTraineeId, subscribeMessages, todayS, traineeLabel } from '../data.js';
 import { P } from '../icons.js';
 import { fmtClock } from '../logic.js';
 import { deleteMessage, markRead, memberIds, readCountFor, sendMessage, toggleReaction } from '../messages.js';
@@ -25,7 +25,7 @@ const nearBottom = () => document.documentElement.scrollHeight - window.innerHei
 const scrollBottom = () => { window.scrollTo(0, document.documentElement.scrollHeight); const p = $('#newpill'); if (p) p.hidden = true; };
 const hashId = s => { let x = 0; for (const c of String(s)) x = (x * 31 + c.charCodeAt(0)) >>> 0; return x; };
 function avatarNode(id) { return h('span', { class: 'avatar a' + (hashId(id) % 3), 'aria-hidden': 'true', text: Array.from(nameOf(id))[0] || '가' }); }
-function nameNode(id) { const n = h('div', { class: 'mname' }, h('span', { text: nameOf(id) })); if (id === traineeId()) n.append(h('span', { class: 'role-badge', text: traineeLabel() })); return n; }
+function nameNode(id) { const n = h('div', { class: 'mname' }, h('span', { text: nameOf(id) })); if (isTraineeId(id)) n.append(h('span', { class: 'role-badge', text: traineeLabel(id) })); return n; }
 function snippet(m) { if (!m) return '원본 메시지'; if (m.deleted) return '삭제된 메시지입니다'; const t = m.text || (m.record && m.record.title) || ''; const a = Array.from(t); return a.length > 40 ? a.slice(0, 40).join('') + '…' : t; }
 function reactionsNode(m) {
   const r = m.reactions || {}, keys = Object.keys(r).filter(k => Array.isArray(r[k]) && r[k].length);
@@ -38,7 +38,7 @@ function cardNode(m, mine) {
   if (k === 'nudge') {
     icon = 'alarm'; cls += ' nudge';
     const acks = Object.keys(m.acks || {}).length;
-    kids = [h('span', { class: 'xt', text: nameOf(m.authorId) + '님이 훈련 알림을 보냈어요:' }), h('span', { text: '‘' + m.text + '’' }), acks ? h('span', { class: 't-small', text: '확인한 사람 ' + acks + '명' }) : null];
+    kids = [h('span', { class: 'xt', text: nameOf(m.authorId) + (m.toId && isTraineeId(m.toId) ? ' → ' + traineeLabel(m.toId) : '') }), h('span', { text: '‘' + m.text + '’' }), acks ? h('span', { class: 't-small', text: '확인한 사람 ' + acks + '명' }) : null];
   } else if (k === 'summary') { kids = [h('span', { class: 'xt', text: '이번 주 요약' }), h('span', { text: m.text })]; }
   else if (k === 'system') { icon = 'check'; cls += ' sys'; kids = [h('span', { class: 'xt', text: (m.record && m.record.type === 'course') ? '훈련 완료' : '가족 소식' }), h('span', { text: m.text })]; }
   else { kids = [h('span', { class: 'xt', text: rec.title || '기록' }), rec.score != null ? h('span', { text: (rec.type === 'assessment' ? '점검 총점 ' : '정답률 ') + rec.score + (rec.type === 'assessment' ? '점' : '%') }) : null, m.text ? h('span', { text: m.text }) : null]; }

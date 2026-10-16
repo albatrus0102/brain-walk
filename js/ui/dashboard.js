@@ -1,7 +1,7 @@
-import { AD, aiAccess, ensureAdminSubs } from '../ai/admin-data.js';
+import { AD, aiAccess, ensureAdminSubs, ensureLatestReports } from '../ai/admin-data.js';
 import { KIND_NAMES, lightOf, topLight } from '../ai/labels.js';
 import { alarmCfg } from '../alarm.js';
-import { allSessions, chatAvail, dashTraineeId, ensureProfiles, getPlan, isAdmin, nameOf, streakNow, todayProgressDoc, todayS, traineeLabel } from '../data.js';
+import { allSessions, chatAvail, ensureProfiles, focusId, getPlan, isAdmin, nameOf, selTrainee, streakNow, tdata, todayProgressDoc, todayS, traineeLabel, trainees } from '../data.js';
 import { GAMES, catalog } from '../games/registry.js';
 import { ic } from '../icons.js';
 import { fmtClock } from '../logic.js';
@@ -9,7 +9,7 @@ import { unreadCount } from '../messages.js';
 import { deriveToday, presenceState, weekStrip } from '../program.js';
 import { S } from '../state.js';
 import { Store } from '../store/store.js';
-import { progressBar, tileHtml } from './widgets.js';
+import { progressBar, tileHtml, traineeChipsHtml } from './widgets.js';
 import { WD, addDays, esc, fmtDur, parseYmd } from '../util.js';
 
 /* ================= 가족 홈 = 대시보드 (DESIGN.md §7, M3 compact) =================
@@ -23,14 +23,26 @@ function dayLabel(ms, today) {
   return ds === today ? '오늘' : ds === addDays(today, -1) ? '어제' : (d.getMonth() + 1) + '/' + d.getDate();
 }
 /* 화면을 그리지 않고 상태만 계산 (시험에서도 써요) */
-export function dashState(now) {
-  const tid = dashTraineeId(), today = todayS(); if (!tid) return null;
+export function dashState(now, tid = focusId()) {
+  const today = todayS(); if (!tid) return null;
   now = now || Date.now();
-  const plan = getPlan(), cat = catalog();
-  const t = deriveToday({ progress: todayProgressDoc(), plan, today, now, sessionsToday: allSessions().filter(s => s.date === today && (!s.userId || s.userId === tid || tid === 'local')), catalog: cat });
-  const strip = weekStrip({ progressList: (S.progressList || []).filter(p => p.userId === tid), sessions: allSessions(), plan, today, catalog: cat });
-  const pres = presenceState(S.presence[tid] && S.presence[tid].lastSeen, now);
+  const plan = getPlan(tid), cat = catalog(), all = allSessions(tid), T = tdata(tid);
+  const t = deriveToday({ progress: todayProgressDoc(tid), plan, today, now, sessionsToday: all.filter(s => s.date === today), catalog: cat });
+  const strip = weekStrip({ progressList: (T.progressList || []).filter(p => p.userId === tid), sessions: all, plan, today, catalog: cat });
+  const pres = presenceState(T.presence && T.presence.lastSeen, now);
   return { t, strip, pres, today, tid, now };
+}
+/* 오늘 상태 한 줄 (타일·모두 보기) */
+function statusLine(t, tid) {
+  const N = t.N, isCheck = t.kind === 'check';
+  if (t.state === 'notStarted') {
+    const cfg = alarmCfg(tid), now = new Date(), past = /^\d{2}:\d{2}$/.test(cfg.time || '') && (now.getHours() * 60 + now.getMinutes() >= +cfg.time.slice(0, 2) * 60 + +cfg.time.slice(3)) && (cfg.days || []).includes(now.getDay());
+    return { status: '아직 시작 전이에요' + (past ? ' · 알람 ' + esc(cfg.time) + ' 지남' : ''), sub: '', cls: past ? 'warm' : '' };
+  }
+  if (t.state === 'inProgress') return { status: (isCheck ? '두뇌 점검 중' : '훈련 중') + ' · ' + N + '개 중 ' + t.n + '개', sub: t.current ? '지금: ' + esc(gname(t.current)) + (t.currentSince ? ' (' + hhmm(t.currentSince) + '부터)' : '') : '', cls: '' };
+  if (t.state === 'paused') return { status: '쉬는 중 · ' + N + '개 중 ' + t.n + '개', sub: t.lastTs ? '마지막 움직임 ' + hhmm(t.lastTs) : '', cls: '' };
+  if (t.state === 'done') return { status: (isCheck ? '오늘 두뇌 점검 완료 ✓ ' : '오늘 완료 ✓ ') + (t.doneTs ? hhmm(t.doneTs) : ''), sub: '', cls: 'accent' };
+  return { status: '오늘은 쉬는 날이에요', sub: '', cls: '' };
 }
 function presenceLine(pres, lastSeen, today) {
   if (pres.state === 'online') return '● 지금 앱을 보고 계세요';
@@ -48,30 +60,46 @@ function aiTile() {
   const r = AD.reports[0], l = lightOf(r ? topLight(r) : 'gray');
   return tileHtml({ id: 'tile-ai', icon: 'sparkle', label: 'AI 신호', to: 'aiReports', value: '<span class="lpill ' + l.cls + '"><span class="lg" aria-hidden="true">' + l.glyph + '</span>' + l.word + '</span>', sub: r ? esc(mdw(r.date) + ' ' + (KIND_NAMES[r.kind] || '리포트')) : '아직 리포트가 없어요' });
 }
+function chatCard() {
+  if (!chatAvail()) return '';
+  const m = S.messages.filter(x => !x.deleted && (x.kind === 'text' || x.kind === 'nudge') && x.text).slice(-1)[0], un = unreadCount();
+  if (m) ensureProfiles([m.authorId]);
+  return '<section class="dcard" id="dash-chatcard" aria-labelledby="dash-chat-h">' + head('dash-chat-h', '대화' + (un > 0 ? ' <span class="ubadge" aria-label="안 읽은 메시지 ' + un + '개">' + (un > 99 ? '99+' : un) + '</span>' : ''), '', 'chat') +
+    (m ? '<div class="chat-prev"><span class="avatar" aria-hidden="true">' + esc(Array.from(nameOf(m.authorId))[0] || '가') + '</span><p class="ctext"><b>' + esc(nameOf(m.authorId)) + '</b>' + esc(m.text) + '</p></div>' : '<div class="chat-prev"><p class="ctext none">아직 대화가 없어요</p></div>') + '</section>';
+}
+/* 모두: 훈련하는 분마다 타일 하나 (누르면 그 분을 골라요) */
+function allHtml() {
+  const ids = trainees(), ai = aiAccess() === 'ok';
+  if (ai) ensureLatestReports(ids);
+  const sts = ids.map(id => ({ id, st: dashState(null, id) }));
+  const tiles = '<div class="ttiles" id="dash-all">' + sts.map(({ id, st }, i) => {
+    const { t, strip, pres } = st, ln = statusLine(t, id), r = ai ? AD.latest[id] : null;
+    const dots = '<span class="mstrip" aria-hidden="true">' + strip.map(d => '<i class="' + d.state + '"></i>').join('') + '</span>';
+    const l = ai ? lightOf(r ? topLight(r) : 'gray') : null;
+    return '<button type="button" class="ttile ' + ln.cls + '" id="tile-t-' + i + '" data-act="selT" data-v="' + esc(id) + '" data-state="' + t.state + '"><span class="tn">' + esc(traineeLabel(id)) + '</span>' +
+      '<span class="live ' + pres.state + '" role="img" aria-label="' + (pres.state === 'online' ? '지금 접속 중' : '접속 안 함') + '"></span>' +
+      '<span class="tst">' + ln.status + '</span>' + dots + (l ? '<span class="lpill ' + l.cls + '"><span class="lg" aria-hidden="true">' + l.glyph + '</span>' + l.word + '</span>' : '') + '</button>';
+  }).join('') + '</div>';
+  const open = sts.filter(x => x.st.t.state !== 'done' && x.st.t.state !== 'rest').map(x => x.id).filter(id => id !== S.myId);
+  const chips = '<div class="assist" id="dash-actions">' +
+    (chatAvail() ? open.map(id => '<button class="chip" id="btn-fam-nudge-' + ids.indexOf(id) + '" type="button" data-act="nudgego" data-to="' + esc(id) + '">' + ic('bell') + esc(traineeLabel(id)) + '께 훈련 알림</button>').join('') : '') +
+    (chatAvail() ? '<button class="chip" id="btn-fam-chat" type="button" data-act="nav" data-to="chat">' + ic('chat') + '응원 보내기</button>' : '') +
+    '<button class="chip" id="btn-pick" type="button" data-act="nav" data-to="pick">' + ic('play') + '나도 훈련해 보기</button></div>';
+  return '<div class="stack dash" id="dash" data-state="all">' + traineeChipsHtml(true) + tiles + chatCard() + chips + '</div>';
+}
 export function dashboardHtml() {
+  if (selTrainee() === 'all') return allHtml();
   const st = dashState();
   if (!st) {
     return '<section class="dcard" id="dash" aria-labelledby="dash-h"><h2 class="t-title" id="dash-h">훈련하는 분</h2><p class="t-body" id="dash-none">아직 훈련하는 분이 없어요.</p>' +
       (isAdmin() && Store.mode === 'firebase' ? '<div><button class="btn filled" id="btn-dash-assign" type="button" data-act="nav" data-to="members">가족 구성원에서 정하기</button></div>' : '') + '</section>';
   }
-  const { t, strip, pres, today, tid } = st, label = esc(traineeLabel()), N = t.N;
+  const { t, strip, pres, today, tid } = st, label = esc(traineeLabel(tid)), N = t.N;
   const isCheck = t.kind === 'check';
-  let status = '', sub = '', cls = '';
-  if (t.state === 'notStarted') {
-    const cfg = alarmCfg(), now = new Date(), past = /^\d{2}:\d{2}$/.test(cfg.time || '') && (now.getHours() * 60 + now.getMinutes() >= +cfg.time.slice(0, 2) * 60 + +cfg.time.slice(3));
-    status = '아직 시작 전이에요' + (past && (cfg.days || []).includes(now.getDay()) ? ' · 알람 ' + esc(cfg.time) + ' 지남' : '');
-    if (past && (cfg.days || []).includes(now.getDay())) cls = 'warm';
-  } else if (t.state === 'inProgress') {
-    status = (isCheck ? '두뇌 점검 중' : '훈련 중') + ' · ' + N + '개 중 ' + t.n + '개';
-    sub = t.current ? '지금: ' + esc(gname(t.current)) + (t.currentSince ? ' (' + hhmm(t.currentSince) + '부터)' : '') : '';
-  } else if (t.state === 'paused') {
-    status = '쉬는 중 · ' + N + '개 중 ' + t.n + '개'; sub = t.lastTs ? '마지막 움직임 ' + hhmm(t.lastTs) : '';
-  } else if (t.state === 'done') {
-    status = (isCheck ? '오늘 두뇌 점검 완료 ✓ ' : '오늘 완료 ✓ ') + (t.doneTs ? hhmm(t.doneTs) : ''); cls = 'accent';
-  } else status = '오늘은 쉬는 날이에요';
+  const { status, sub, cls } = statusLine(t, tid);
   const planned = (t.planned || []).slice(0, 13);
-  const weekDone = strip.filter(d => d.state === 'done').length, streak = streakNow(new Date());
-  const lastSeen = S.presence[tid] && S.presence[tid].lastSeen;
+  const weekDone = strip.filter(d => d.state === 'done').length, streak = streakNow(new Date(), tid);
+  const lastSeen = tdata(tid).presence && tdata(tid).presence.lastSeen;
   // 요약 타일
   const tiles = '<div class="tiles" id="dash-tiles">' +
     tileHtml({ id: 'tile-today', icon: t.state === 'done' ? 'check' : 'play', label: '오늘', to: 'family', cls, value: status, valueId: 'dash-status', sub: sub || null, subId: sub ? 'dash-sub' : null }) +
@@ -94,21 +122,14 @@ export function dashboardHtml() {
     return '<li class="wd ' + d.state + (d.isToday ? ' today' : '') + '" data-state="' + d.state + '" aria-label="' + aria + '"><span class="wl">' + w + '</span><span class="wc" aria-hidden="true">' + (d.state === 'done' ? ic('check') : d.state === 'rest' ? '–' : '') + '</span><span class="wn">' + (d.isToday ? '오늘' : d2) + '</span></li>';
   }).join('') + '</ul>';
   const week = '<section class="dcard" id="dash-weekcard" aria-labelledby="dash-week-h">' + head('dash-week-h', '최근 7일', weekDone + '/7', 'family') + strip7 + '</section>';
-  // 최근 대화
-  let chat = '';
-  if (chatAvail()) {
-    const m = S.messages.filter(x => !x.deleted && (x.kind === 'text' || x.kind === 'nudge') && x.text).slice(-1)[0], un = unreadCount();
-    if (m) ensureProfiles([m.authorId]);
-    chat = '<section class="dcard" id="dash-chatcard" aria-labelledby="dash-chat-h">' + head('dash-chat-h', '대화' + (un > 0 ? ' <span class="ubadge" aria-label="안 읽은 메시지 ' + un + '개">' + (un > 99 ? '99+' : un) + '</span>' : ''), '', 'chat') +
-      (m ? '<div class="chat-prev"><span class="avatar" aria-hidden="true">' + esc(Array.from(nameOf(m.authorId))[0] || '가') + '</span><p class="ctext"><b>' + esc(nameOf(m.authorId)) + '</b>' + esc(m.text) + '</p></div>' : '<div class="chat-prev"><p class="ctext none">아직 대화가 없어요</p></div>') + '</section>';
-  }
+  const chat = chatCard();
   // 빠른 동작 (M3 assist chips)
   const showNudge = chatAvail() && t.state !== 'done' && t.state !== 'rest';
   const chips = '<div class="assist" id="dash-actions">' +
-    (showNudge ? '<button class="chip" id="btn-fam-nudge" type="button" data-act="nudgego">' + ic('bell') + label + '께 훈련 알림</button>' : '') +
+    (showNudge && tid !== S.myId ? '<button class="chip" id="btn-fam-nudge" type="button" data-act="nudgego" data-to="' + esc(tid) + '">' + ic('bell') + label + '께 훈련 알림</button>' : '') +
     (chatAvail() ? '<button class="chip" id="btn-dash-share" type="button" data-act="sharesummary">' + ic('share') + '이번 주 요약 공유</button><button class="chip" id="btn-fam-chat" type="button" data-act="nav" data-to="chat">' + ic('chat') + '응원 보내기</button>' : '') +
     '<button class="chip" id="btn-pick" type="button" data-act="nav" data-to="pick">' + ic('play') + '나도 훈련해 보기</button></div>';
-  return '<div class="stack dash" id="dash" data-state="' + t.state + '">' + tiles + course + week + chat + chips + '</div>';
+  return '<div class="stack dash" id="dash" data-state="' + t.state + '">' + traineeChipsHtml(true) + tiles + course + week + chat + chips + '</div>';
 }
 /* 가족 홈이 열려 있는 동안 30초마다 다시 그려요 (상대 시간이 낡지 않게). 홈을 떠나면 멈춰요. */
 let tick = null;

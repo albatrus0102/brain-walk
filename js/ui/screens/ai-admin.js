@@ -1,10 +1,11 @@
-import { AD, aiAccess, ensureAdminSubs, isExample, msOf, parseItems, weekDoc } from '../../ai/admin-data.js';
+import { AD, aiAccess, ensureAdminSubs, isExample, msOf, parseItems, tpath, weekDoc } from '../../ai/admin-data.js';
 import { noteDoc, noteId, reviewDoc, switchDoc, themesDoc } from '../../ai/admin-docs.js';
 import { mean, movingAvg, sd, trendChart } from '../../ai/charts.js';
 import { CONFIDENCE, DOMAIN_NAMES, KIND_NAMES, NOTE_CODES, NOTE_NAME, PHASE, REJECT_CODES_REPORT, TREND_DOMAINS, BANK_ROWS, FORMAT_NAMES, errLabel, lightOf, numLabel, rejectLabel, topLight } from '../../ai/labels.js';
 import { weekKey, weekStart } from '../../ai/kdate.js';
 import { observationState, setObservation } from '../../ai/consent.js';
-import { adminNames, traineeId, traineeLabel } from '../../data.js';
+import { adminNames, traineeLabel } from '../../data.js';
+import { traineeChipsEl } from '../widgets.js';
 import { S } from '../../state.js';
 import { Store } from '../../store/store.js';
 import { ACTS } from '../acts.js';
@@ -29,7 +30,8 @@ const pill = (light, label) => { const l = lightOf(light); return h('span', { cl
 const btn = (label, cls, act, id, data) => h('button', Object.assign({ type: 'button', class: 'btn ' + cls, id, 'data-act': act }, data || {}), label);
 
 /* 화면 틀: 접근 확인 → 구독 시작 → 안쪽 그리기 */
-function screen(titleText, fill) {
+/* family=true: 가족 전체 화면(문제 은행)이라 훈련하는 분 고르기가 없어요 */
+function screen(titleText, fill, family) {
   return {
     html() { return '<div class="stack" id="ai-root"></div>'; },
     bind(el) {
@@ -38,6 +40,7 @@ function screen(titleText, fill) {
       if (acc !== 'ok') { root.append(h('h1', { class: 't-headline', id: 'ai-h', text: 'AI 리포트' }), blocked(acc)); return; }
       ensureAdminSubs();
       root.append(h('h1', { class: 't-headline', id: 'ai-h', text: titleText }));
+      if (!family) { const c = traineeChipsEl(false); if (c) root.append(c); }
       if (AD.denied) root.append(h('section', { class: 'card tertiary', id: 'ai-denied' }, h('p', { class: 't-body', text: '이 기기에서는 AI 리포트를 읽을 수 없어요' })));
       if (isExample()) root.append(h('p', { class: 'chip-status', id: 'ai-example', text: '예시' }));
       fill(root);
@@ -247,9 +250,9 @@ document.addEventListener('input', e => {
 ACTS['ai-n-save'] = async () => {
   const r = noteDoc(draftNote(), by(), Date.now());
   if (r.error) return toast(r.error);
-  try { await Store.setDoc('aiNotes/' + noteId(), r.doc); S.aiNoteDraft = null; render(true); } catch (e) { toast('저장하지 못했어요. 관리자만 쓸 수 있어요.'); }
+  try { await Store.setDoc(tpath(AD.mid, 'aiNotes/' + noteId()), r.doc); S.aiNoteDraft = null; render(true); } catch (e) { toast('저장하지 못했어요. 관리자만 쓸 수 있어요.'); }
 };
-ACTS['ai-n-del'] = b => dialog('이 메모를 지울까요?', '지우면 리포트가 이 기간을 더 이상 함께 보지 않아요.', [{ label: '남겨 둘게요', kind: 'filled' }, { label: '지우기', kind: 'text', run: async () => { try { await Store.deleteDoc('aiNotes/' + b.dataset.id); } catch (e) { toast('지우지 못했어요.'); } } }]);
+ACTS['ai-n-del'] = b => dialog('이 메모를 지울까요?', '지우면 리포트가 이 기간을 더 이상 함께 보지 않아요.', [{ label: '남겨 둘게요', kind: 'filled' }, { label: '지우기', kind: 'text', run: async () => { try { await Store.deleteDoc(tpath(AD.mid, 'aiNotes/' + b.dataset.id)); } catch (e) { toast('지우지 못했어요.'); } } }]);
 
 /* ---------------- 문제 은행 ---------------- */
 const WHY_NAMES = { reminiscence: '옛날 이야기', same_wrong_pick: '모호 의심 (같은 오답을 두 번 골랐어요)', slow_wrong: '모호 의심 (틀리고 아주 오래 걸렸어요)', admin_flag: '모호 의심 (신고)', quarantine: '모호 의심' };
@@ -286,17 +289,17 @@ SCREENS.aiBank = screen('문제 은행', root => {
   }
   const items = parseItems(AD.review), groups = { reminiscence: [], other: [] };
   items.forEach(it => (it.why === 'reminiscence' ? groups.reminiscence : groups.other).push(it));
-  const q = section('검토 기다림 (아버지에게 나가기 전에 확인해 주세요)');
+  const q = section('검토 기다림');
   q.id = 'ai-review';
   if (!items.length) q.append(note(AD.ready.review ? '검토를 기다리는 문항이 없어요.' : '불러오는 중이에요…'));
   if (groups.reminiscence.length) q.append(h('h3', { class: 't-title-m', text: '옛날 이야기 ' + groups.reminiscence.length + '개' }), h('div', { class: 'ai-rows' }, groups.reminiscence.map(reviewCard)));
   if (groups.other.length) q.append(h('h3', { class: 't-title-m', text: '모호 의심 ' + groups.other.length + '개' }), h('div', { class: 'ai-rows' }, groups.other.map(reviewCard)));
   root.append(q);
-});
+}, true);
 const totalOrient = cells => { let n = 0, any = false; for (let l = 1; l <= 5; l++) { const v = cells['orientation|' + l]; if (v != null) { n += v; any = true; } } return any ? n + ' (앞으로 몇 주 분)' : '–'; };
 ACTS['ai-rv'] = b => {
   const id = b.dataset.id, dec = b.dataset.d, name = { approve: '내보내기', retire: '은퇴', flag: '이 문제 이상해요' }[dec];
-  const text = { approve: '이 문제가 아버지에게 나가요. 내용이 사실과 맞는지 확인하셨나요?', retire: '이 문제를 더 이상 쓰지 않아요.', flag: '이 문제를 잠시 빼고 다시 살펴봐요. 이미 같은 문제를 다시 풀었던 앵커 문항이면 비교에서 빠져요.' }[dec];
+  const text = { approve: '이 문제가 훈련하는 분께 나가요. 내용이 사실과 맞는지 확인하셨나요?', retire: '이 문제를 더 이상 쓰지 않아요.', flag: '이 문제를 잠시 빼고 다시 살펴봐요. 이미 같은 문제를 다시 풀었던 앵커 문항이면 비교에서 빠져요.' }[dec];
   dialog(name + '을 보낼까요?', text, [{ label: '취소', kind: 'text' }, { label: name, kind: 'filled', run: async () => {
     try { await Store.setDoc('aiReview/' + id, reviewDoc(dec, by(), Date.now())); } catch (e) { toast('보내지 못했어요. 관리자만 쓸 수 있어요.'); }
   } }]);
@@ -310,7 +313,7 @@ SCREENS.aiOps = screen('루틴 상태', root => {
   if (!AD.health) root.append(section(null, note(AD.ready.health ? '아직 루틴 기록이 없어요.' : '불러오는 중이에요…')));
   const ok7 = (g.okDays || []).filter(d => d >= addDays(ymd(new Date()), -6)).length;
   const today = ymd(new Date()), mo = today.slice(0, 7), days = (wk.days || {}), moN = Object.keys(days).filter(d => d.slice(0, 7) === mo).reduce((s, d) => s + days[d], 0);
-  const tid = traineeId() || (isExample() ? 'local' : null), cons = AD.consents.find(c => c.id === tid) || null;   // 지금 훈련하는 분의 안내 기록 (예전 훈련하는 분 것은 보지 않아요)
+  const tid = AD.mid, cons = AD.consents.find(c => c.id === tid) || null;   // 고른 훈련하는 분의 안내 기록
   root.append(h('ul', { class: 'ai-sts', id: 'ai-ops-list' },
     statusRow('ai-st-gen', '① 문제 만들기', g.lastSubmitTs ? msOf(g.lastSubmitTs) > Date.now() - 36 * 3600e3 : null, '마지막 올림 ' + when(msOf(g.lastSubmitTs)) + ' (' + ago(msOf(g.lastSubmitTs)) + ')', g.lastAccepted != null ? '받은 문항 중 ' + g.lastAccepted + '개 통과, ' + (g.lastRejected || 0) + '개 버림' : null, '최근 7일 성공 ' + ok7 + '/7'),
     statusRow('ai-st-rep', '② 리포트', rp.lastReportTs ? msOf(rp.lastReportTs) > Date.now() - 36 * 3600e3 : null, '마지막 ' + when(msOf(rp.lastReportTs)) + ' (' + ago(msOf(rp.lastReportTs)) + ')', rp.lastGeneratedBy === 'template' ? '간단판 (AI 설명이 빠졌어요)' : rp.lastGeneratedBy ? 'AI 설명 포함' : null),
@@ -318,21 +321,21 @@ SCREENS.aiOps = screen('루틴 상태', root => {
     statusRow('ai-st-server', '서버', sv.lastTick ? msOf(sv.lastTick) > Date.now() - 3 * 3600e3 : null, '마지막 확인 ' + ago(msOf(sv.lastTick || sv.lastRun)), sv.reason ? '상태: ' + sv.reason : null),
     statusRow('ai-st-tg', '텔레그램 알림', tg.lastResult ? tg.lastResult === 'sent' : null, tg.lastResult ? ({ sent: '보냈어요', failed: '보내지 못했어요', queued: '조용한 시간이라 기다리고 있어요' }[tg.lastResult] || tg.lastResult) + ' · ' + ago(msOf(tg.lastTs)) : '기록 없음'),
     statusRow('ai-st-th', '신호 문턱 버전', null, hl.thresholdsVer || (AD.thresholds && AD.thresholds.current && AD.thresholds.current.ver) || 'v1'),
-    statusRow('ai-st-cons', traineeLabel() + ' 안내 확인', cons ? !('withdrawnTs' in cons) : false, cons ? ('withdrawnTs' in cons ? '살펴보지 말아 달라고 하셨어요' : when(msOf(cons.ackTs)) + '에 확인하셨어요' + (cons.withFamily ? ' (가족과 함께)' : '')) : '아직 안내를 보지 않으셨어요')));
+    statusRow('ai-st-cons', traineeLabel(tid) + ' 안내 확인', cons ? !('withdrawnTs' in cons) : false, cons ? ('withdrawnTs' in cons ? '살펴보지 말아 달라고 하셨어요' : when(msOf(cons.ackTs)) + '에 확인하셨어요' + (cons.withFamily ? ' (가족과 함께)' : '')) : '아직 안내를 보지 않으셨어요')));
   root.append(switchSection());
 });
 
 /* ---------------- 설정: AI 기록 관찰 켜기, 관심사 낱말, AI 끄기 ---------------- */
 /* 훈련하는 분 화면에는 안내 화면이 없어요. 관리자가 이 스위치를 켜면 consents/{훈련하는 분} 을 관리자가 대신 기록해요 (ai/consent.js). */
 function observeSection() {
-  const on = observationState(AD.consents) === 'ok';
+  const on = observationState(AD.consents, AD.mid) === 'ok';
   return h('section', { class: 'card outlined', id: 'ai-obs-sec' }, h('div', { class: 'switch-row' },
     h('div', { class: 't-title-m', id: 'ai-obs-label', text: 'AI 기록 관찰 켜기' }),
     h('button', { class: 'switch', id: 'ai-obs', type: 'button', role: 'switch', 'aria-checked': String(on), 'aria-labelledby': 'ai-obs-label', 'data-act': 'ai-obs' })));
 }
 ACTS['ai-obs'] = async b => {
   const want = b.getAttribute('aria-checked') !== 'true'; b.disabled = true;
-  if (!(await setObservation(want))) toast('바꾸지 못했어요');
+  if (!(await setObservation(want, AD.mid))) toast('바꾸지 못했어요');
   render(true);
 };
 function switchSection() {
@@ -348,7 +351,7 @@ ACTS['ai-switch'] = () => {
   dialog('AI 리포트를 끌까요?', '끄면 집계와 깨우기가 멈추고, 지금까지 모은 가명 집계를 지워요. 훈련 기록은 그대로예요. 다시 켤 수 있어요.', [{ label: '그대로 둘게요', kind: 'filled' }, { label: '끄기', kind: 'text', run: () => setSwitch(false) }]);
 };
 const HANGUL = /^[가-힣]{1,10}$/;
-const draftThemes = () => S.aiThemeDraft || (S.aiThemeDraft = { words: ((AD.themes && AD.themes.words) || []).slice(), base: JSON.stringify((AD.themes && AD.themes.words) || []), input: '' });
+const draftThemes = () => (S.aiThemeDraft && S.aiThemeDraft.mid === AD.mid ? S.aiThemeDraft : (S.aiThemeDraft = { mid: AD.mid, words: ((AD.themes && AD.themes.words) || []).slice(), base: JSON.stringify((AD.themes && AD.themes.words) || []), input: '' }));
 SCREENS.aiSettings = screen('AI 리포트 설정', root => {
   const d = draftThemes();
   root.append(observeSection());
@@ -370,6 +373,6 @@ ACTS['ai-theme-add'] = () => {
 ACTS['ai-theme-x'] = b => { const d = draftThemes(); d.words.splice(Number(b.dataset.i), 1); render(true); };
 ACTS['ai-theme-save'] = async () => {
   const d = draftThemes();
-  try { await Store.setDoc('aiState/themes', themesDoc(d.words, by(), Date.now())); S.aiThemeDraft = null; render(true); } catch (e) { toast('저장하지 못했어요. 관리자만 쓸 수 있어요.'); }
+  try { await Store.setDoc(tpath(AD.mid, 'aiState/themes'), themesDoc(d.words, by(), Date.now())); S.aiThemeDraft = null; render(true); } catch (e) { toast('저장하지 못했어요. 관리자만 쓸 수 있어요.'); }
 };
 void weekKey;

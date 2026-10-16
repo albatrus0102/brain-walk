@@ -1,12 +1,21 @@
-import { adminNames, courseStatus, isAdmin } from '../data.js';
+import { adminNames, courseStatus, focusId, isAdmin, isTrainee, selTrainee, setSelT, traineeLabel, trainees } from '../data.js';
 import { followsAdmin } from '../display.js';
 import { ic } from '../icons.js';
 import { fmtClock } from '../logic.js';
 import { synth } from '../sound.js';
 import { S } from '../state.js';
+import { ACTS } from './acts.js';
 import { h } from './dom.js';
 import { esc } from '../util.js';
 
+/* 훈련하는 분 고르기 (M3 filter chips, 하나만 고름). 2명 이상일 때만 보여요. withAll: [모두] 를 맨 앞에 */
+export function traineeChipsHtml(withAll) {
+  const ids = trainees(); if (isTrainee() || ids.length < 2) return '';
+  const cur = withAll ? selTrainee() : focusId(), opts = (withAll ? [['all', '모두']] : []).concat(ids.map(id => [id, traineeLabel(id)]));
+  return '<div class="fchips" id="tsel" role="radiogroup" aria-label="훈련하는 분">' + opts.map((o, i) => '<button type="button" class="fchip" id="tsel-' + (o[0] === 'all' ? 'all' : i - (withAll ? 1 : 0)) + '" role="radio" aria-checked="' + (cur === o[0]) + '" data-act="selT" data-v="' + esc(o[0]) + '">' + (cur === o[0] ? ic('check') : '') + '<span>' + esc(o[1]) + '</span></button>').join('') + '</div>';
+}
+export function traineeChipsEl(withAll) { const w = document.createElement('div'); w.innerHTML = traineeChipsHtml(withAll); return w.firstElementChild; }
+ACTS.selT = b => { setSelT(b.dataset.v); const nb = document.querySelector('#tsel [data-v="' + CSS.escape(b.dataset.v) + '"]'); if (nb) nb.focus(); };
 export function switchRow(id, label, stateText, checked, act, disabled) {
   return '<div class="switch-row"><div><div class="t-title-m" id="' + id + '-label">' + label + '</div><div class="t-small muted" id="' + id + '-state">' + stateText + '</div></div>' +
     '<button class="switch" id="' + id + '" type="button" role="switch" aria-checked="' + checked + '" aria-labelledby="' + id + '-label" data-act="' + act + '"' + (disabled ? ' disabled' : '') + '></button></div>';

@@ -1,5 +1,6 @@
 import { alarmTick } from '../../alarm.js';
-import { allAssessments, allSessions, chatAvail, ensureProfiles, getPlan, isTrainee, nameOf, todayS, traineeLabel } from '../../data.js';
+import { allAssessments, allSessions, chatAvail, ensureProfiles, focusOn, getPlan, isPending, isTrainee, nameOf, todayS } from '../../data.js';
+import { joinLabels } from '../../trainees.js';
 import { ic } from '../../icons.js';
 import { unreadCount } from '../../messages.js';
 import { checkDue, isTrainingDay, nextTrainingDate } from '../../program.js';
@@ -19,6 +20,7 @@ import { $, LS, WD, esc, iga, parseYmd, ymd } from '../../util.js';
 /* 훈련하는 분의 홈 (DESIGN.md §5 L1): 오늘 할 일 하나(큰 버튼)와 가족 한마디뿐이에요. 하단 메뉴 없음.
  * 큰 버튼의 상태(첫 번째로 맞는 것): 점검 이어하기 · 점검 하는 날 · 오늘 완료 · 이어서 하기 · 오늘 훈련 시작 · 쉬는 날 */
 export function mainState() {
+  if (isPending()) return { k: 'pending', label: '준비 중', sub: '', ci: { n: 0, N: 0 } };
   const now = new Date(), today = ymd(now), plan = getPlan(), ci = courseInfo(), trainingDay = isTrainingDay(plan, now);
   const lastA = allAssessments()[0], dr = assessDraft();
   const due = checkDue(plan, lastA && lastA.date, today, allSessions().length > 0);
@@ -34,10 +36,10 @@ export function mainState() {
 function traineeHtml() {
   const now = new Date(), hr = now.getHours(), st = mainState(), due = !!S.alarmDue && st.k !== 'done';
   const greet = hr < 12 ? '좋은 아침이에요' : hr < 18 ? '편안한 오후예요' : '편안한 저녁이에요';
-  const cls = st.k === 'done' ? ' done' : st.k === 'rest' ? ' soft' : '';
+  const cls = st.k === 'done' ? ' done' : st.k === 'rest' || st.k === 'pending' ? ' soft' : '';
   const card = '<section class="card ' + (due ? 'today due' : 'elevated today') + '" id="today-card" aria-labelledby="today-h"' + (due ? ' role="alert"' : '') + '>' +
     (due ? '<h2 class="due-title" id="today-h">' + ic('alarm') + '훈련할 시간이에요!</h2>' : '<h2 class="sr" id="today-h">오늘의 훈련</h2>') +
-    '<button class="main-btn' + cls + '" id="btn-main" type="button" data-act="main" data-k="' + st.k + '">' + (st.k === 'done' ? '' : ic(st.k === 'rest' ? 'leaf' : 'play')) + '<span>' + st.label + '</span></button>' +
+    '<button class="main-btn' + cls + '" id="btn-main" type="button" data-act="main" data-k="' + st.k + '"' + (st.k === 'pending' ? ' disabled' : '') + '>' + (st.k === 'done' || st.k === 'pending' ? '' : ic(st.k === 'rest' ? 'leaf' : 'play')) + '<span>' + st.label + '</span></button>' +
     '' +
     (st.progress ? '<div>' + progressBar(st.ci.n / st.ci.N * 100, '오늘의 훈련 진행') + '</div>' : '') +
     (due ? '<button class="btn text snooze" id="banner-snooze" type="button">30분 뒤에 다시 알려 주세요</button>' : '') + '</section>';
@@ -75,8 +77,8 @@ SCREENS.home = {
     bn.append(installSlot('home'));
     const pc = pushPromptCard(); if (pc) bn.append(pc);
     if (S.remDue) {
-      bn.append(h('div', { class: 'banner', role: 'status', id: 'reminder-banner' }, h('div', { class: 't-title' }, svgIcon('alarm'), traineeLabel() + iga(traineeLabel()) + ' 아직 훈련 전이에요'),
-        h('div', { class: 'row' }, btnEl('알림 보내기', 'filled fit', () => { go('family'); setTimeout(() => { const n = $('#nudge-slot'); if (n) n.scrollIntoView({ block: 'center' }); }, 50); }, 'rem-send'), btnEl('닫기', 'text', () => { LS.set('bw.remDismiss', todayS()); alarmTick(); render(true); }, 'rem-close'))));
+      bn.append(h('div', { class: 'banner', role: 'status', id: 'reminder-banner' }, h('div', { class: 't-title' }, svgIcon('alarm'), joinLabels(S.trainees, S.remIds) + iga(joinLabels(S.trainees, S.remIds)) + ' 아직 훈련 전이에요'),
+        h('div', { class: 'row' }, btnEl('알림 보내기', 'filled fit', () => { const to = (S.remIds || [])[0]; if (to) { S.nudgeTo = to; focusOn(to); } go('family'); setTimeout(() => { const n = $('#nudge-slot'); if (n) n.scrollIntoView({ block: 'center' }); }, 50); }, 'rem-send'), btnEl('닫기', 'text', () => { LS.set('bw.remDismiss', todayS()); alarmTick(); render(true); }, 'rem-close'))));
     }
     startDashboardTicker(render);
   }
@@ -85,7 +87,7 @@ export const QUICK_REPLIES = ['고마워요 ❤️', '오늘도 했어요!', '�
 
 /* ---- 훈련하는 분 홈의 동작 ---- */
 ACTS.main = b => {
-  const k = b.dataset.k;
+  const k = b.dataset.k; if (k === 'pending') return;
   if (k === 'resumeCheck') resumeAssessment();
   else if (k === 'check') go('checkIntro');
   else if (k === 'done') dialog('오늘 훈련을 다 하셨어요', '한 번 더 해 보시겠어요? 오늘 기록은 그대로 남아요.', [{ label: '아니요, 쉴게요', kind: 'filled' }, { label: '한 번 더', kind: 'text', run: () => startCourse({ replay: true }) }]);

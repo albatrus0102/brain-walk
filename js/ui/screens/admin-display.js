@@ -1,4 +1,4 @@
-import { isAdmin, traineeLabel, writeErrMsg } from '../../data.js';
+import { displayOf, focusId, isAdmin, traineeLabel, writeErrMsg } from '../../data.js';
 import { DISPLAY_DEFAULTS, normalizeDisplay, presenceState } from '../../program.js';
 import { say } from '../../sound.js';
 import { S } from '../../state.js';
@@ -18,8 +18,8 @@ const STACKS = {
   system: 'system-ui,"Apple SD Gothic Neo",sans-serif'
 };
 const RATES = [[0.75, '천천히'], [0.9, '보통'], [1.05, '조금 빠르게']];
-const draft = () => S.dispDraft || (S.dispDraft = normalizeDisplay(S.displayRemote || DISPLAY_DEFAULTS));
-const dirty = () => !S.displayRemote || JSON.stringify(normalizeDisplay(S.displayRemote)) !== JSON.stringify(draft());
+const draft = () => S.dispDraft || (S.dispDraft = normalizeDisplay(displayOf() || DISPLAY_DEFAULTS));
+const dirty = () => !displayOf() || JSON.stringify(normalizeDisplay(displayOf())) !== JSON.stringify(draft());
 const nearRate = r => RATES.reduce((a, b) => (Math.abs(b[0] - r) < Math.abs(a[0] - r) ? b : a))[0];
 
 function previewHtml(d) {
@@ -32,7 +32,7 @@ function previewHtml(d) {
 SCREENS.adminDisplay = {
   html() {
     const d = draft(), ro = !isAdmin(), L = esc(traineeLabel());
-    const lead = '' + (S.displayRemote ? '' : '');
+    const lead = '';
     return '<div class="stack"><h1 class="t-headline" id="dd-h">' + L + ' 화면</h1>' + lead + adminOnlyNote() +
       '<section class="card elevated" aria-label="미리보기"><div class="t-label muted">미리보기</div><div class="mt">' + previewHtml(d) + '</div></section>' +
       '<section class="card outlined stack" aria-label="화면 설정">' +
@@ -58,7 +58,8 @@ ACTS['dd-revert'] = () => { S.dispDraft = null; render(true); };
 ACTS['dd-save'] = async () => {
   if (!isAdmin()) return;
   try {
-    await saveDisplay(draft(), S.myId || 'local');
+    const mid = focusId(); if (!mid) return;
+    await saveDisplay(mid, draft(), S.myId || 'local');
     S.dispDraft = null; render(true);
   } catch (e) { toast(writeErrMsg(e, true)); }
 };

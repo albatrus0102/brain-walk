@@ -19,8 +19,8 @@ export function dialog(title, text, actions, onClose, extra, opts) {
     if (a.keep) { a.run && a.run(); return; }
     close(); Promise.resolve(a.run && a.run()).catch(() => {}).then(() => { if (onClose) onClose(); });
   } }, a.label)));
-  sc.append(h('div', { class: 'dialog', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'dlg-title', 'aria-describedby': 'dlg-text' },
-    h('h2', { class: 't-headline-s', id: 'dlg-title', text: title }), h('p', { class: 't-body mt', id: 'dlg-text', text: text }), extra || null, acts));
+  sc.append(h('div', { class: 'dialog', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'dlg-title', 'aria-describedby': text ? 'dlg-text' : null },
+    h('h2', { class: 't-headline-s', id: 'dlg-title', text: title }), (text ? h('p', { class: 't-body mt', id: 'dlg-text', text: text }) : null), extra || null, acts));
   sc.hidden = false;
   layer = dialogLayer = openLayer(() => { if (close() && onClose) onClose(); }, opts);   // 뒤로 가기·Escape 는 창을 닫아요
   sc.onkeydown = e => {

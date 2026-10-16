@@ -1,4 +1,4 @@
-import { chatAvail, getPlan, isAdmin, isOwnerNow, isTrainee, traineeId, traineeLabel } from '../../data.js';
+import { chatAvail, displayOf, focusId, getPlan, isAdmin, isOwnerNow, isTrainee, traineeLabel } from '../../data.js';
 import { refreshRole } from '../../data.js';
 import { aiAccess } from '../../ai/admin-data.js';
 import { alarmCfg } from '../../alarm.js';
@@ -15,7 +15,7 @@ import { planSummary } from '../plan-text.js';
 import { SCREENS } from '../registry.js';
 import { btn, confirmDeleteAll, confirmDeleteLocal, confirmLeave, newCreateCode, openDevices, openInvite, openOwnerTransfer, openRename, openTransfer, pushRow } from '../room-settings.js';
 import { go } from '../shell.js';
-import { FONT_OPTS, SIZE_OPTS, liEl, prefsCard, segHtml, slotText, switchRow, xpCard } from '../widgets.js';
+import { FONT_OPTS, SIZE_OPTS, liEl, prefsCard, segHtml, slotText, switchRow, traineeChipsEl, xpCard } from '../widgets.js';
 import { $ } from '../../util.js';
 
 /* 설정 (DESIGN.md §5 L3, §6.1).
@@ -29,7 +29,7 @@ const hm = t => { const p = String(t || '').split(':').map(Number); if (p.length
 
 /* 훈련하는 분 기기를 관리하는 줄들 (훈련하는 분 기기에서 관리자가 여는 '가족방 관리'가 써요) */
 function mgmtRows() {
-  const none = !traineeId() && Store.mode === 'firebase';
+  const none = !focusId() && Store.mode === 'firebase';
   return none ? '<p class="t-body" id="no-trainee">훈련하는 분이 없어요</p>'
     : '<p class="t-body" id="plan-summary">' + esc(planSummary(getPlan())) + '</p>' +
       rowBtn('row-display', esc(traineeLabel()) + ' 화면 (글자·소리)', '글꼴·글자 크기·소리를 ' + esc(traineeLabel()) + ' 휴대폰에 바로 적용해요') +
@@ -44,7 +44,7 @@ const group = (title, rows, id) => { const g = h('section', { class: 'group', id
 function familyList() {
   const fb = Store.mode === 'firebase', local = Store.mode === 'local', admin = isAdmin(), L = esc(traineeLabel());
   const me = fb ? (FirebaseAdapter.me() || {}) : {};
-  const d = normalizeDisplay(S.displayRemote || DISPLAY_DEFAULTS);
+  const d = normalizeDisplay(displayOf() || DISPLAY_DEFAULTS);
   const out = [];
   // 가족
   if (fb) out.push(group('가족', [
@@ -56,8 +56,9 @@ function familyList() {
     isOwnerNow() ? liEl({ id: 'btn-owner-transfer', icon: 'swap', title: '관리자 넘기기 (가족방 주인 바꾸기)' }, openOwnerTransfer) : null,
     liEl({ id: 'btn-leave', icon: 'logout', title: '가족 나가기' }, confirmLeave)
   ], 'set-family'));
-  // 훈련하는 분 화면 · 학습 설정 (관리자가 아니면 읽기 전용 화면이 열려요)
-  const none = fb && !traineeId();
+  // 훈련하는 분 화면 · 학습 설정 · AI: 고른 훈련하는 분 것 (2명 이상이면 고르는 칩, '모두' 없음)
+  const none = fb && !focusId();
+  const chips = traineeChipsEl(false); if (chips) out.push(chips);
   out.push(group(L + ' 화면', [
     none ? liEl({ id: 'no-trainee', icon: 'phone', title: '훈련하는 분이 없어요', chevron: false }) : liEl({ id: 'row-display', icon: 'phone', title: '화면 (글자·소리)', value: esc(nameOfOpt(FONT_OPTS, d.font) + ' · ' + nameOfOpt(SIZE_OPTS, d.size)) }, () => { S.dispDraft = null; go('adminDisplay'); })
   ], 'set-display'));

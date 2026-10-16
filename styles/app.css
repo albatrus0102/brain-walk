@@ -644,3 +644,24 @@ select.input{appearance:auto}
 .tchip .tx{min-width:48px;min-height:48px;border:0;border-radius:50%;background:transparent;color:inherit;font:inherit;font-size:1.3em;cursor:pointer}
 .ai-note p{margin:0}
 .consent .card p{font-size:var(--md-sys-typescale-title-medium-size);line-height:1.6}
+/* 훈련하는 분 고르기 (M3 filter chips, 가로로 밀어 보기) · 모두 보기 타일 */
+.fchips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0;max-width:100%;-webkit-overflow-scrolling:touch}
+.fchips::-webkit-scrollbar{display:none}
+.fchip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 16px;border-radius:var(--md-sys-shape-corner-small);border:1px solid var(--md-sys-color-outline);background:transparent;color:var(--md-sys-color-on-surface-variant);font:inherit;font-size:var(--md-sys-typescale-label-large-size);font-weight:500;cursor:pointer;white-space:nowrap}
+.fchip[aria-checked="true"]{background:var(--md-sys-color-secondary-container);color:var(--md-sys-color-on-secondary-container);border-color:var(--md-sys-color-secondary-container);padding-left:8px}
+.fchip .ic{width:18px;height:18px}
+.fchip:focus-visible{outline:2px solid var(--md-sys-color-primary);outline-offset:2px}
+.ttiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.ttile{position:relative;display:flex;flex-direction:column;gap:6px;min-width:0;padding:12px 14px;border-radius:var(--ui-radius,12px);border:1px solid var(--md-sys-color-outline-variant);background:var(--md-sys-color-surface-container-low);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.ttile .tn{font-size:var(--md-sys-typescale-title-medium-size);font-weight:700;padding-right:18px;overflow-wrap:anywhere}
+.ttile .tst{font-size:var(--md-sys-typescale-body-medium-size);line-height:1.35;overflow-wrap:anywhere}
+.ttile.accent{background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container)}
+.ttile.warm{background:var(--md-sys-color-tertiary-container);color:var(--md-sys-color-on-tertiary-container)}
+.ttile .live{position:absolute;top:14px;right:12px;width:10px;height:10px;border-width:2px}
+.ttile .mstrip{display:flex;gap:4px}
+.ttile .mstrip i{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--md-sys-color-outline);display:block}
+.ttile .mstrip i.done{background:var(--md-sys-color-primary);border-color:var(--md-sys-color-primary)}
+.ttile .mstrip i.partial{background:color-mix(in srgb,var(--md-sys-color-primary) 45%,transparent);border-color:var(--md-sys-color-primary)}
+.ttile .mstrip i.rest{border-style:dashed;opacity:.5}
+.ttile .lpill{align-self:flex-start}
+.badges .pill.pend,.sub.pend{color:var(--md-sys-color-tertiary)}

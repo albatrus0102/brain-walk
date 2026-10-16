@@ -1,4 +1,5 @@
-import { nameOf, traineeLabel, writeErrMsg } from '../../data.js';
+import { focusId, nameOf, writeErrMsg } from '../../data.js';
+import { joinLabels } from '../../trainees.js';
 import { sendMessage } from '../../messages.js';
 import { CLINICAL_TESTS, CT, RESULTS, byTest, records, scoreText, shortName, testName } from '../../clinical/tests.js';
 import { S } from '../../state.js';
@@ -6,7 +7,7 @@ import { Store } from '../../store/store.js';
 import { $, esc, ymd } from '../../util.js';
 import { dialog, toast } from '../dom.js';
 import { SCREENS } from '../registry.js';
-import { barsHtml, mdShort } from '../widgets.js';
+import { barsHtml, mdShort, traineeChipsHtml } from '../widgets.js';
 import { go, render } from '../shell.js';
 
 /* 병원 검사 기록 (가족 전용) */
@@ -42,7 +43,7 @@ export function clinicalReportHtml(withActions) {
 
 SCREENS.clinical = {
   html() {
-    return '<div class="stack"><h1 class="t-headline" id="clin-h">병원 검사 기록</h1>' +
+    return '<div class="stack"><h1 class="t-headline" id="clin-h">병원 검사 기록</h1>' + traineeChipsHtml(false) +
       clinicalReportHtml(true) + '</div>';
   }
 };
@@ -88,7 +89,8 @@ export async function saveClinical() {
   if (max != null && max <= 0) { toast('만점은 0보다 커야 해요.'); return; }
   if (score != null && max != null && score > max) { toast('점수가 만점보다 클 수 없어요.'); return; }
   if (c.test === 'other' && !(c.label || '').trim()) { c.open = false; toast('검사 이름을 적어 주세요.'); return; }
-  const doc = { test: c.test, date: c.date, recordedBy: S.myId || 'local', ts: Date.now() };
+  const subj = focusId(); if (!subj) return;
+  const doc = { test: c.test, date: c.date, recordedBy: S.myId || 'local', ts: Date.now(), subjectId: subj };
   if (score != null) doc.score = score; if (max != null) doc.max = max;
   if (c.test === 'other') doc.testLabel = c.label.trim().slice(0, 30);
   if ((c.place || '').trim()) doc.place = c.place.trim().slice(0, 40);
@@ -100,7 +102,7 @@ export async function saveClinical() {
 }
 export function shareClinical(id) {
   const r = records().find(x => x.id === id); if (!r) return;
-  dialog(traineeLabel() + '도 대화방을 보세요. 공유할까요?', shortName(r) + ' · ' + scoreText(r) + ' (' + r.date + ') 기록 카드를 가족 대화방에 올려요.', [
+  dialog(joinLabels(S.trainees) + '도 대화방을 보세요. 공유할까요?', shortName(r) + ' · ' + scoreText(r) + ' (' + r.date + ') 기록 카드를 가족 대화방에 올려요.', [
     { label: '취소', kind: 'text' },
     { label: '공유하기', kind: 'filled', run: async () => { const ok = await sendMessage({ kind: 'record', text: '', record: { type: 'clinical', ref: r.id, title: '병원 검사 기록 · ' + shortName(r) + ' ' + scoreText(r) + ' · ' + r.date.slice(5).replace('-', '월 ') + '일' + (r.result ? ' · ' + r.result : ''), score: null } }); toast(ok ? '대화방에 공유했어요.' : '공유하려면 가족방에 들어와 있어야 해요.'); } }]);
 }

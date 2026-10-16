@@ -1,4 +1,4 @@
-import { allAssessments, isAdmin, todayProgressDoc, todayS, traineeLabel, writeErrMsg } from '../../data.js';
+import { alarmOf, allAssessments, focusId, isAdmin, levelsOf, planRawOf, todayProgressDoc, todayS, traineeLabel, writeErrMsg } from '../../data.js';
 import { DOM, GAMES, catalog } from '../../games/registry.js';
 import { buildIcs } from '../../logic.js';
 import { Platform } from '../../platform.js';
@@ -19,9 +19,9 @@ const DAYS = MON_FIRST.map(d => [d, WD[d]]);
 const TARGETS = [[10, '10분'], [15, '15분'], [20, '20분'], [30, '30분']];
 const CHECKS = [[0, '끔'], [2, '2주마다'], [4, '4주마다'], [8, '8주마다']];
 const AUTOS = [[0, '끔'], [5, '5초'], [10, '10초'], [15, '15초']];
-const timeOf = () => (S.alarm && /^\d{2}:\d{2}$/.test(S.alarm.time || '') && S.alarm.time) || '10:00';
+const timeOf = () => { const a = alarmOf(); return (a && /^\d{2}:\d{2}$/.test(a.time || '') && a.time) || '10:00'; };
 function initDraft() {
-  const d = Object.assign(normalizePlan(S.planRaw || { weekdays: S.alarm && S.alarm.days }, catalog()), { alarmTime: timeOf() });
+  const d = Object.assign(normalizePlan(planRawOf() || { weekdays: alarmOf() && alarmOf().days }, catalog()), { alarmTime: timeOf() });
   S.planDraft = d; S.planBase = JSON.stringify(d); return d;
 }
 const draft = () => S.planDraft || initDraft();
@@ -76,7 +76,7 @@ SCREENS.adminPlan = {
     const nFixed = cat.filter(g => d.games[g.id].mode === 'fixed').length;
     const c4 = '' +
       '<details class="field-opt" id="plan-lv" data-xp="plan-lv"' + (S.xpOpen['plan-lv'] ? ' open' : '') + '><summary id="plan-lv-sum">게임마다 정하기</summary><div class="stack mt">' + cat.map(g => {
-        const id = g.id, x = d.games[id], now = clampLv(S.levels[id] || 1), levels = [1, 2, 3, 4, 5];
+        const id = g.id, x = d.games[id], now = clampLv(levelsOf()[id] || 1), levels = [1, 2, 3, 4, 5];
         return '<div class="lvset card outlined" data-g="' + id + '"><div class="rowline"><strong>' + esc(GAMES[id].name) + '</strong><span class="t-small muted">지금 ' + now + '단계</span></div>' +
           '<div class="seg mt" role="radiogroup" aria-label="' + esc(GAMES[id].name) + ' 단계 방식">' + [['auto', '자동'], ['fixed', '고정']].map(o => '<button type="button" id="plan-mode-' + id + '-' + o[0] + '" role="radio" aria-checked="' + (x.mode === o[0]) + '" data-act="pl-gmode" data-id="' + id + '" data-v="' + o[0] + '"' + dis + '>' + o[1] + '</button>').join('') + '</div>' +
           (x.mode === 'auto'
@@ -126,7 +126,8 @@ ACTS['pl-save'] = async () => {
   const d = draft(), prog = todayProgressDoc(), started = !!(prog && prog.status === 'started');
   if (planProblems(d, catalog()).length) return;
   try {
-    await savePlan(d, catalog(), S.myId || 'local', d.alarmTime);
+    const mid = focusId(); if (!mid) return;
+    await savePlan(mid, d, catalog(), S.myId || 'local', d.alarmTime);
     S.planBase = JSON.stringify(d);
     render(true);
   } catch (e) { toast(writeErrMsg(e, true)); }
