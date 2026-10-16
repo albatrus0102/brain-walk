@@ -4,7 +4,7 @@ import { Platform } from '../platform.js';
 import { disablePush, enablePush, pushIsOn, pushReasonText } from '../push.js';
 import { S } from '../state.js';
 import { FirebaseAdapter } from '../store/firebase-adapter.js';
-import { TRANSFER_MIN, clearLocalData, createTransferCode, deleteFamily, deleteMyRecords, getInviteInfo, isOwner, leaveFamily, listMyDevices, renameSelf, revokeDevice, rotateJoinCode, MIN_CREATE_CODE, setCreateCode, transferLink, transferOwnership } from '../store/membership.js';
+import { TRANSFER_MIN, clearLocalData, createTransferCode, deleteFamily, deleteMyRecords, getInviteInfo, isOwner, leaveFamily, listMyDevices, renameSelf, revokeDevice, rotateJoinCode, createNewCreateCode, transferLink, transferOwnership } from '../store/membership.js';
 import { Store } from '../store/store.js';
 import { LS } from '../util.js';
 import { closeSheet, dialog, h, openSheet, toast } from './dom.js';
@@ -115,18 +115,20 @@ export function openRename() {
   });
 }
 
-/* 방 주인: 새 가족방을 만들 때 묻는 '만들기 코드' 정하기. 서버에는 해시만 가요. */
-export function openCreateCode() {
-  openSheet('가족방 만들기 코드 정하기', (body) => {
-    const input = h('input', { class: 'input', id: 'ccset-input', type: 'password', autocomplete: 'off', spellcheck: 'false', maxlength: '100', 'aria-label': '새 만들기 코드 (' + MIN_CREATE_CODE + '글자 이상)', placeholder: MIN_CREATE_CODE + '글자 이상' });
-    const save = async () => {
-      const v = input.value.trim();
-      if (v.length < MIN_CREATE_CODE) { toast(MIN_CREATE_CODE + '글자 이상 적어 주세요.'); return; }
-      try { await setCreateCode(v); closeSheet(); toast('정했어요.'); } catch (e) { toast('저장하지 못했어요.'); }
+/* 방 주인: 새 가족방을 만들 때 묻는 '만들기 코드'를 앱이 새로 만들어요. 만든 코드는 이 창에서 한 번만 보여요. 서버에는 이중 해시만 가요. */
+export async function newCreateCode() {
+  let code;
+  try { code = await createNewCreateCode(); } catch (e) { toast('만들지 못했어요.'); return; }
+  openSheet('새 만들기 코드', (body) => {
+    const codeEl = h('p', { class: 't-display center', id: 'ccnew-code', text: code, style: 'letter-spacing:.12em;user-select:all;font-variant-numeric:tabular-nums;word-break:keep-all' });
+    const selectCode = () => { try { const r = document.createRange(); r.selectNodeContents(codeEl); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); } catch (e) {} };
+    const copy = async () => {
+      let ok = false;
+      try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(code); ok = true; } } catch (e) {}
+      if (!ok) { selectCode(); try { ok = !!document.execCommand('copy'); } catch (e) {} }
+      toast(ok ? '복사했어요.' : '길게 눌러 직접 복사해 주세요.');
     };
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
-    body.append(h('div', { class: 'field' }, h('label', { for: 'ccset-input', text: '새 만들기 코드 (' + MIN_CREATE_CODE + '글자 이상)' }), input), btn('저장', 'filled', save, 'ccset-save'), btn('취소', 'text', closeSheet, 'ccset-cancel'));
-    input.focus();
+    body.append(codeEl, btn('복사', 'filled', copy, 'ccnew-copy'), btn('닫기', 'text', () => { code = ''; closeSheet(); }, 'ccnew-close'));
   });
 }
 

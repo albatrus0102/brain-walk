@@ -64,20 +64,31 @@ await ios.screenshot({ path: SHOTS + '/onboarding-ios.png' });
   must(!(await fam.locator('#screen p:not([hidden])').count()), '만들기 코드 화면: 설명 글 없음');
   await fam.fill('#create-code', 'abcdefgh1'); await fam.click('#btn-ccode-next'); await fam.waitForSelector('#ob-err:not([hidden])');
   must((await fam.innerText('#ob-err')) === '만들기 코드가 맞지 않아요.' && !(await vis('#ob-name-input')), '코드를 정하기 전에는 어떤 코드도 거절');
-  // 설정에서 방 주인이 코드를 정해요 (8글자 이상)
+  // 설정에서 방 주인이 '새 코드 만들기' — 앱이 12글자 코드를 만들어 한 번만 보여 줘요
   await fam.evaluate(() => window.__go('settings')); await fam.waitForSelector('#set-main-h');
-  await fam.click('#btn-create-code'); await fam.waitForSelector('#ccset-input');
-  await fam.fill('#ccset-input', 'short7!'); await fam.click('#ccset-save'); await fam.waitForTimeout(150);
-  must(await vis('#ccset-input') && (await fam.innerText('#snackbar')).includes('8글자 이상'), '8글자보다 짧으면 저장하지 않아요');
-  await fam.fill('#ccset-input', 'family-key-2026'); await fam.click('#ccset-save'); await fam.waitForSelector('#ccset-input', { state: 'detached' });
+  must((await fam.innerText('#btn-create-code')).includes('새 코드 만들기'), '설정: "새 코드 만들기" 줄');
+  await fam.click('#btn-create-code'); await fam.waitForSelector('#ccnew-code');
+  const shown = (await fam.innerText('#ccnew-code')).trim();
+  must(/^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/.test(shown), '만들어진 코드: XXXX-XXXX-XXXX, 0/O/1/I/L 없음');
+  const sheetParts = await fam.evaluate(() => { const c = document.getElementById('ccnew-code').parentElement; return { n: c.children.length, ps: c.querySelectorAll('p').length, btns: [...c.querySelectorAll('button')].map(b => b.textContent.trim()) }; });
+  must(sheetParts.ps === 1 && sheetParts.n === 3 && sheetParts.btns.join() === '복사,닫기', '창에는 코드, [복사], [닫기]만 있어요');
+  await fam.click('#ccnew-copy'); await fam.waitForTimeout(150);
+  must(((await fam.innerText('#snackbar')) || '').length > 0, '복사 누르면 알림 (클립보드가 막혀도 글자를 선택해 둬요)');
   const stored = await fam.evaluate(async () => window.__Store.getDoc('appConfig/creation'));
-  must(stored && /^[0-9a-f]{64}$/.test(stored.codeHash) && !JSON.stringify(stored).includes('family-key-2026'), '저장된 것은 해시뿐이고 원래 코드는 없어요');
-  // 틀린 코드는 거절, 맞는 코드는 이름 화면으로
+  const dbl = await fam.evaluate(async c => { const h = async t => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t))), b => b.toString(16).padStart(2, '0')).join(''); return await h(await h(c.replace(/-/g, ''))); }, shown);
+  must(stored && stored.codeHash === dbl && !JSON.stringify(stored).includes(shown.replace(/-/g, '')), '저장된 것은 이중 해시뿐이고 원래 코드는 없어요');
+  await fam.click('#ccnew-close'); await fam.waitForSelector('#ccnew-code', { state: 'detached' });
+  must(!(await fam.evaluate(c => document.body.innerText.includes(c), shown)), '닫으면 코드가 화면에서 사라져요');
+  // 새로 만들면 이전 코드는 바로 못 써요
+  await fam.click('#btn-create-code'); await fam.waitForSelector('#ccnew-code');
+  const shown2 = (await fam.innerText('#ccnew-code')).trim(); await fam.click('#ccnew-close');
+  must(shown2 !== shown, '다시 만들면 다른 코드');
+  // 틀린 코드는 거절, 맞는 코드는 (소문자·공백·줄표로 쳐도) 이름 화면으로
   await fam.evaluate(() => { window.__S.ob = {}; window.__go('ob-start'); }); await fam.waitForSelector('#ob-start-h');
-  await fam.click('#btn-create'); await fam.fill('#create-code', 'family-key-2025'); await fam.click('#btn-ccode-next'); await fam.waitForSelector('#ob-err:not([hidden])');
-  must((await fam.innerText('#ob-err')) === '만들기 코드가 맞지 않아요.' && !(await vis('#ob-name-input')), '틀린 만들기 코드: 짧은 오류');
-  await fam.fill('#create-code', ' family-key-2026 '); await fam.click('#btn-ccode-next'); await fam.waitForSelector('#ob-name-input');
-  must(true, '맞는 만들기 코드: 이름 화면으로');
+  await fam.click('#btn-create'); await fam.fill('#create-code', shown); await fam.click('#btn-ccode-next'); await fam.waitForSelector('#ob-err:not([hidden])');
+  must((await fam.innerText('#ob-err')) === '만들기 코드가 맞지 않아요.' && !(await vis('#ob-name-input')), '이전 코드: 짧은 오류');
+  await fam.fill('#create-code', ' ' + shown2.toLowerCase().replace(/-/g, ' ') + ' '); await fam.click('#btn-ccode-next'); await fam.waitForSelector('#ob-name-input');
+  must(true, '맞는 만들기 코드(소문자·공백으로 쳐도): 이름 화면으로');
   await fam.click('#name-chip-0'); await fam.click('#btn-name-next'); await fam.waitForSelector('#ob-role-h'); must(await vis('#role-family'), '이어서 역할 화면');
   await fam.screenshot({ path: SHOTS + '/onboarding-ccode.png' });
 }

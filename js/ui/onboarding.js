@@ -2,7 +2,7 @@ import { Platform } from '../platform.js';
 import { S } from '../state.js';
 import { Store } from '../store/store.js';
 import { FirebaseAdapter } from '../store/firebase-adapter.js';
-import { checkCreateCode, createFamily, inviteLink, inviteText, joinFamily, normalizeCode, previewJoinCode, redeemTransfer } from '../store/membership.js';
+import { checkCreateCode, clearCreateProof, createFamily, inviteLink, inviteText, joinFamily, normalizeCode, previewJoinCode, redeemTransfer } from '../store/membership.js';
 import { enterApp, startFlow, startLocalDemo } from '../boot.js';
 import { LS, iga } from '../util.js';
 import { dialog, h, toast } from './dom.js';
@@ -89,7 +89,7 @@ SCREENS['ob-ccode'] = {
     input.addEventListener('keydown', e => { if (e.key === 'Enter') next(); });
     fill(h('h1', { class: 't-headline', id: 'ccode-h', text: '만들기 코드' }),
       h('div', { class: 'field' }, h('label', { for: 'create-code', text: '만들기 코드' }), input), errP(), btn,
-      h('button', { class: 'btn text', type: 'button', id: 'btn-ccode-back', onclick: () => { o.ccode = ''; go('ob-start'); } }, '처음으로'));
+      h('button', { class: 'btn text', type: 'button', id: 'btn-ccode-back', onclick: () => { o.ccode = ''; clearCreateProof(); go('ob-start'); } }, '처음으로'));
     input.focus();
   }
 };

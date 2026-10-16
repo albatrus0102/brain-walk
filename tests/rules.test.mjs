@@ -9,10 +9,10 @@ const db = u => env.authenticatedContext(u).firestore();
 // ---- 가족방 만들기 코드: 시험 환경에 코드(해시만)를 심어 두고, 가족방을 만드는 배치에는 코드를 입력한 증거(createProofs)를 자동으로 함께 넣어요.
 const sha = x => createHash('sha256').update(x).digest('hex');
 const CREATE_CODE = 'test-create-code-1';
-await env.withSecurityRulesDisabled(async c => { const x = c.firestore(); await setDoc(doc(x, 'appConfig/creation'), { codeHash: sha(CREATE_CODE), setBy: 'seed', updatedTs: Timestamp.now() }); });
+await env.withSecurityRulesDisabled(async c => { const x = c.firestore(); await setDoc(doc(x, 'appConfig/creation'), { codeHash: sha(sha(CREATE_CODE)), setBy: 'seed', updatedTs: Timestamp.now() }); });
 const writeBatch = d => {
   const b = writeBatchRaw(d), set = b.set.bind(b);
-  b.set = (ref, data, ...r) => { if (ref.parent.id === 'families' && ref.parent.parent === null && data && data.createdBy) set(doc(d, 'createProofs', data.createdBy), { proof: CREATE_CODE, ts: serverTimestamp() }); return set(ref, data, ...r); };
+  b.set = (ref, data, ...r) => { if (ref.parent.id === 'families' && ref.parent.parent === null && data && data.createdBy) set(doc(d, 'createProofs', data.createdBy), { proof: sha(CREATE_CODE), ts: serverTimestamp() }); return set(ref, data, ...r); };
   return b;
 };
 const anon = env.unauthenticatedContext().firestore();
@@ -817,7 +817,7 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
 // =============================================================================
 {
   const FP = 'famP', CP = 'PQR234', P = `families/${FP}`;
-  const found = (d, uid, fid, code, withProof, proof = CREATE_CODE) => {
+  const found = (d, uid, fid, code, withProof, proof = sha(CREATE_CODE)) => {
     const b = writeBatchRaw(d);
     if (withProof) b.set(doc(d, 'createProofs', uid), { proof, ts: serverTimestamp() });
     b.set(doc(d, 'families', fid), { createdBy: uid, createdTs: serverTimestamp(), ownerMemberId: 'm' + uid, joinCode: code });
@@ -826,20 +826,29 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
     b.set(doc(d, `families/${fid}/members/m${uid}`), { name: '나', role: 'family', joinedTs: serverTimestamp() });
     return b.commit();
   };
-  const hashOf = c => ({ codeHash: sha(c), setBy: 'mP', updatedTs: serverTimestamp() });
+  const hashOf = c => ({ codeHash: sha(sha(c)), setBy: 'mP', updatedTs: serverTimestamp() });
   await env.withSecurityRulesDisabled(async c => { await deleteDoc(doc(c.firestore(), 'appConfig/creation')); });
   await t('CC: no creation doc → nobody can create a family', found(db('p1'), 'p1', 'famN1', 'NNN234', true), false);
-  await t('CC: no creation doc → the proof itself is denied', setDoc(doc(db('p1'), 'createProofs/p1'), { proof: CREATE_CODE, ts: serverTimestamp() }), false);
-  await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), 'appConfig/creation'), { codeHash: sha(CREATE_CODE), setBy: 'seed', updatedTs: Timestamp.now() }); });
+  await t('CC: no creation doc → the proof itself is denied', setDoc(doc(db('p1'), 'createProofs/p1'), { proof: sha(CREATE_CODE), ts: serverTimestamp() }), false);
+  await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), 'appConfig/creation'), { codeHash: sha(sha(CREATE_CODE)), setBy: 'seed', updatedTs: Timestamp.now() }); });
   await t('CC: no proof → family create denied', found(db('p2'), 'p2', 'famN2', 'NNN235', false), false);
-  await t('CC: wrong code → family create denied', found(db('p3'), 'p3', 'famN3', 'NNN236', true, 'wrong-code-123'), false);
-  await t('CC: wrong code → the proof write is denied (the screen can tell right away)', setDoc(doc(db('p3'), 'createProofs/p3'), { proof: 'wrong-code-123', ts: serverTimestamp() }), false);
-  await t('CC: the stored hash is not a code (sending the hash itself is denied)', setDoc(doc(db('p3'), 'createProofs/p3'), { proof: sha(CREATE_CODE), ts: serverTimestamp() }), false);
-  await t('CC: proof with a client time denied', setDoc(doc(db('p3'), 'createProofs/p3'), { proof: CREATE_CODE, ts: Timestamp.fromMillis(Date.now()) }), false);
-  await t('CC: proof for someone else denied', setDoc(doc(db('p3'), 'createProofs/other'), { proof: CREATE_CODE, ts: serverTimestamp() }), false);
+  await t('CC: wrong code → family create denied', found(db('p3'), 'p3', 'famN3', 'NNN236', true, sha('wrong-code-123')), false);
+  await t('CC: wrong code → the proof write is denied (the screen can tell right away)', setDoc(doc(db('p3'), 'createProofs/p3'), { proof: sha('wrong-code-123'), ts: serverTimestamp() }), false);
+  await t('CC: the stored double hash is not a proof (sending codeHash itself is denied)', setDoc(doc(db('p3'), 'createProofs/p3'), { proof: sha(sha(CREATE_CODE)), ts: serverTimestamp() }), false);
+  await t('CC: a RAW code in proof is rejected (single hash is the only accepted form)', setDoc(doc(db('p3'), 'createProofs/p3'), { proof: CREATE_CODE, ts: serverTimestamp() }), false);
+  await t('CC: a raw code in proof is rejected inside a founding batch', found(db('p3'), 'p3', 'famN3', 'NNN236', true, CREATE_CODE), false);
+  await t('CC: raw code, normalized form (uppercase, no dashes) in proof is rejected', setDoc(doc(db('p3'), 'createProofs/p3'), { proof: 'ABCD2345EFGH', ts: serverTimestamp() }), false);
+  await t('CC: uppercase hex of the right proof is rejected (must be lowercase hex)', setDoc(doc(db('p3'), 'createProofs/p3'), { proof: sha(CREATE_CODE).toUpperCase(), ts: serverTimestamp() }), false);
+  await t('CC: old single-hash scheme (codeHash = sha256(code)) is rejected for both sha256(code) and the raw code as proof', (async () => {
+    await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), 'appConfig/creation'), { codeHash: sha(CREATE_CODE), setBy: 'seed', updatedTs: Timestamp.now() }); });
+    try { await assertFails(setDoc(doc(db('p3'), 'createProofs/p3'), { proof: sha(CREATE_CODE), ts: serverTimestamp() })); await assertFails(setDoc(doc(db('p3'), 'createProofs/p3'), { proof: CREATE_CODE, ts: serverTimestamp() })); }
+    finally { await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), 'appConfig/creation'), { codeHash: sha(sha(CREATE_CODE)), setBy: 'seed', updatedTs: Timestamp.now() }); }); }
+  })());
+  await t('CC: proof with a client time denied', setDoc(doc(db('p3'), 'createProofs/p3'), { proof: sha(CREATE_CODE), ts: Timestamp.fromMillis(Date.now()) }), false);
+  await t('CC: proof for someone else denied', setDoc(doc(db('p3'), 'createProofs/other'), { proof: sha(CREATE_CODE), ts: serverTimestamp() }), false);
   await t('CC: proofs cannot be read', getDoc(doc(db('p3'), 'createProofs/p3')), false);
   await t('CC: right code → family create allowed (proof in the same batch)', found(db('pP'), 'pP', FP, CP, true));
-  await t('CC: right code → the proof write alone is allowed, then the family create (screen flow)', (async () => { const d = db('p4'); await setDoc(doc(d, 'createProofs/p4'), { proof: CREATE_CODE, ts: serverTimestamp() }); await found(d, 'p4', 'famN4', 'NNN237', false); })());
+  await t('CC: right code → the proof write alone is allowed, then the family create (screen flow)', (async () => { const d = db('p4'); await setDoc(doc(d, 'createProofs/p4'), { proof: sha(CREATE_CODE), ts: serverTimestamp() }); await found(d, 'p4', 'famN4', 'NNN237', false); })());
   await t('CC: own proof can be deleted', deleteDoc(doc(db('p4'), 'createProofs/p4')));
   await t('CC: after deleting the proof a new family is denied again', found(db('p4'), 'p4', 'famN5', 'NNN238', false), false);
   await t('CC: existing family still lets people join by code', (async () => { const d = db('pJ'), b = writeBatchRaw(d); b.set(doc(d, `${P}/uids/pJ`), { memberId: 'mJ', via: 'join', code: CP, addedTs: serverTimestamp() }); b.set(doc(d, `${P}/members/mJ`), { name: '딸', role: 'family', joinedTs: serverTimestamp() }); await b.commit(); })());
@@ -862,12 +871,12 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('CC: owner with an extra key denied', setDoc(doc(db('pP'), 'appConfig/creation'), Object.assign(hashOf('x-code-12345'), { raw: 'x-code-12345' })), false);
   await t('CC: the primary owner sets a new code', setDoc(doc(db('pP'), 'appConfig/creation'), Object.assign(hashOf('new-code-12345'), { setBy: 'mpP' })));
   await t('CC: nobody deletes the code doc', deleteDoc(doc(db('pP'), 'appConfig/creation')), false);
-  await t('CC: the old code no longer works', setDoc(doc(db('p5'), 'createProofs/p5'), { proof: CREATE_CODE, ts: serverTimestamp() }), false);
-  await t('CC: the new code works', setDoc(doc(db('p5'), 'createProofs/p5'), { proof: 'new-code-12345', ts: serverTimestamp() }));
-  await t('CC: a proof made with the old code stops working after the code changes', (async () => { await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), 'createProofs/p6'), { proof: CREATE_CODE, ts: Timestamp.now() }); }); await found(db('p6'), 'p6', 'famN6', 'NNN239', false); })(), false);
+  await t('CC: the old code no longer works', setDoc(doc(db('p5'), 'createProofs/p5'), { proof: sha(CREATE_CODE), ts: serverTimestamp() }), false);
+  await t('CC: the new code works', setDoc(doc(db('p5'), 'createProofs/p5'), { proof: sha('new-code-12345'), ts: serverTimestamp() }));
+  await t('CC: a proof made with the old code stops working after the code changes', (async () => { await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), 'createProofs/p6'), { proof: sha(CREATE_CODE), ts: Timestamp.now() }); }); await found(db('p6'), 'p6', 'famN6', 'NNN239', false); })(), false);
 
   // ---- 검증 추가 (CCv): 만료, 남의 증거, 증거 꾸미기, 배치 시각 꾸미기, 관리자·예전 방 주인의 코드 바꾸기
-  const NEW = 'new-code-12345';
+  const NEW = sha('new-code-12345');
   const seedProof = (u, ms) => env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), `createProofs/${u}`), { proof: NEW, ts: Timestamp.fromMillis(ms) }); });
   await seedProof('v1', Date.now() - 31 * 60 * 1000);
   await t('CCv: a proof older than 30 minutes is rejected', found(db('v1'), 'v1', 'famV1', 'VVV234', false), false);
@@ -895,11 +904,11 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('CCv: refreshing an expired proof without a new server time is denied', updateDoc(doc(db('x3'), 'createProofs/x3'), { proof: NEW }), false);
   await t('CCv: refreshing with a client time is denied', updateDoc(doc(db('x3'), 'createProofs/x3'), { ts: Timestamp.fromMillis(Date.now()) }), false);
   await t('CCv: proof with an extra key denied', setDoc(doc(db('x3'), 'createProofs/x3'), { proof: NEW, ts: serverTimestamp(), ok: true }), false);
-  await t('CCv: proof longer than 100 chars denied', setDoc(doc(db('x3'), 'createProofs/x3'), { proof: 'x'.repeat(101), ts: serverTimestamp() }), false);
+  await t('CCv: proof longer than 100 chars denied', setDoc(doc(db('x3'), 'createProofs/x3'), { proof: 'a'.repeat(101), ts: serverTimestamp() }), false);
   await t('CCv: proof that is not a string denied', setDoc(doc(db('x3'), 'createProofs/x3'), { proof: 12345, ts: serverTimestamp() }), false);
   await t('CCv: batch with a wrong-code proof and a forged (client) time is denied', (async () => {
     const d = db('x4'), b = writeBatchRaw(d);
-    b.set(doc(d, 'createProofs/x4'), { proof: 'guess-123456', ts: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000) });
+    b.set(doc(d, 'createProofs/x4'), { proof: sha('guess-123456'), ts: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000) });
     b.set(doc(d, 'families/famX4'), { createdBy: 'x4', createdTs: serverTimestamp(), ownerMemberId: 'mx4', joinCode: 'XXA234' });
     b.set(doc(d, 'joinCodes/XXA234'), { familyId: 'famX4', createdBy: 'mx4', createdTs: serverTimestamp(), expiresTs: in7d() });
     b.set(doc(d, 'families/famX4/uids/x4'), { memberId: 'mx4', via: 'create', addedTs: serverTimestamp() });

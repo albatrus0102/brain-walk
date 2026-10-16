@@ -41,39 +41,57 @@ export async function previewJoinCode(code) {
 }
 
 /* ---- 가족방 만들기 코드 (firestore.rules: appConfig/creation, createProofs) ----
- * 새 가족방은 '만들기 코드'를 아는 사람만 만들 수 있어요. 서버에는 코드의 sha256(16진수 소문자)만 있어요.
- * 입력한 코드는 createProofs/{내 uid} 에 쓰는데, 코드가 맞을 때만 규칙이 받아 줘요 (그래서 화면에서 바로 맞는지 알 수 있어요).
- * 체험 모드(LocalAdapter)는 같은 검사를 appConfig/creation 문서로 흉내 내요. */
-export const MIN_CREATE_CODE = 8;
+ * 새 가족방은 '만들기 코드'를 아는 사람만 만들 수 있어요. 코드는 앱이 무작위로 만들어요 (방 주인이 고르지 않아요).
+ * 정리한 코드(대문자, 공백·줄표 없음) = N.  증거 proof = sha256(N),  서버 appConfig/creation.codeHash = sha256(sha256(N)).
+ * 생 코드는 서버에 가지 않아요. 증거는 createProofs/{내 uid} 에 쓰는데, 규칙이 sha256(proof) == codeHash 일 때만 받아 줘요
+ * (그래서 화면에서 바로 맞는지 알 수 있어요). 체험 모드(LocalAdapter)는 같은 검사를 appConfig/creation 문서로 흉내 내요. */
+export const CREATE_CODE_LEN = 12;
+export const CREATE_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';   // 0 O 1 I L 없음 (31글자)
 export async function sha256Hex(text) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(text)));
   return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('');
 }
-const cleanCreateCode = c => String(c == null ? '' : c).trim();
+/* 입력 정리: 대문자, 공백·줄표(여러 종류) 제거 */
+export const normalizeCreateCode = c => String(c == null ? '' : c).toUpperCase().replace(/[\s\-\u2010-\u2015\u2212]+/g, '');
+export const proofOf = code => sha256Hex(normalizeCreateCode(code));
+export const formatCreateCode = n => (String(n).match(/.{1,4}/g) || []).join('-');
+/* 무작위 12글자 (crypto.getRandomValues, 한쪽으로 쏠리지 않게 거절 추출) → XXXX-XXXX-XXXX */
+export function generateCreateCode() {
+  const A = CREATE_CODE_ALPHABET, limit = 256 - (256 % A.length), out = [];
+  while (out.length < CREATE_CODE_LEN) {
+    const buf = new Uint8Array(32); crypto.getRandomValues(buf);
+    for (const x of buf) { if (x < limit && out.length < CREATE_CODE_LEN) out.push(A[x % A.length]); }
+  }
+  return formatCreateCode(out.join(''));
+}
 export async function checkCreateCode(code) {
-  code = cleanCreateCode(code);
-  if (!code || code.length > 100) throw { code: 'bad-code' };
+  const n = normalizeCreateCode(code);
+  if (!n || n.length > 100) throw { code: 'bad-code' };
+  const proof = await sha256Hex(n);
   if (Store.mode === 'local') {
     const cfg = await LocalAdapter.getDoc('appConfig/creation');
-    if (!cfg || cfg.codeHash !== await sha256Hex(code)) throw { code: 'bad-code' };
+    if (!cfg || cfg.codeHash !== await sha256Hex(proof)) throw { code: 'bad-code' };
     return true;
   }
-  try { await FA.sdk.F.setDoc(FA.sdk.F.doc(FA.sdk.db, 'createProofs', FA.uid), { proof: code, ts: sv() }); }
+  try { await FA.sdk.F.setDoc(FA.sdk.F.doc(FA.sdk.db, 'createProofs', FA.uid), { proof, ts: sv() }); }
   catch (e) { throw { code: e && e.code === 'permission-denied' ? 'bad-code' : (e && e.code) || 'failed' }; }
   return true;
 }
-/* 방 주인이 만들기 코드를 정해요. 서버에는 해시만 보내요. 성공하면 true */
-export async function setCreateCode(code) {
-  code = cleanCreateCode(code);
-  if (code.length < MIN_CREATE_CODE || code.length > 100) throw { code: 'short-code' };
-  const codeHash = await sha256Hex(code);
-  if (Store.mode === 'local') { await LocalAdapter.setDoc('appConfig/creation', { codeHash, setBy: 'local', updatedTs: Date.now() }); return true; }
+/* 증거 지우기 (만들기를 그만두거나 실패했을 때, 되도록이면). 지우지 못해도 30분 뒤 규칙이 거절해요. */
+export async function clearCreateProof() {
+  if (Store.mode === 'local' || !FA.sdk || !FA.uid) return;
+  try { await FA.sdk.F.deleteDoc(FA.sdk.F.doc(FA.sdk.db, 'createProofs', FA.uid)); } catch (e) {}
+}
+/* 방 주인이 새 만들기 코드를 만들어요. 서버에는 이중 해시만 보내요. 이전 코드는 바로 못 써요. 만든 코드(XXXX-XXXX-XXXX)를 돌려줘요. */
+export async function createNewCreateCode() {
+  const code = generateCreateCode(), codeHash = await sha256Hex(await proofOf(code));
+  if (Store.mode === 'local') { await LocalAdapter.setDoc('appConfig/creation', { codeHash, setBy: 'local', updatedTs: Date.now() }); return code; }
   await FA.sdk.F.setDoc(FA.sdk.F.doc(FA.sdk.db, 'appConfig', 'creation'), { codeHash, setBy: FA.mid, updatedTs: sv() });
-  return true;
+  return code;
 }
 
 export async function createFamily({ name, role, createCode }) {
-  const { F, db } = FA.sdk, uid = FA.uid, fid = newId(), mid = newId(), proof = cleanCreateCode(createCode);
+  const { F, db } = FA.sdk, uid = FA.uid, fid = newId(), mid = newId(), proof = await proofOf(createCode);
   let lastErr;
   for (let i = 0; i < 3; i++) {
     const code = newCode(), b = F.writeBatch(db);
@@ -83,9 +101,10 @@ export async function createFamily({ name, role, createCode }) {
     b.set(F.doc(db, 'families', fid, 'uids', uid), { memberId: mid, via: 'create', addedTs: sv(), device: deviceLabel() });
     b.set(F.doc(db, 'families', fid, 'members', mid), { name, role, joinedTs: sv() });
     b.set(F.doc(db, 'users', uid), { familyId: fid, memberId: mid, updatedAt: sv() });
-    try { await b.commit(); lastErr = null; await FA.setMembership(fid, mid); F.deleteDoc(F.doc(db, 'createProofs', uid)).catch(() => {}); if (role === 'trainee') await setTrainee(); return { fid, mid, code }; }
+    try { await b.commit(); lastErr = null; await FA.setMembership(fid, mid); await clearCreateProof(); if (role === 'trainee') await setTrainee(); return { fid, mid, code }; }
     catch (e) { lastErr = e; if (!(e && e.code === 'permission-denied')) break; }
   }
+  await clearCreateProof();
   throw lastErr;
 }
 

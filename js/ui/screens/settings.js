@@ -13,7 +13,7 @@ import { dialog, h } from '../dom.js';
 import { installSlot } from '../install.js';
 import { planSummary } from '../plan-text.js';
 import { SCREENS } from '../registry.js';
-import { btn, confirmDeleteAll, confirmDeleteLocal, confirmLeave, openCreateCode, openDevices, openInvite, openOwnerTransfer, openRename, openTransfer, pushRow } from '../room-settings.js';
+import { btn, confirmDeleteAll, confirmDeleteLocal, confirmLeave, newCreateCode, openDevices, openInvite, openOwnerTransfer, openRename, openTransfer, pushRow } from '../room-settings.js';
 import { go } from '../shell.js';
 import { FONT_OPTS, SIZE_OPTS, liEl, prefsCard, segHtml, slotText, switchRow, xpCard } from '../widgets.js';
 import { $ } from '../../util.js';
@@ -81,7 +81,7 @@ function familyList() {
   out.push(group('앱', [
     liEl({ id: 'row-mine', icon: 'text', title: '내 화면', value: esc(fontName() + ' · ' + sizeName()) }, () => go('setMine')),
     inst,
-    (fb || local) && isOwnerNow() ? liEl({ id: 'btn-create-code', icon: 'key', title: '가족방 만들기 코드 정하기' }, openCreateCode) : null,
+    (fb || local) && isOwnerNow() ? liEl({ id: 'btn-create-code', icon: 'key', title: '새 코드 만들기' }, newCreateCode) : null,
     local ? liEl({ id: 'btn-role-switch', icon: 'eye', title: '훈련하는 분 화면으로 보기' }, () => ACTS.roleswitch()) : null,
     fb ? liEl({ id: 'btn-delete-all', icon: 'trash', title: '모든 기록 삭제' }, confirmDeleteAll) : null,
     local ? liEl({ id: 'btn-delete-local', icon: 'trash', title: '모든 기록 삭제 (이 기기)' }, confirmDeleteLocal) : null

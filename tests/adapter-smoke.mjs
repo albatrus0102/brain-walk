@@ -3,7 +3,7 @@
 // 사람마다(A 아버지·B 가족·C 새 기기) 별도 프로세스로 돌려서 진짜 기기처럼 서로 다른 로그인을 써요.
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { CREATE_CODE, seedCreation } from './seed-creation.mjs';
+import { CREATE_CODE, docExists, seedCreation } from './seed-creation.mjs';
 const actor = process.argv[2];
 const dir = process.env.SMOKE_DIR || path.join(os.tmpdir(), 'bw-smoke');
 
@@ -49,8 +49,19 @@ try {
     ok(await M.checkCreateCode(CREATE_CODE) === true, '맞는 만들기 코드는 통과');
     const r = await M.createFamily({ name: '아버지', role: 'trainee', createCode: CREATE_CODE });
     ok(await (async () => { const { F, db } = FA.sdk; try { await F.getDoc(F.doc(db, 'createProofs', FA.uid)); return false; } catch (e) { return e.code === 'permission-denied'; } })(), '만들기 증거 문서는 아무도 읽지 못해요');
-    ok(await denied(M.setCreateCode('another-code-12345')), 'appConfig/primary 가 없으면 방 주인도 코드를 못 바꿔요');
-    ok(await M.setCreateCode('short').then(() => false, e => e && e.code === 'short-code'), '8글자 미만 코드는 거절');
+    ok(!(await docExists('createProofs/' + FA.uid)), '가족방을 만든 뒤 만들기 증거 문서는 지워져 있어요');
+    ok(await denied(M.createNewCreateCode()), 'appConfig/primary 가 없으면 방 주인도 코드를 못 바꿔요');
+    await seedCreation(CREATE_CODE, r.fid);   // 이제 이 가족방이 기본 가족방: 방 주인(아버지)만 새 코드를 만들 수 있어요
+    const fresh = await M.createNewCreateCode();
+    ok(/^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/.test(fresh), '방 주인이 새 만들기 코드를 만들어요 ' + fresh.replace(/./g, '*'));
+    ok(await M.checkCreateCode(CREATE_CODE).then(() => false, e => e && e.code === 'bad-code'), '이전 코드는 바로 못 써요');
+    ok(await M.checkCreateCode(' ' + fresh.toLowerCase().replace(/-/g, ' ') + ' ') === true, '새 코드: 소문자·공백으로 쳐도 정리해서 통과');
+    await M.clearCreateProof();
+    ok(!(await docExists('createProofs/' + FA.uid)), '증거 정리: 만들기를 그만두면 증거 문서를 지워요')
+    const gen = Array.from({ length: 200 }, () => M.generateCreateCode());
+    ok(gen.every(c => /^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/.test(c) && !/[01OIL]/.test(c)), '생성 코드는 XXXX-XXXX-XXXX, 0/O/1/I/L 없음');
+    ok(new Set(gen).size === gen.length, '생성 코드는 매번 달라요');
+    ok(M.normalizeCreateCode(' ab-cd ef\u2013gh ') === 'ABCDEFGH', '입력 정리: 대문자, 공백·줄표 제거');
     ok(/^[2-9A-HJ-NP-Z]{6}$/.test(r.code), '가족 만들기 + 6글자 코드 ' + r.code);
     ok(FA.me().id === r.mid && FA.me().name === '아버지', 'me() = memberId');
     ok((await FA.getDoc('state/trainee')).userId === r.mid, 'state/trainee 설정');

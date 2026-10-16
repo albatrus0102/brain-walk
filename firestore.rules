@@ -65,15 +65,15 @@ service cloud.firestore {
       return exists(traineePath(fid)) && get(traineePath(fid)).data.userId == myId(fid);
     }
 
-    // ---- 새 가족방 만들기는 '만들기 코드'를 아는 사람만 (appConfig/creation.codeHash = 코드의 sha256 소문자 16진수. toHexString() 은 대문자라서 .lower() 로 맞춰요).
+    // ---- 새 가족방 만들기는 '만들기 코드'를 아는 사람만 (코드 N = 대문자, 공백·줄표 없는 12글자. 앱이 보내는 증거 proof = sha256hex(N), appConfig/creation.codeHash = sha256hex(sha256hex(N)). toHexString() 은 대문자라서 .lower() 로 맞춰요).
     // appConfig 는 앱에서 읽을 수 없고, 코드 문서가 없으면 아무도 새 가족방을 못 만들어요. 이미 있는 가족방은 영향이 없어요.
-    // 코드 바꾸기는 appConfig/primary.fid 가 가리키는 가족방(서버가 심어요)의 방 주인만. 생 코드는 어디에도 저장하지 않아요.
+    // 코드 바꾸기는 appConfig/primary.fid 가 가리키는 가족방(서버가 심어요)의 방 주인만. 생 코드는 서버에 오지 않아요 (생 코드를 proof 로 보내도 해시가 달라 거절돼요).
     function creationPath() { return /databases/$(database)/documents/appConfig/creation; }
     function primaryPath() { return /databases/$(database)/documents/appConfig/primary; }
     function proofPath(u) { return /databases/$(database)/documents/createProofs/$(u); }
     function validProofDoc(d) {
       return d.keys().hasOnly(['proof', 'ts']) && d.keys().hasAll(['proof', 'ts'])
-        && d.proof is string && d.proof.size() > 0 && d.proof.size() <= 100
+        && d.proof is string && d.proof.matches('^[0-9a-f]{64}$')
         && exists(creationPath()) && hashing.sha256(d.proof).toHexString().lower() == get(creationPath()).data.codeHash;
     }
     function isPrimaryOwner() {
