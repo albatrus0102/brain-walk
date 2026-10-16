@@ -5,15 +5,16 @@
  * every ~10 minutes (GitHub delays scheduled runs 5–30 min, sometimes more).
  *
  * For projects WITHOUT the Blaze plan (no Cloud Functions). Handles:
- *   1. the daily training alarm to the trainee (state/alarm, Asia/Seoul)
- *   2. each family member's reminder (reminders/{memberId}) if not trained yet
+ *   1. the daily training alarm to each trainee (state/trainees → trainees/{mid}/state/alarm, Asia/Seoul)
+ *   2. each family member's reminder (reminders/{memberId}) naming the trainees not trained yet today
  *   3. chat messages / nudges still in push:'pending' (delayed, not instant)
  *   4. messages deferred by quiet hours (21:00–08:00) -> one digest after 08:00
  *   5. purge of expired join/transfer codes and stale devices
  *
  * Safe to run alongside the Cloud Functions: every send is claimed first in a
  * Firestore transaction (messages.push state machine, pushState/{memberId}
- * lastAlarmSentDate / lastReminderSentDate / lastNudgePushAt).
+ * lastAlarmSentDate / lastReminderSentDate / nudgePushAt.{toId}).
+ * Keep the family logic identical to functions/index.js.
  *
  * Env:
  *   FIREBASE_SERVICE_ACCOUNT  service-account JSON (repo secret). Not needed
@@ -61,7 +62,8 @@ if (!/^https:\/\//.test(APP_URL) && !DRY_RUN) {
 const WINDOW_MIN = Number(env.WINDOW_MIN || 90);
 const PENDING_GRACE_MS = Number(env.PENDING_GRACE_SEC || 120) * 1000;
 
-const COURSE_N = 5;
+const COURSE_N = 5;                               // default plan.gamesPerDay
+const MAX_TRAINEES = 4;
 const QUIET_START = 21 * 60;
 const QUIET_END = 8 * 60;
 const NUDGE_PUSH_GAP_MS = 110 * 60 * 1000;
@@ -107,11 +109,10 @@ const famRef = (fid) => db.collection('families').doc(fid);
 // ---------------------------------------------------------- family context
 async function loadFamily(fid) {
   const f = famRef(fid);
-  const [membersSnap, uidsSnap, traineeSnap, alarmSnap] = await Promise.all([
+  const [membersSnap, uidsSnap, regSnap] = await Promise.all([
     f.collection('members').get(),
     f.collection('uids').get(),
-    f.collection('state').doc('trainee').get(),
-    f.collection('state').doc('alarm').get(),
+    f.collection('state').doc('trainees').get(),
   ]);
   const members = new Map();
   membersSnap.forEach((d) => { const m = d.data(); if (!m.leftTs) members.set(d.id, m); });
@@ -121,15 +122,21 @@ async function loadFamily(fid) {
     if (!uidsByMember.has(mid)) uidsByMember.set(mid, new Set());
     uidsByMember.get(mid).add(d.id);
   });
-  const trainee = traineeSnap.exists ? traineeSnap.data() : null;
-  return {
-    fid,
-    members,
-    uidsByMember,
-    traineeId: trainee && members.has(trainee.userId) ? trainee.userId : null,
-    traineeLabel: (trainee && trainee.displayLabel) || '아버지',
-    alarm: alarmSnap.exists ? alarmSnap.data() : null,
-  };
+  // state/trainees { ids:[mid…] (≤4, display order), labels:{mid:'아버지'} } → per trainee: alarm + plan
+  const reg = regSnap.exists ? regSnap.data() : {};
+  const ids = [...new Set(Array.isArray(reg.ids) ? reg.ids : [])].filter((id) => typeof id === 'string' && members.has(id)).slice(0, MAX_TRAINEES);
+  const labels = reg.labels && typeof reg.labels === 'object' ? reg.labels : {};
+  const trainees = await Promise.all(ids.map(async (id) => {
+    const st = f.collection('trainees').doc(id).collection('state');
+    const [alarmSnap, planSnap] = await Promise.all([st.doc('alarm').get(), st.doc('plan').get()]);
+    return {
+      id,
+      label: (typeof labels[id] === 'string' && labels[id].trim()) || '훈련하는 분',
+      alarm: alarmSnap.exists ? alarmSnap.data() : null,
+      plan: planSnap.exists ? planSnap.data() : null,
+    };
+  }));
+  return { fid, members, uidsByMember, trainees, traineeIds: new Set(ids) };
 }
 
 async function tokensFor(ctx, memberIds) {
@@ -204,20 +211,21 @@ async function claimDaily(fid, memberId, field, dateKey) {
     return true;
   });
 }
-async function claimNudgeSlot(fid, authorId, nowMs) {
+async function claimNudgeSlot(fid, authorId, toId, nowMs) {
   const ref = famRef(fid).collection('pushState').doc(authorId);
   return db.runTransaction(async (tx) => {
     const s = await tx.get(ref);
-    const last = s.exists && s.get('lastNudgePushAt') ? s.get('lastNudgePushAt').toMillis() : 0;
+    const at = (s.exists && s.get('nudgePushAt')) || {};
+    const last = at[toId] && at[toId].toMillis ? at[toId].toMillis() : 0;
     if (nowMs - last < NUDGE_PUSH_GAP_MS) return false;
-    tx.set(ref, { lastNudgePushAt: Timestamp.fromMillis(nowMs) }, { merge: true });
+    tx.set(ref, { nudgePushAt: { [toId]: Timestamp.fromMillis(nowMs) } }, { merge: true });
     return true;
   });
 }
 
 // ------------------------------------------------------------ messages
 function recipientsOf(ctx, msg) {
-  if (msg.kind === 'nudge') return msg.toId && msg.toId !== msg.authorId && ctx.members.has(msg.toId) ? [msg.toId] : [];
+  if (msg.kind === 'nudge') return msg.toId && msg.toId !== msg.authorId && ctx.traineeIds.has(msg.toId) ? [msg.toId] : [];
   return [...ctx.members.keys()].filter((m) => m !== msg.authorId);
 }
 
@@ -242,7 +250,7 @@ async function runMessageQueue(now) {
     if (msg.deleted || msg.kind === 'summary') { await claimMessage(d.ref, st, 'none'); continue; }
     if (isQuiet(now)) { await claimMessage(d.ref, st, 'deferred'); continue; } // st is 'pending' here
     if (!(await claimMessage(d.ref, st, 'sent'))) continue;
-    if (msg.kind === 'nudge' && !(await claimNudgeSlot(fid, msg.authorId, now.ms))) {
+    if (msg.kind === 'nudge' && !(await claimNudgeSlot(fid, msg.authorId, msg.toId, now.ms))) {
       await d.ref.update({ push: 'throttled' });
       continue;
     }
@@ -281,7 +289,7 @@ async function runMessageQueue(now) {
       } else {
         n = {
           title: '우리 가족 대화방',
-          body: (e.overnight ? '밤사이 ' : '') + `새 메시지 ${total}개가 있어요.` + (e.nudge && mid === ctx.traineeId ? ' 가족이 응원도 보냈어요.' : ''),
+          body: (e.overnight ? '밤사이 ' : '') + `새 메시지 ${total}개가 있어요.` + (e.nudge && ctx.traineeIds.has(mid) ? ' 가족이 응원도 보냈어요.' : ''),
           path: '?open=chat', tag: `chat-${fid}`,
         };
       }
@@ -292,47 +300,62 @@ async function runMessageQueue(now) {
 }
 
 // ------------------------------------------------------- alarms/reminders
-async function courseDoneToday(ctx, dateKey) {
-  if (!ctx.traineeId) return false;
+/** Trainee t finished today: progress/{date}-{mid}.status == 'done', else (fallback) that trainee's in-course
+ *  sessions of today cover the plan's gamesPerDay (distinct games). */
+async function courseDoneToday(ctx, t, dateKey) {
+  const p = await famRef(ctx.fid).collection('progress').doc(`${dateKey}-${t.id}`).get();
+  if (p.exists && p.get('status') === 'done') return true;
+  const gpd = t.plan && Number.isInteger(t.plan.gamesPerDay) ? Math.min(9, Math.max(1, t.plan.gamesPerDay)) : COURSE_N;
   const snap = await famRef(ctx.fid).collection('sessions')
     .where('date', '==', dateKey)
     .where('inCourse', '==', true)
-    .where('userId', '==', ctx.traineeId)
+    .where('userId', '==', t.id)
     .select('gameId')
     .get();
-  return new Set(snap.docs.map((d) => d.get('gameId'))).size >= COURSE_N;
+  return new Set(snap.docs.map((d) => d.get('gameId'))).size >= gpd;
 }
+/** A training day for t: plan.weekdays (0 = Sunday) includes today; no plan = every day. */
+const isTrainingDay = (t, weekday) => !(t.plan && Array.isArray(t.plan.weekdays)) || t.plan.weekdays.includes(weekday);
 
+/** (a) daily alarm to each trainee + per-member reminders to the family (members not in T). */
 async function runAlarmsForFamily(fid, now) {
   const ctx = await loadFamily(fid);
-  let done = null;
-  const isDone = async () => (done == null ? (done = await courseDoneToday(ctx, now.dateKey)) : done);
+  const done = new Map(); // lazy per trainee: only query if something is due
+  const isDone = async (t) => { if (!done.has(t.id)) done.set(t.id, await courseDoneToday(ctx, t, now.dateKey)); return done.get(t.id); };
 
-  const a = ctx.alarm;
-  if (ctx.traineeId && a && Array.isArray(a.days) && a.days.includes(now.weekday) && isDue(a.time, now, WINDOW_MIN)) {
-    if (!(await isDone()) && (await claimDaily(fid, ctx.traineeId, 'lastAlarmSentDate', now.dateKey))) {
+  // Training alarm per trainee (trainees/{mid}/state/alarm) — exempt from quiet hours (the family chose that time).
+  for (const t of ctx.trainees) {
+    const a = t.alarm;
+    if (!(a && Array.isArray(a.days) && a.days.includes(now.weekday) && isDue(a.time, now, WINDOW_MIN))) continue;
+    if (!(await isDone(t)) && (await claimDaily(fid, t.id, 'lastAlarmSentDate', now.dateKey))) {
       stats.alarms++;
-      await sendPush(await tokensFor(ctx, [ctx.traineeId]), {
+      await sendPush(await tokensFor(ctx, [t.id]), {
         title: '훈련할 시간이에요!',
         body: '오늘의 두뇌 산책을 시작해 볼까요? 천천히 하셔도 괜찮아요.',
-        path: '?open=course', tag: `alarm-${now.dateKey}`, ttlSec: 3 * 3600,
+        path: '?open=course', tag: `alarm-${t.id}-${now.dateKey}`, ttlSec: 3 * 3600,
         data: { type: 'alarm', familyId: fid },
       });
     }
   }
 
-  if (!ctx.traineeId || isQuiet(now)) return; // reminders respect quiet hours
+  // Family reminders — subject to quiet hours. Names the trainees with a training day today who are not done.
+  if (!ctx.trainees.length || isQuiet(now)) return;
   const rems = await famRef(fid).collection('reminders').get();
+  let pending = null; // lazy
   for (const r of rems.docs) {
     const mid = r.id;
     const { time, enabled } = r.data();
-    if (!enabled || mid === ctx.traineeId || !ctx.members.has(mid) || !isDue(time, now, WINDOW_MIN)) continue;
-    if (await isDone()) return;
+    if (!enabled || ctx.traineeIds.has(mid) || !ctx.members.has(mid) || !isDue(time, now, WINDOW_MIN)) continue;
+    if (pending == null) {
+      pending = [];
+      for (const t of ctx.trainees) if (isTrainingDay(t, now.weekday) && !(await isDone(t))) pending.push(t);
+    }
+    if (!pending.length) return;
     if (!(await claimDaily(fid, mid, 'lastReminderSentDate', now.dateKey))) continue;
     stats.reminders++;
     await sendPush(await tokensFor(ctx, [mid]), {
       title: '오늘의 두뇌 산책',
-      body: `${withSubject(ctx.traineeLabel)} 아직 훈련 전이에요. 응원 한마디 보내 볼까요?`,
+      body: `${withSubject(pending.map((t) => t.label).join('·'))} 아직 훈련 전이에요. 응원 한마디 보내 볼까요?`,
       path: '?open=family', tag: `reminder-${now.dateKey}`, ttlSec: 3 * 3600,
       data: { type: 'reminder', familyId: fid },
     });
