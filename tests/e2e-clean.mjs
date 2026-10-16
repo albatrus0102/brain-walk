@@ -42,11 +42,11 @@ const paras = page => page.evaluate(() => [...document.querySelectorAll('#screen
   must(!BAD.test(await body(page)) && !(await page.locator('#disclaimer, .foot').count()), '가족 홈: 면책·꼬리말 없음');
   must((await paras(page)).length === 0, '가족 홈: 문단 글 없음 ' + JSON.stringify(await paras(page)));
   await page.screenshot({ path: DIR + '/family-home.png' });
-  for (const s of ['family', 'assess', 'surveys', 'clinical', 'assessView', 'clocks', 'pick', 'members', 'adminDisplay', 'adminPlan', 'aiReports', 'aiSettings']) {
+  for (const s of ['family', 'assess', 'surveys', 'clinical', 'assessView', 'pick', 'members', 'adminDisplay', 'adminPlan', 'aiReports', 'aiSettings']) {
     await page.evaluate(x => window.__go(x), s); await page.waitForTimeout(200);
     const ps = await paras(page);
     must(!BAD.test(await body(page)), s + ': 면책·위기·출처 글 없음');
-    if (['surveys', 'assess', 'pick', 'clocks', 'members'].includes(s)) must(ps.length === 0, s + ': 문단 글 없음 ' + JSON.stringify(ps));
+    if (['surveys', 'assess', 'pick', 'members'].includes(s)) must(ps.length === 0, s + ': 문단 글 없음 ' + JSON.stringify(ps));
     await page.screenshot({ path: DIR + '/sweep-' + s + '.png' });
   }
   // 설문: 출처 접는 칸 없음

@@ -15,7 +15,7 @@ const myDisplay = () => { const me = myTrainee(); return me ? displayOf(me) : nu
 export const followsAdmin = () => !!(myDisplay() && isTrainee());
 
 /* 가족·관리자 화면은 촘촘한(M3 기본 밀도) 모드, 훈련하는 분 화면과 게임 흐름·가입 화면은 큰 글자 그대로예요 (styles/compact.css) */
-const LARGE_SCREENS = ['game', 'result', 'courseBreak', 'checkIntro', 'checkin', 'courseDone', 'assessStep', 'assessBreak', 'assessDone', 'clock', 'clockDone', 'setup', 'ob-loading'];
+const LARGE_SCREENS = ['game', 'result', 'courseBreak', 'checkIntro', 'checkin', 'courseDone', 'assessStep', 'assessBreak', 'assessDone', 'setup', 'ob-loading'];
 export const isCompact = () => !isTrainee() && !LARGE_SCREENS.includes(S.screen) && String(S.screen).indexOf('ob-') !== 0;
 export function syncDensity() {
   const r = document.documentElement, want = isCompact() ? 'compact' : 'large';

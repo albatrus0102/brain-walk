@@ -1,4 +1,4 @@
-// 체험 모드: 일상생활 체크(가족), 잠 기록(생활 체크), 시계 그리기(훈련하는 분) → 가족 화면에서 확인
+// 체험 모드: 일상생활 체크(가족), 잠 기록(생활 체크) → 가족 화면에서 확인
 import { createRequire } from 'node:module';
 const require = createRequire(process.env.PW_MODULES || '/opt/node-tools/node_modules/');
 const { chromium } = require('playwright');
@@ -21,26 +21,9 @@ await page.click('#sl-summary'); await page.fill('#sl-bed', '22:30'); await page
 must((await page.inputValue('#sl-bed')) === '22:30', '잠든 시각 유지(다시 그려도)');
 await page.click('#btn-ci-save'); await page.waitForSelector('#btn-main');
 must(await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem('bw.localdb'))).some(k => k.startsWith('sleeplogs/'))), '수면 기록 저장');
-// 2) 시계 그리기 (훈련하는 분)
-await page.evaluate(() => window.__go('clock')); await page.waitForSelector('#clock-canvas');
-must((await page.innerText('#clk-prompt')).includes('11시 10분을 가리키는 시계를 그려 주세요'), '시계 그리기 안내 문구');
-must(await page.locator('#btn-clock-done').isDisabled(), '그리기 전에는 저장 불가');
-const box = await page.locator('#clock-canvas').boundingBox(), cx = box.x + box.width / 2, cy = box.y + box.height / 2, R = box.width * 0.38;
-await page.mouse.move(cx + R, cy); await page.mouse.down();
-for (let a = 0; a <= 360; a += 10) await page.mouse.move(cx + R * Math.cos(a * Math.PI / 180), cy + R * Math.sin(a * Math.PI / 180));
-await page.mouse.up();
-for (const [dx, dy] of [[0, -R * 0.5], [R * 0.45, -R * 0.2]]) { await page.mouse.move(cx, cy); await page.mouse.down(); await page.mouse.move(cx + dx, cy + dy, { steps: 5 }); await page.mouse.up(); }
-must(await page.locator('#btn-clock-done').isEnabled(), '그린 뒤 저장 가능');
-await page.screenshot({ path: SHOTS + '/clock-draw.png' });
-await page.click('#btn-clock-done'); await page.waitForSelector('#cd-h'); must((await page.innerText('#cd-h')).includes('수고하셨어요'), '그림 저장 후 격려 문구만');
-const len = await page.evaluate(() => { const o = JSON.parse(localStorage.getItem('bw.localdb')); const k = Object.keys(o).find(x => x.startsWith('clocks/')); return o[k].img.length; });
-must(len > 500 && len <= 190000, '저장된 그림 크기(문자) ' + len + ' ≤ 190000');
-// 3) 가족으로 전환 → 시계 그림, 일상생활 체크, 잠 기록
+// 2) 가족으로 전환 → 일상생활 체크, 잠 기록
 await page.evaluate(() => { localStorage.setItem('bw.role', JSON.stringify('family')); }); await page.goto(BASE); await page.waitForSelector('#appbar-title'); if (await vis('.dialog')) await page.click('#dlg-btn-1').catch(() => {});
 await page.click('#nav-family'); await page.waitForSelector('#tab-assess'); await page.click('#tab-assess'); await page.waitForSelector('#hub-h');
-await page.click('#hub-clocks'); await page.waitForSelector('#clks-h'); must(await vis('#clk-grid img'), '가족: 시계 그림 보기');
-await page.click('#clk-0'); await page.waitForSelector('#clk-close'); must(await vis('.sheet img'), '크게 보기'); await page.click('#clk-close');
-await page.screenshot({ path: SHOTS + '/clock-gallery.png' });
 await page.goto(BASE); await page.waitForSelector('#appbar-title'); if (await vis('.dialog')) await page.click('#dlg-btn-1').catch(() => {});
 await page.click('#nav-family'); await page.waitForSelector('#tab-assess'); await page.click('#tab-assess'); await page.click('#hub-iadl'); await page.waitForSelector('#svi-h');
 await page.click('#rel-1'); await page.click('#btn-sv-start'); await page.waitForSelector('#q-text');

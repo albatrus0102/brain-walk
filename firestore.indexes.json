@@ -179,20 +179,6 @@
       ]
     },
     {
-      "collectionGroup": "clocks",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "userId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "ts",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "sleeplogs",
       "queryScope": "COLLECTION",
       "fields": [

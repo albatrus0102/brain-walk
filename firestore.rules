@@ -48,7 +48,7 @@ service cloud.firestore {
     function ownerId(fid) { return get(famPath(fid)).data.ownerMemberId; }
     function isOwner(fid) { return ownerId(fid) == myId(fid); }
 
-    // 가족 전용 자료(설문·일상생활 체크·시계 그림·병원 검사)용: 내 member 문서의 role 이 'family' 인 사람만 읽어요.
+    // 가족 전용 자료(설문·일상생활 체크·병원 검사)용: 내 member 문서의 role 이 'family' 인 사람만 읽어요.
     // 훈련하는 분(role 'trainee')은 (설문처럼) 만들 수는 있어도 읽을 수 없어요.
     // role 은 처음 가입할 때(가입 후 30분 안)를 빼면 관리자만 바꿀 수 있어요 (members 규칙). DESIGN.md §3.
     function isFamilyRole(fid) { return myMember(fid).role == 'family'; }
@@ -510,24 +510,6 @@ service cloud.firestore {
         allow create: if isMember(fid) && okId(sid) && validSurvey();
         allow update: if false;
         allow delete: if isMember(fid) && isFamilyOnlyReader(fid) && (resource.data.answeredBy == myId(fid) || isAdmin(fid));
-      }
-
-      // ---- 시계 그림: 훈련하는 분이 그리면 저장(create)되고, 가족만 볼 수 있어요. 자동 채점 없음.
-      // img 는 작게 줄인 data URL (PNG/JPEG, 200KB 이하).
-      match /clocks/{cid} {
-        allow read: if isMember(fid) && isFamilyOnlyReader(fid);
-        allow create: if isMember(fid) && okId(cid)
-          && newData().keys().hasOnly(['date', 'ts', 'userId', 'img', 'w', 'h'])
-          && newData().keys().hasAll(['date', 'ts', 'userId', 'img'])
-          && newData().userId == myId(fid)
-          && okDate(newData().date) && okMs(newData().ts)
-          && newData().img is string && newData().img.size() <= 200000
-          // base64 글자만 허용: 따옴표 등이 섞이면 화면의 <img src> 를 깨고 스크립트를 넣을 수 있어요
-          && newData().img.matches('^data:image/(png|jpeg);base64,[A-Za-z0-9+/]+=*$')
-          && optNum('w') && optNum('h');
-        allow update: if false;
-        // 그린 사람(훈련하는 분)은 자기 그림을 읽을 수 없으니, 지우는 일은 가족 역할인 사람이 해요.
-        allow delete: if isMember(fid) && isFamilyOnlyReader(fid);
       }
 
       // ---- 수면 기록: checkins 처럼 사람마다 하루 한 개 (문서 id = YYYY-MM-DD-memberId). 가족만 읽기(훈련하는 분은 쓰기만).

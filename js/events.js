@@ -1,7 +1,6 @@
 import { alarmTick } from './alarm.js';
 import { SURVEYS } from './surveys/content.js';
 import { clinicalInput, deleteClinical, openClinicalForm, saveClinical, shareClinical } from './ui/screens/clinical.js';
-import { openClock } from './ui/screens/clock.js';
 import { answerSurvey } from './ui/screens/surveys.js';
 import { togglePush } from './ui/room-settings.js';
 import { NO_WRITE_MSG, allCheckins, allSessions, focusOn, isTrainee, remoteSet, todayS } from './data.js';
@@ -25,7 +24,7 @@ document.addEventListener('click', e => {
   if (a === 'nav') { if (b.dataset.to === 'settings') { S.remDraft = null; } go(b.dataset.to); }
   else if (a === 'back' || a === 'home') {
     if (S.screen === 'game') leaveGameConfirm(() => go('home'));
-    else if (a === 'back' && !isTrainee() && (S.screen === 'surveyQ' || S.screen === 'clock')) confirmQuit();
+    else if (a === 'back' && !isTrainee() && S.screen === 'surveyQ') confirmQuit();
     else if (a === 'back' && ADMIN_SUBSCREENS.includes(S.screen)) ACTS.adminback();
     else if (a === 'back' && AI_BACK[S.screen]) go(backTarget(S.screen, AI_BACK[S.screen]));
     else if (a === 'back' && BACK_TO[S.screen] && !isTrainee()) go(backTarget(S.screen, BACK_TO[S.screen]));
@@ -49,7 +48,6 @@ document.addEventListener('click', e => {
   else if (a === 'clres') { S.cl.result = S.cl.result === b.dataset.v ? null : b.dataset.v; S.cl.open = true; render(true); const nb = $('#cl-more'); if (nb) nb.scrollIntoView({ block: 'nearest' }); }
   else if (a === 'clshare') shareClinical(b.dataset.id);
   else if (a === 'cldel') deleteClinical(b.dataset.id);
-  else if (a === 'clockopen') openClock(Number(b.dataset.i));
   else if (a === 'svopen') { const sv = SURVEYS[b.dataset.k]; S.sv = { kind: sv.id, mode: isTrainee() ? 'self' : sv.modes[0], relation: LS.get('bw.relation', null), idx: 0, answers: [] }; go('surveyIntro'); }
   else if (a === 'svmode') { S.sv.mode = b.dataset.v; render(true); }
   else if (a === 'svrel') { S.sv.relation = b.dataset.v; render(true); const nb = $('#btn-sv-start'); if (nb) nb.focus(); }

@@ -299,10 +299,10 @@ async function seedLocalTrainees() {
   ops.push({ set: 'presence/' + DEMO_T2, data: { ts: now - 6e4, lastSeen: now - 6e4, screen: 'game', device: 'Android' } });
   await A.batch(ops);
 }
-/* ---- 가족 전용 자료 (설문·시계 그림·병원 검사·잠 기록·점검 과제 상세): 고른 훈련하는 분 것만 구독해요 ----
+/* ---- 가족 전용 자료 (설문·병원 검사·잠 기록·점검 과제 상세): 고른 훈련하는 분 것만 구독해요 ----
  * 규칙상 role 이 'family' 이고 훈련하는 분 목록에 없는 사람만 읽을 수 있어요. [컬렉션, S 의 이름, 정렬, 개수, 사람 필드] */
 export const FAMILY_ONLY = [
-  ['surveys', 'surveys', 'ts', 100, 'subjectId'], ['clocks', 'clocks', 'ts', 40, 'userId'], ['clinicalTests', 'clinical', 'ts', 100, 'subjectId'],
+  ['surveys', 'surveys', 'ts', 100, 'subjectId'], ['clinicalTests', 'clinical', 'ts', 100, 'subjectId'],
   ['sleeplogs', 'sleeplogs', 'date', 30, 'userId'], ['taskRuns', 'taskRuns', 'ts', 30, 'userId']
 ];
 let famUnsubs = [];
@@ -350,7 +350,7 @@ function syncBank() { const me = myTrainee(); if (Store.adapter && me) startBank
 function onData() {
   syncRole(); syncHeartbeat(); syncBank();
   alarmTick(true);
-  if (['home', 'pick', 'family', 'assess', 'settings', 'members', 'surveys', 'clinical', 'clocks'].includes(S.screen) || String(S.screen).indexOf('ai') === 0) { const keep = document.activeElement; if (!(keep && /^(INPUT|TEXTAREA)$/.test(keep.tagName))) render(true); }
+  if (['home', 'pick', 'family', 'assess', 'settings', 'members', 'surveys', 'clinical'].includes(S.screen) || String(S.screen).indexOf('ai') === 0) { const keep = document.activeElement; if (!(keep && /^(INPUT|TEXTAREA)$/.test(keep.tagName))) render(true); }
   else if (S.screen === 'chat') refreshChat();
   else renderChrome();
   checkNudgeDialog();

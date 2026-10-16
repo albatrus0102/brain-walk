@@ -109,7 +109,6 @@ const SHELL_FILES = /*SHELL_START*/ [
   "./js/ui/screens/assess.js",
   "./js/ui/screens/checkin.js",
   "./js/ui/screens/clinical.js",
-  "./js/ui/screens/clock.js",
   "./js/ui/screens/course-break.js",
   "./js/ui/screens/course-done.js",
   "./js/ui/screens/family.js",
