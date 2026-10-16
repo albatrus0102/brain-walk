@@ -10,18 +10,25 @@ function koVoice() {
 /* 실제로 쓰는 화면·소리 설정은 display.js 의 applyDisplay 가 S.eff 에 넣어요 (훈련하는 분 기기는 관리자가 정한 값) */
 export const effectiveSound = () => (S.eff ? S.eff.voice : S.prefs.sound);
 export const speechRate = () => (S.eff && S.eff.rate) || 0.9;
-export function stopSpeech() { try { if (synth) synth.cancel(); } catch (e) {} }
+let cur = null;   // 크롬은 참조가 없는 발화를 지워 버려서 끝 신호(onend)가 안 와요: 붙잡아 둬요
+function speakNow(u) {
+  cur = u;
+  const busy = synth.speaking || synth.pending;
+  try { if (synth.paused) synth.resume(); } catch (e) {}   // 백그라운드에 다녀오면 멈춤 상태로 남는 기기가 있어요
+  if (busy) { synth.cancel(); setTimeout(() => { if (cur === u) synth.speak(u); }, 80); }   // 안드로이드 크롬: cancel 바로 뒤 speak 는 무시될 때가 있어요
+  else synth.speak(u);
+}
+export function stopSpeech() { cur = null; try { if (synth) synth.cancel(); } catch (e) {} }
 /* rate: 미리 듣기처럼 정해진 빠르기로 읽을 때만. onEnd: 다 읽었을 때 (읽을 수 있을 때만 불려요). 돌려주는 값: 읽기 시작했는지 */
 export function say(text, force, rate, onEnd) {
   if (!synth || !text) return false;
   if (!force && !effectiveSound()) return false;
   try {
-    synth.cancel();
     const u = new window.SpeechSynthesisUtterance(text);
     u.lang = 'ko-KR'; u.rate = rate || speechRate(); u.pitch = 1;
     const v = koVoice(); if (v) u.voice = v;
     if (onEnd) { u.onend = onEnd; u.onerror = onEnd; }
-    synth.speak(u);
+    speakNow(u);
     return true;
   } catch (e) { return false; }
 }
@@ -33,11 +40,10 @@ export function sayThen(text, cb, noVoiceMs, maxMs) {
   const fire = () => { if (fired) return; fired = true; clearTimeout(t1); clearTimeout(t2); cb(); };
   if (!synth || !text || !effectiveSound()) { t1 = setTimeout(fire, noVoiceMs == null ? 3000 : noVoiceMs); return () => { fired = true; clearTimeout(t1); }; }
   try {
-    synth.cancel();
     const u = new window.SpeechSynthesisUtterance(text);
     u.lang = 'ko-KR'; u.rate = speechRate(); u.pitch = 1; u.onend = fire; u.onerror = fire;
     const v = koVoice(); if (v) u.voice = v;
-    synth.speak(u);
+    speakNow(u);
   } catch (e) { t1 = setTimeout(fire, noVoiceMs == null ? 3000 : noVoiceMs); }
   t2 = setTimeout(fire, maxMs || 9000);
   return () => { fired = true; clearTimeout(t1); clearTimeout(t2); };
@@ -58,4 +64,8 @@ export function beep(kind) {
     });
   } catch (e) {}
 }
-if (synth) { try { synth.onvoiceschanged = () => { S.voice = null; }; } catch (e) {} }
+if (synth) {
+  try { synth.onvoiceschanged = () => { S.voice = null; }; synth.getVoices(); } catch (e) {}   // 목록은 늦게 와요: 미리 불러 둬요
+  // 앱으로 돌아오면 멈춰 있던 음성 엔진을 깨워요
+  try { document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && synth.paused) synth.resume(); }); } catch (e) {}
+}

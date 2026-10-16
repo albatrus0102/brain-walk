@@ -7,6 +7,8 @@ import { ic } from '../../icons.js';
 import { courseLen, praise } from '../../session.js';
 import { getPlan, isTrainee } from '../../data.js';
 import { beep, canSpeakKo, say, synth } from '../../sound.js';
+import { chromeIntentUrl, inAppInfo, kakaoExternalUrl } from '../install.js';
+import { Platform } from '../../platform.js';
 import { S } from '../../state.js';
 import { h } from '../dom.js';
 import { SCREENS } from '../registry.js';
@@ -29,6 +31,11 @@ function revealFeedback(el) {
   else if (f.top < top) dy = f.top - top;
   if (Math.abs(dy) > 1) window.scrollBy(0, dy);
 }
+/* 음성이 없는 브라우저(카톡 등 앱 안 브라우저): 소리가 나오는 브라우저로 여는 버튼 */
+function noSpeechBtn() {
+  const info = inAppInfo(), url = info ? (info.kakao ? kakaoExternalUrl() : Platform.platformName() === 'android' ? chromeIntentUrl() : '') : '';
+  return url ? '<a class="btn tonal" id="btn-replay" href="' + url + '" rel="noopener">' + ic('vol') + '크롬으로 열기</a>' : '<button class="btn tonal" id="btn-replay" type="button" disabled>' + ic('vol') + '소리 안내 불가</button>';
+}
 SCREENS.game = {
   html() {
     const s = S.sess, g = s.g, pr = Math.round(s.idx / s.rounds * 100);
@@ -37,7 +44,7 @@ SCREENS.game = {
       '<div class="prog-label"><span>문제 ' + (s.idx + 1) + ' / ' + s.rounds + '</span><span>' + (s.assess ? '점검' : (isTrainee() && !getPlan().showScore) ? '' : s.level + '단계') + '</span></div>' + progressBar(pr, '문제 진행') + '</div>' +
       '<h1 class="t-title' + (s.flow || s.assess ? '' : ' sr') + '" id="g-title">' + esc(g.name) + '</h1>' +
       '<section class="card elevated prompt" aria-label="안내"><p class="prompt-text" id="prompt"></p>' +
-      '<div class="row"><button class="btn tonal" id="btn-replay" type="button" data-act="replay"' + (synth ? '' : ' disabled') + '>' + ic('vol') + (synth ? '다시 듣기' : '소리 안내 불가') + '</button></div></section>' +
+      '<div class="row">' + (synth ? '<button class="btn tonal" id="btn-replay" type="button" data-act="replay">' + ic('vol') + '다시 듣기</button>' : noSpeechBtn()) + '</div></section>' +
       '<div id="box"></div><div id="fb" aria-live="polite"></div>' +
       '<div class="cta quiet" id="game-cta"><button class="btn filled" id="btn-next" type="button" data-act="next" hidden>다음 문제</button><button class="btn text" id="btn-quit" type="button" data-act="quit">그만하기</button></div></div>';
   },
