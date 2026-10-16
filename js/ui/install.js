@@ -104,6 +104,15 @@ export const installCardShowing = where => installVisible(where) && installState
 
 /* 부팅 때 한 번 */
 export function initInstall() {
+  // 카카오톡·안드로이드 앱 안 브라우저에서 열면 바로 기본 브라우저(크롬)로 옮겨요: 소리·설치가 거기서만 돼요
+  try {
+    const info = inAppInfo();
+    if (info && !sessionStorage.getItem('bw.extTried')) {
+      sessionStorage.setItem('bw.extTried', '1');
+      if (info.kakao) location.href = kakaoExternalUrl();
+      else if (Platform.platformName() === 'android') location.href = chromeIntentUrl();
+    }
+  } catch (e) {}
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; if (S.screen === 'home') render(true); else refreshInstall(); });
   window.addEventListener('appinstalled', () => { S.installed = true; S.installEvt = null; if (S.screen === 'home') render(true); else refreshInstall(); });
 }
