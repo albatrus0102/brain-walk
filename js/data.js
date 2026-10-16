@@ -231,6 +231,16 @@ export async function connectData() {
     }
     if (Store.mode === 'local') { try { await seedDemo(); } catch (e) {} }   // 체험 모드: 예시 문제 은행·리포트를 넣어 둬요 (예시라고 표시돼요)
     syncTraineeSubs(); syncBank();
+    // 첫 화면과 첫 안내(점검 권유 등)가 기본값이 아니라 이 분의 계획·화면 설정·점검 기록으로 정해지도록, 구독이 오기 전에 한 번 읽어 둬요
+    try {
+      const mt = myTrainee(), T0 = mt && S.T[mt];
+      if (T0) {
+        const st = 'trainees/' + mt + '/state/';
+        try { T0.planRaw = await Store.getDoc(st + 'plan'); T0.plan = null; } catch (e) {}
+        try { T0.display = await Store.getDoc(st + 'display'); } catch (e) {}
+        try { T0.assess = await Store.query('assessments', { where: [['userId', '==', mt]], orderBy: ['ts', 'desc'], limit: 60 }); } catch (e) {}
+      }
+    } catch (e) {}
     connectFamilyOnly(); wasTrainee = isTrainee();
     // 내 역할(members.role)은 목록보다 늦게 올 수 있어요: 바뀌었을 때만 다시 맞춰요
     try { if (Store.adapter && Store.adapter.onMembers) dbUnsubs.push(Store.adapter.onMembers(() => { if (roleChanged()) onData(); })); } catch (e) {}

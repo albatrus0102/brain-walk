@@ -113,6 +113,8 @@ export function render(soft) {
   if (S.onLeave) { const f = S.onLeave; S.onLeave = null; try { f(); } catch (e) {} }   // 이전 화면의 타이머 정리
   renderChrome();
   const el = $('#screen'), fn = SCREENS[S.screen];
+  // 접는 칸의 열림 상태는 'toggle' 이벤트(비동기)로 기억하는데, 바로 이어 다시 그리면 아직 못 받았을 수 있어요: 지금 화면에서 직접 읽어 둬요
+  try { el.querySelectorAll('details[data-xp]').forEach(d => { S.xpOpen[d.dataset.xp] = d.open; }); } catch (e) {}
   el.textContent = ''; el.insertAdjacentHTML('beforeend', fn.html());
   if (fn.bind) fn.bind(el);
   // 촘촘한 모드: 화면 제목이 위 앱 바의 제목과 같으면 두 번 보이지 않게 숨겨요 (읽어 주는 기기에는 남아요)
