@@ -1,7 +1,7 @@
 import { hasAny } from './ai/bank.js';
 import { flushItemLog } from './ai/itemlog.js';
 import { pmMidReminder, pmStart } from './ai/pm.js';
-import { allAssessments, allCheckins, chatAvail, courseStatus, getLevel, getPlan, isTrainee, myTrainee, remoteSet, saveSession, todayProgressDoc, todayS } from './data.js';
+import { allAssessments, allCheckins, chatAvail, courseStatus, getLevel, getPlan, isTrainee, meId, myTrainee, remoteSet, saveSession, todayProgressDoc, todayS } from './data.js';
 import { DOMAINS, GAMES, catalog } from './games/registry.js';
 import { assessTotal } from './logic.js';
 import { sendMessage } from './messages.js';
@@ -51,7 +51,7 @@ export function finishSession() {
   const nl = nextLevelFor(s.g.id, getPlan(), s.level, acc, prevAcc);
   S.hist[s.g.id] = hist.concat([acc]).slice(-3); LS.set('bw.hist', S.hist);
   const rec = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 8), date: ymd(now), ts: Date.now(), gameId: s.g.id, gameName: s.g.name, domain: s.g.domain,
-    level: s.level, correct: s.correct, total: s.total, accuracy: Math.round(acc * 1000) / 1000, durationSec: dur, inCourse: s.inCourse, roundSec: s.roundSec, userId: S.myId || null };
+    level: s.level, correct: s.correct, total: s.total, accuracy: Math.round(acc * 1000) / 1000, durationSec: dur, inCourse: s.inCourse, roundSec: s.roundSec, userId: meId() };
   saveSession(rec, nl.level, nl.store);
   s.sid = rec.id; flushItemLog(s, false, rec.id);       // 문항별 기록 (AI 리포트용, 훈련하는 분 기기만)
   S.last = { rec, old: s.level, nl: nl.level, kind: nl.kind, score: Math.round(acc * 100) };
@@ -166,10 +166,10 @@ export function domainScores(scores, tasks) {
 export function completeAssessment() {
   const prev = allAssessments()[0] || null, now = new Date(), ts = Date.now(), tasks = S.assess.tasks || {};
   const scores = domainScores(S.assess.scores, tasks);
-  const rec = { date: ymd(now), ts, scores, total: assessTotal(scores), userId: S.myId || null };
+  const rec = { date: ymd(now), ts, scores, total: assessTotal(scores), userId: meId() };
   S.assessLocal.push(Object.assign({ id: String(ts) }, rec)); S.assessLocal = S.assessLocal.slice(-60); LS.set('bw.assess', S.assessLocal);
   remoteSet('assessments/' + ts, rec);
-  if (Object.keys(tasks).length) remoteSet('taskRuns/' + ts, { date: rec.date, ts, userId: S.myId || null, v: 1, tasks }, true);
+  if (Object.keys(tasks).length) remoteSet('taskRuns/' + ts, { date: rec.date, ts, userId: meId(), v: 1, tasks }, true);
   LS.set('bw.assessDraft', null);
   progressMarkDone();
   S.lastAssess = { rec, prev }; go('assessDone');

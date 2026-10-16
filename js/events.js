@@ -4,7 +4,7 @@ import { clinicalInput, deleteClinical, openClinicalForm, saveClinical, shareCli
 import { openClock } from './ui/screens/clock.js';
 import { answerSurvey } from './ui/screens/surveys.js';
 import { togglePush } from './ui/room-settings.js';
-import { NO_WRITE_MSG, allCheckins, allSessions, focusOn, isTrainee, remoteSet, todayS } from './data.js';
+import { NO_WRITE_MSG, allCheckins, allSessions, focusOn, isTrainee, meId, remoteSet, todayS } from './data.js';
 import { applyDisplay } from './display.js';
 import { recordOfCheck, recordOfSession, shareSummary, talkAbout } from './records.js';
 import { beginAssessStep, completeAssessment, resumeAssessment, saveAssessLater, finishSession, nextCourseStep, startAssessment, startCourse, startSession } from './session.js';
@@ -74,9 +74,9 @@ document.addEventListener('click', e => {
     render(true); const nb = $('#ci-' + (k === 'mood' ? 'mood-' + v : k === 'sleepHours' ? 'sleep-' + v : k + '-' + (v === 'true' ? 'yes' : 'no'))); if (nb) nb.focus();
   }
   else if (a === 'cisave') {
-    const c = S.ci, date = todayS(), doc = { date, ts: Date.now(), mood: c.mood, sleepHours: c.sleepHours, exercise: !!c.exercise, social: !!c.social, meals: !!c.meals, userId: S.myId || null };
+    const c = S.ci, date = todayS(), doc = { date, ts: Date.now(), mood: c.mood, sleepHours: c.sleepHours, exercise: !!c.exercise, social: !!c.social, meals: !!c.meals, userId: meId() };
     S.ciLocal[date] = doc; LS.set('bw.checkins', S.ciLocal); remoteSet('checkins/' + date + '-' + (S.myId || 'local'), doc, true);
-    if (/^\d{2}:\d{2}$/.test(c.bed || '') && /^\d{2}:\d{2}$/.test(c.wake || '')) remoteSet('sleeplogs/' + date + '-' + (S.myId || 'local'), { date, ts: doc.ts, userId: S.myId || null, bed: c.bed, wake: c.wake, wakings: c.wakings == null ? 0 : c.wakings }, true);
+    if (/^\d{2}:\d{2}$/.test(c.bed || '') && /^\d{2}:\d{2}$/.test(c.wake || '')) remoteSet('sleeplogs/' + date + '-' + (S.myId || 'local'), { date, ts: doc.ts, userId: meId(), bed: c.bed, wake: c.wake, wakings: c.wakings == null ? 0 : c.wakings }, true);
     S.ci = {};
     if (S.ciFlow) { S.ciFlow = false; go('courseDone'); } else go('home');
   }
