@@ -370,8 +370,8 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('F2: admin cannot add a non-member', setDoc(doc(d3, `${P}/state/trainees`), tsDoc('m3', ['m2', 'ghost'], { m2: '아버지', ghost: '유령' })), false);
   await t('F2: admin relabels', setDoc(doc(d3, `${P}/state/trainees`), tsDoc('m3', ['m2'], { m2: '할아버지' })));
   await t('F2: admin clears the list', setDoc(doc(d3, `${P}/state/trainees`), tsDoc('m3', [], {})));
-  await t('F2: nobody deletes the list doc', deleteDoc(doc(d1, `${P}/state/trainees`)), false);
-  await env.withSecurityRulesDisabled(async c => { await deleteDoc(doc(c.firestore(), `${P}/state/trainees`)); });
+  await t('F2: only the owner deletes the list doc (admin daughter cannot)', deleteDoc(doc(d3, `${P}/state/trainees`)), false);
+  await t('F2: owner deletes the list doc', deleteDoc(doc(d1, `${P}/state/trainees`)));
   await t('F2: family-role newcomer cannot claim an empty list', setDoc(doc(d4, `${P}/state/trainees`), tsDoc('m4', ['m4'], { m4: '사위' })), false);
   await ageMember('m2', 2 * 3600e3);
   await t('F2: trainee-role member who joined >1h ago cannot claim an empty list', setDoc(doc(d2, `${P}/state/trainees`), tsDoc('m2', ['m2'], { m2: '아버지' })), false);
@@ -883,7 +883,9 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('F5: admin relabels t3', setDoc(doc(U.a, ST), reg('a', ['t1', 't2', 't3', 't4'], { t1: '아버지', t2: '어머니', t3: '외할머니', t4: '할아버지' })));
   await t('F5: admin removes t4 and makes him family in one batch', addT('a', ['t1', 't2', 't3'], 't4', 'family'));
   await t('F5: admin removes t3 (list only, role stays trainee)', setDoc(doc(U.a, ST), reg('a', ['t1', 't2'])));
-  await t('F5: nobody deletes the list', deleteDoc(doc(U.o, ST)), false);
+  await t('F5: admin (not the owner) cannot delete the list', deleteDoc(doc(U.a, ST)), false);
+  await t('F5: trainee cannot delete the list', deleteDoc(doc(U.t1, ST)), false);
+  await t('F5: plain family cannot delete the list', deleteDoc(doc(U.f, ST)), false);
   await t('F5: everyone reads the list (trainee)', getDoc(doc(U.t2, ST)));
   await t('F5: everyone reads the list (family)', getDoc(doc(U.f, ST)));
   await t('F5: non-member cannot read the list', getDoc(doc(db('u5x'), ST)), false);
@@ -1040,6 +1042,29 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('F5: t2 reacts', updateDoc(doc(U.t2, `${P}/messages/x1`), { 'reactions.t2': ['👍'] }));
   await t('F5: t1 reads messages', getDocs(collection(U.t1, `${P}/messages`)));
   await t('F5: t1 writes own read mark', setDoc(doc(U.t1, `${P}/reads/t1`), { lastReadTs: Date.now() }));
+
+  // ---- "모든 기록 삭제": 방 주인은 목록(state/trainees)과 훈련하는 분마다의 하위 자료를 지울 수 있어요 (membership.js deleteFamily 순서)
+  await env.withSecurityRulesDisabled(async c => {
+    const x = c.firestore();
+    await setDoc(doc(x, `${P}/trainees/t1/aiState/themes`), { words: ['낚시'], updatedBy: 'a', updatedTs: Date.now() });
+    await setDoc(doc(x, `${P}/trainees/t1/aiNotes/nd1`), { from: today, to: null, codes: ['sleep'], by: 'a', ts: Date.now() });
+  });
+  await t('F5: del: admin (not the owner) cannot delete themes', deleteDoc(doc(U.a, `${P}/trainees/t1/aiState/themes`)), false);
+  await t('F5: del: trainee cannot delete themes', deleteDoc(doc(U.t1, `${P}/trainees/t1/aiState/themes`)), false);
+  await t('F5: del: owner cannot delete the server plan (the server purge does)', deleteDoc(doc(U.o, `${P}/trainees/t1/aiState/plan`)), false);
+  await t('F5: del: owner cannot delete server-written reports', deleteDoc(doc(U.o, `${P}/trainees/t1/aiReports/r-a-1`)), false);
+  await t('F5: del: t1 deletes own levels', deleteDoc(doc(U.t1, `${T1}/levels`)));
+  await t('F5: del: t1 deletes own program', deleteDoc(doc(U.t1, `${T1}/program`)));
+  await t('F5: del: t1 cannot delete t2 levels', deleteDoc(doc(U.t1, `${T2}/levels`)), false);
+  await t('F5: del: t1 cannot delete own plan (admin-only)', deleteDoc(doc(U.t1, `${T1}/plan`)), false);
+  await t('F5: del: plain family cannot delete levels', deleteDoc(doc(U.f, `${T2}/levels`)), false);
+  await t('F5: del: owner deletes every per-trainee state doc', (async () => { for (const [m, k] of [['t1', 'plan'], ['t2', 'display'], ['t2', 'levels'], ['t2', 'program']]) await deleteDoc(doc(U.o, `${P}/trainees/${m}/state/${k}`)); })());
+  await t('F5: del: owner deletes the per-trainee note', deleteDoc(doc(U.o, `${P}/trainees/t1/aiNotes/nd1`)));
+  await t('F5: del: owner deletes themes', deleteDoc(doc(U.o, `${P}/trainees/t1/aiState/themes`)));
+  await t('F5: del: owner deletes the trainee list', deleteDoc(doc(U.o, ST)));
+  await t('F5: del: the list is gone', (async () => { if ((await getDoc(doc(U.o, ST))).exists()) throw new Error('still there'); })());
+  await t('F5: del: deleting an already deleted list is fine for the owner', deleteDoc(doc(U.o, ST)));
+  await t('F5: del: with no list nobody is a trainee any more (t1 cannot write levels)', setDoc(doc(U.t1, `${T1}/levels`), { levels: { odd: 2 }, updatedTs: Date.now() }), false);
 }
 // =============================================================================
 // fam5c: 목록(state/trainees)이 없으면 아무도 훈련하는 분이 아니에요

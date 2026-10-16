@@ -310,11 +310,19 @@ export async function deleteFamily() {
   const set = normalizeTrainees(await FA.getDoc('state/trainees').catch(() => null));
   if (set.ids.includes(FA.mid)) { try { await removeTrainee(FA.mid); } catch (e) {} }
   else { try { await F.updateDoc(FA._ref('members/' + FA.mid), { role: 'family' }); } catch (e) {} }
-  for (const id of set.ids) for (const k of ['plan', 'display', 'alarm', 'levels', 'program']) { try { await F.deleteDoc(FA._ref('trainees/' + id + '/state/' + k)); } catch (e) {} }
+  // 훈련하는 분마다의 하위 자료: 지금 목록의 분들 + 예전에 목록에서 빠진 분들(가족 구성원 id 로 찾아요, 부모 문서가 없어서 목록을 열 수 없어요)
+  const memberRefs = await refsOf('members');
+  const tids = Array.from(new Set(set.ids.concat(memberRefs.map(r => r.id))));
+  for (const id of tids) {
+    for (const k of ['plan', 'display', 'alarm', 'levels', 'program']) { try { await F.deleteDoc(FA._ref('trainees/' + id + '/state/' + k)); } catch (e) {} }
+    try { await deleteRefs(await refsOf('trainees/' + id + '/aiNotes')); } catch (e) {}
+    try { await F.deleteDoc(FA._ref('trainees/' + id + '/aiState/themes')); } catch (e) {}
+  }
+  // 목록(state/trainees)은 방 주인만 지울 수 있어요. 구성원·가족 문서를 지우기 전에 (규칙이 아직 방 주인으로 알아봐요)
+  try { await F.deleteDoc(FA._ref('state/trainees')); } catch (e) {}
   for (const c of ['messages', 'sessions', 'assessments', 'checkins', 'taskRuns', 'sleeplogs', 'surveys', 'clocks', 'clinicalTests', 'reads', 'reminders', 'progress', 'presence', 'pushState']) await deleteRefs(await refsOf(c));
   // AI 문항 기록·메모·안내 동의·검토 결정 (읽을 수 없는 칸이 있어도 삭제는 계속해요. 서버가 만든 aiStats·aiReports 등은 서버가 하루 안에 지워요)
   for (const c of ['itemLogs', 'aiNotes', 'consents', 'aiReview']) { try { await deleteRefs(await refsOf(c)); } catch (e) {} }
-  const memberRefs = await refsOf('members');
   for (const m of memberRefs) await deleteRefs(await refsOf('members/' + m.id + '/devices'));
   await deleteRefs(memberRefs);
   await deleteRefs((await refsOf('uids')).filter(r => r.id !== FA.uid));
@@ -338,6 +346,8 @@ export async function deleteMyRecords() {
   } finally {
     if (role && role !== 'family') { try { await F.updateDoc(FA._ref('members/' + FA.mid), { role }); } catch (e) {} }
   }
+  // 내 적응 난이도·프로그램 시작일 (훈련하는 분이 아니면 문서가 없어서 그냥 지나가요)
+  for (const k of ['levels', 'program']) { try { await F.deleteDoc(FA._ref('trainees/' + FA.mid + '/state/' + k)); } catch (e) {} }
   for (const p of ['reads/' + FA.mid, 'reminders/' + FA.mid, 'presence/' + FA.mid]) { try { await F.deleteDoc(FA._ref(p)); } catch (e) {} }
   ['bw.sessions', 'bw.levels', 'bw.hist', 'bw.assess', 'bw.checkins', 'bw.course', 'bw.aiSeen', 'bw.aiPacks'].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
 }

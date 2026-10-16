@@ -681,7 +681,8 @@ service cloud.firestore {
           || (newData().ids == [myId(fid)] && myMember(fid).role == 'trainee'
               && myMember(fid).joinedTs > request.time - duration.value(1, 'h')));
         allow update: if isMember(fid) && isAdmin(fid) && validTrainees() && tsChange(resource.data.ids);
-        allow delete: if false;
+        // 방 주인만 지울 수 있어요 ("모든 기록 삭제": 가족 데이터 전체 삭제의 일부)
+        allow delete: if isMember(fid) && isOwner(fid);
       }
 
       // ---- 훈련하는 분마다의 하위 자료 trainees/{tid}/… (부모 문서는 없어요)
@@ -694,7 +695,7 @@ service cloud.firestore {
           allow read: if isMember(fid);
           allow create: if isMember(fid) && tOK() && key in ['plan', 'display', 'alarm', 'levels', 'program'] && validState(key) && canWriteT(key, true);
           allow update: if isMember(fid) && tOK() && key in ['plan', 'display', 'alarm', 'levels', 'program'] && validState(key) && canWriteT(key, false);
-          allow delete: if isAdmin(fid);
+          allow delete: if isAdmin(fid) || (key in ['levels', 'program'] && tid == myId(fid));   // 본인 기록 삭제: 자기 적응 난이도·시작일
         }
         // 쓸 문항 묶음 (서버가 만들어요): 그 훈련하는 분 본인과 가족 전용 자료를 읽는 사람
         match /aiPacks/{k} {
@@ -705,7 +706,7 @@ service cloud.firestore {
         match /aiState/{k} {
           allow read: if isMember(fid);
           allow create, update: if isAdmin(fid) && tOK() && k == 'themes' && validThemes();
-          allow delete: if false;
+          allow delete: if isMember(fid) && isOwner(fid) && k == 'themes';   // 가족 전체 삭제 (plan 은 서버가 지워요)
         }
         // 서버가 계산한 숫자·신호·리포트·운영 기록: AI 관리자만 읽어요. 쓰기는 서버만.
         match /aiStats/{k} { allow read: if isAiAdmin(fid); allow write: if false; }

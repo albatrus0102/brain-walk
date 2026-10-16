@@ -166,9 +166,26 @@ try {
     await wait('b-left');
     await sleep(500);
     ok((await FA.profiles([j.mid]))[j.mid].name === '떠난 가족', '나간 가족은 "떠난 가족"');
+    // "모든 기록 삭제"(방 주인): 훈련하는 분 목록과 훈련하는 분마다의 하위 자료도 함께 지워져야 해요
+    const fid0 = FA.fid;
+    await FA.setDoc('trainees/' + r.mid + '/state/levels', { levels: { odd: 2 }, updatedTs: Date.now() });
+    ok(await FA.getDoc('state/trainees') != null && (await FA.getDoc('trainees/' + r.mid + '/state/plan')) != null, '삭제 전: 목록과 훈련하는 분의 계획이 있어요');
     await M.deleteFamily();
     const after = await FA.resolveMembership().catch(() => false);
     ok(after === false, '삭제 후 멤버십 없음');
+    {
+      const { initializeTestEnvironment } = await import('@firebase/rules-unit-testing');
+      const FS = await import('firebase/firestore');
+      const tenv = await initializeTestEnvironment({ projectId: 'demo-bw' });
+      await tenv.withSecurityRulesDisabled(async c => {
+        const x = c.firestore();
+        ok(!(await FS.getDoc(FS.doc(x, 'families/' + fid0 + '/state/trainees'))).exists(), '삭제 후 state/trainees 도 사라졌어요');
+        for (const k of ['plan', 'display', 'alarm', 'levels', 'program']) ok(!(await FS.getDoc(FS.doc(x, 'families/' + fid0 + '/trainees/' + r.mid + '/state/' + k))).exists(), '삭제 후 trainees/{mid}/state/' + k + ' 가 사라졌어요');
+        ok(!(await FS.getDoc(FS.doc(x, 'families/' + fid0))).exists(), '삭제 후 가족 문서가 사라졌어요');
+        for (const col of ['members', 'uids', 'messages', 'sessions']) ok((await FS.getDocs(FS.collection(x, 'families/' + fid0 + '/' + col))).empty, '삭제 후 ' + col + ' 가 비었어요');
+      });
+      await tenv.cleanup();
+    }
     signal('done', {});
   }
   if (actor === 'B') {
