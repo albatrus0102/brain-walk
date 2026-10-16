@@ -2,11 +2,13 @@
 /**
  * Report check and fill (DESIGN-AI Appendix B.8, F.2).
  *  1. schema bw.report.v1, basedOn == aggregate id, jobId match, mode match
- *  2. no digits anywhere outside {{key}} placeholders; every key exists in aggregate.numbers
+ *  2. no digits anywhere outside {{key}} placeholders; every key exists in aggregate.numbers, except {{who}}:
+ *     the person is named ONLY as {{who}} (the app fills in the trainee's label); kinship words such as 아버지 or
+ *     어머니 written out are rejected ('who'), names are rejected ('pii')
  *  3. light, confidence and the domain list equal the server values exactly
  *  4. report_banned words absent; at least one approved closing phrase
  *  5. lengths (headline ≤ 60, summary 2–3 sentences ≤ 200, domain sentence ≤ 80, total ≤ 6,000)
- * Passing reports are filled (placeholders → numbers) by the server only.
+ * Passing reports are filled (placeholders → numbers) by the server only; {{who}} stays for the app.
  */
 const { NFC, vlen, badChars } = require('./text.js');
 const { lexicon } = require('./lexicon.js');
@@ -15,8 +17,10 @@ const { bannedHit, piiHit } = require('./checks.js');
 const JOB_RE = /^w-\d{8}-\d{4}-[a-z0-9]{2}$/;
 const KEYS = ['schema', 'jobId', 'basedOn', 'mode', 'headline', 'summary', 'domains', 'notable', 'confounders', 'doctorPoints', 'glossary', 'confidence', 'trend', 'anchor'];
 const PH = /\{\{([a-z0-9_]{1,40})\}\}/g;
+const WHO = 'who';                       // the only placeholder that is not a number; never a key of numbers
+const KIN = ['아버지', '어머니', '아버님', '어머님', '할아버지', '할머니', '할아버님', '할머님', '아빠', '엄마', '부친', '모친'];
 const REPORT_REASONS = ['schema', 'job', 'based_on', 'mode', 'domains', 'light', 'confidence', 'digits', 'placeholder', 'charset', 'length',
-  'banned', 'pii', 'closing', 'glossary', 'evidence', 'trend', 'anchor'];
+  'banned', 'pii', 'who', 'closing', 'glossary', 'evidence', 'trend', 'anchor'];
 
 function checkReport(rep, agg, { jobId = 'scheduled' } = {}) {
   const lx = lexicon();
@@ -60,7 +64,7 @@ function checkReport(rep, agg, { jobId = 'scheduled' } = {}) {
   let total = 0;
   for (const [, t] of texts) {
     total += vlen(t);
-    for (const m of t.matchAll(PH)) if (!numKeys.has(m[1])) fail('placeholder');
+    for (const m of t.matchAll(PH)) if (m[1] === WHO ? numKeys.has(WHO) : !numKeys.has(m[1])) fail('placeholder');
     const bare = t.replace(PH, '');
     if (/[0-9０-９]/.test(bare)) fail('digits');
     if (/[{}]/.test(bare)) fail('placeholder');
@@ -70,6 +74,7 @@ function checkReport(rep, agg, { jobId = 'scheduled' } = {}) {
   const all = texts.map(([, t]) => t.replace(PH, ' ')).join('\n');
   if (bannedHit(lx, all, 'report')) fail('banned');
   if (piiHit(lx, all)) fail('pii');
+  if (KIN.some((w) => NFC(all).includes(w))) fail('who');
   const closing = [...(rep.summary || []), ...((rep.doctorPoints || []).map((p) => p && p.text))].filter((s) => typeof s === 'string');
   if (!closing.some((s) => lx.reportClosings.some((c) => NFC(s).includes(c)))) fail('closing');
   return { ok: codes.length === 0, codes };
@@ -78,7 +83,7 @@ function checkReport(rep, agg, { jobId = 'scheduled' } = {}) {
 /** Replace {{key}} with aggregate numbers (server side, after checkReport passed). */
 function fillReport(rep, agg) {
   const N = agg.numbers || {};
-  const f = (s) => (typeof s === 'string' ? s.replace(PH, (_, k) => (N[k] != null ? N[k] : '')) : s);
+  const f = (s) => (typeof s === 'string' ? s.replace(PH, (m, k) => (k === WHO ? m : N[k] != null ? N[k] : '')) : s);
   const out = {
     headline: f(rep.headline), summary: rep.summary.map(f),
     domains: rep.domains.map((d) => ({ domain: d.domain, light: d.light, sentence: f(d.sentence) })),
@@ -92,4 +97,4 @@ function fillReport(rep, agg) {
   return out;
 }
 
-module.exports = { checkReport, fillReport, REPORT_REASONS, JOB_RE };
+module.exports = { checkReport, fillReport, REPORT_REASONS, JOB_RE, WHO_PLACEHOLDER: '{{who}}' };

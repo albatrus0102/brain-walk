@@ -1,10 +1,13 @@
 'use strict';
 /**
- * Per-family aggregation run (DESIGN-AI §5.1): 06:50 daily, and after the course is done (progress doc).
- *   eligibility → plan → ingest itemLogs into weekly stats → speed model → summary → anchor comparison →
- *   signal engine → aiSignals on/off → pseudonymized aggregate (aiAggregates/current + dated copy) →
- *   (daily) measure packs, training packs, bank needs, bank status
- * Returns { ran, reason, aggId, newOrange[] }.
+ * Aggregation runs (DESIGN-AI §5.1, DESIGN-MULTI §4.2): 06:50 daily for every trainee in state/trainees (one after
+ * the other), and for one trainee after their course is done (progress doc).
+ * Per trainee (all docs under families/{fid}/trainees/{mid}/…):
+ *   eligibility → pseudonym letter L → plan → ingest that trainee's itemLogs into weekly stats → speed model →
+ *   summary → anchor comparison → signal engine → aiSignals on/off → pseudonymized aggregate
+ *   (aiAggregates/a-{L}-YYYYMMDD-HHMM + aiAggregates/current-{L}) → (daily) measure packs, training packs
+ * Then, once per family (daily): reactivation, shared bank needs, bank status.
+ * runTrainee returns { ran, reason, L, aggId, newOrange[], agg }.
  */
 const { db, fam, FieldValue, expireIn } = require('./fb.js');
 const kd = require('./core/kdate.js');
@@ -14,27 +17,36 @@ const { anchorCompare } = require('./core/anchor.js');
 const { buildAggregate } = require('./core/aggregate.js');
 const bank = require('./bank.js');
 const { getConfig, RETENTION_DAYS } = require('./config.js');
-const { VERSION } = require('./core/index.js');
+const F = require('./family.js');
 const log = require('./log.js');
 
 const CONSENT_KIND = 'ai-report-notice';
 
-/** Is the configured family ready for aggregation? Returns { ok, why, traineeId, plan, ... }. */
-async function eligibility(fid) {
+/** Family-level gate: the family exists and the family AI switch is not off. */
+async function familyGate(fid) {
   const f = fam(fid);
-  const [famSnap, trSnap, swSnap] = await Promise.all([f.get(), f.collection('state').doc('trainee').get(), f.collection('aiState').doc('switch').get()]);
+  const [famSnap, swSnap] = await Promise.all([f.get(), f.collection('aiState').doc('switch').get()]);
   if (!famSnap.exists) return { ok: false, why: 'no_family' };
   if (swSnap.exists && swSnap.get('enabled') === false) return { ok: false, why: 'switched_off' };
-  const traineeId = trSnap.exists ? trSnap.get('userId') : null;
-  if (!traineeId) return { ok: false, why: 'no_trainee' };
-  const c = await f.collection('consents').doc(traineeId).get();
-  if (!c.exists || c.get('kind') !== CONSENT_KIND || c.get('withdrawnTs') || !c.get('ackTs')) return { ok: false, why: 'no_consent', traineeId };
-  return { ok: true, traineeId, consentTs: c.get('ackTs') };
+  return { ok: true };
+}
+/**
+ * Is trainee `mid` ready for aggregation? In state/trainees + consents/{mid} acknowledged and not withdrawn.
+ * Returns { ok, why, consentTs }. `T` (from loadTrainees) may be passed to save a read.
+ */
+async function eligibility(fid, mid, T = null) {
+  const g = await familyGate(fid);
+  if (!g.ok) return g;
+  const set = T || (await F.loadTrainees(fid));
+  if (!mid || !set.ids.includes(mid)) return { ok: false, why: 'no_trainee' };
+  const c = await fam(fid).collection('consents').doc(mid).get();
+  if (!c.exists || c.get('kind') !== CONSENT_KIND || c.get('withdrawnTs') || !c.get('ackTs')) return { ok: false, why: 'no_consent' };
+  return { ok: true, consentTs: c.get('ackTs') };
 }
 
-/** aiState/plan: created on first eligible run; program starts the Sunday on/after consent. */
-async function loadPlan(fid, consentTs) {
-  const ref = fam(fid).collection('aiState').doc('plan');
+/** trainees/{mid}/aiState/plan: created on first eligible run; program starts the Sunday on/after consent. */
+async function loadPlan(fid, mid, consentTs) {
+  const ref = F.tref(fid, mid).collection('aiState').doc('plan');
   const s = await ref.get();
   if (s.exists) return s.data();
   const ackDate = kd.kst(consentTs && consentTs.toMillis ? consentTs.toMillis() : Date.now()).date;
@@ -44,9 +56,10 @@ async function loadPlan(fid, consentTs) {
   return plan;
 }
 
-async function readLogs(fid, traineeId, fromDate, toDate) {
-  const s = await fam(fid).collection('itemLogs').where('date', '>=', fromDate).where('date', '<=', toDate).get();
-  return s.docs.map((d) => SR.sanitizeLog(d.data(), d.id)).filter((x) => x && x.userId === traineeId);
+/** One trainee's itemLogs in [fromDate, toDate] (index: itemLogs userId ASC, date ASC). */
+async function readLogs(fid, mid, fromDate, toDate) {
+  const s = await fam(fid).collection('itemLogs').where('userId', '==', mid).where('date', '>=', fromDate).where('date', '<=', toDate).get();
+  return s.docs.map((d) => SR.sanitizeLog(d.data(), d.id)).filter((x) => x && x.userId === mid);
 }
 async function bankMeta(logs) {
   const ids = [...new Set(logs.flatMap((l) => l.items.map((x) => (x.id || '').split('#')[0])).filter((id) => /^bk_[0-9a-f]{20}$/.test(id)))];
@@ -60,24 +73,60 @@ async function bankMeta(logs) {
   return meta;
 }
 
+/**
+ * Every trainee in state/trainees, sequentially (aiDaily, 540 s), then the shared daily upkeep.
+ * Returns { ran (any trainee ran), reason, results: [{ mid, ran, reason, L, aggId, newOrange }] }.
+ */
 async function runFamily(fid, { mode = 'daily', reason = 'schedule', nowMs = Date.now(), daily = false } = {}) {
   const cfg = await getConfig();
+  if (cfg.enabled === false) return { ran: false, reason: 'disabled', results: [] };
+  const famHealth = fam(fid).collection('aiOps').doc('health');
+  const g = await familyGate(fid);
+  if (!g.ok) {
+    if (g.why === 'switched_off') { await clearAggregates(); await famHealth.set({ server: { lastRun: FieldValue.serverTimestamp(), state: g.why } }, { merge: true }); }
+    return { ran: false, reason: g.why, results: [] };
+  }
+  const T = await F.loadTrainees(fid);
+  if (daily) await bank.reactivate();
+  const results = [];
+  for (const mid of T.ids) {
+    let r;
+    try { r = await runTrainee(fid, mid, { mode, reason, nowMs, daily, T }); } catch (e) { log.debugError(e); log.error('trainee_run_failed', { code: e && e.code ? String(e.code) : 'error' }); r = { ran: false, reason: 'error' }; }
+    results.push({ mid, ...r });
+  }
+  if (daily) {
+    const counts = await bank.bankCounts();
+    await F.writeFamilyBankNeeds(fid, counts);
+    await bank.writeBankStatus(fid, counts);
+  }
+  const ran = results.filter((r) => r.ran).length;
+  const state = ran ? 'ok' : !T.ids.length ? 'no_trainee' : (results[0] && results[0].reason) || 'idle';
+  await famHealth.set({ server: { lastRun: FieldValue.serverTimestamp(), state, reason, trainees: T.ids.length, ran } }, { merge: true });
+  return { ran: ran > 0, reason: state, results };
+}
+
+/** One trainee: eligibility, letter, then the aggregation. Health in trainees/{mid}/aiOps/health. */
+async function runTrainee(fid, mid, { mode = 'daily', reason = 'schedule', nowMs = Date.now(), daily = false, T = null } = {}) {
+  const cfg = await getConfig();
   if (cfg.enabled === false) return { ran: false, reason: 'disabled' };
-  const el = await eligibility(fid);
-  const health = fam(fid).collection('aiOps').doc('health');
+  const t = F.tref(fid, mid);
+  const el = await eligibility(fid, mid, T);
+  const health = t.collection('aiOps').doc('health');
   if (!el.ok) {
-    await health.set({ server: { lastRun: FieldValue.serverTimestamp(), state: el.why } }, { merge: true });
     if (el.why === 'switched_off') await clearAggregates();
+    if (el.why !== 'no_family' && el.why !== 'no_trainee') await health.set({ server: { lastRun: FieldValue.serverTimestamp(), state: el.why } }, { merge: true });
     return { ran: false, reason: el.why };
   }
-  const plan = await loadPlan(fid, el.consentTs);
+  const L = await F.ensureLetter(mid);
+  if (!L) { await health.set({ server: { lastRun: FieldValue.serverTimestamp(), state: 'no_letter' } }, { merge: true }); return { ran: false, reason: 'no_letter' }; }
+  const plan = await loadPlan(fid, mid, el.consentTs);
   const now = kd.kst(nowMs);
   const curWk = kd.weekKey(now.date);
   const idxOf = (wk) => kd.weeksBetween(plan.startWeek, wk);
   const curIdx = idxOf(curWk);
   if (curIdx < 0) { await health.set({ server: { lastRun: FieldValue.serverTimestamp(), state: 'waiting_start' } }, { merge: true }); return { ran: false, reason: 'before_start' }; }
 
-  const statsCol = fam(fid).collection('aiStats');
+  const statsCol = t.collection('aiStats');
   const sumRef = statsCol.doc('summary');
   const sumSnap = await sumRef.get();
   const summary = sumSnap.exists ? sumSnap.data() : { v: 1, weeks: [], anchorCmp: [] };
@@ -89,7 +138,7 @@ async function runFamily(fid, { mode = 'daily', reason = 'schedule', nowMs = Dat
   let want = [];
   for (let i = 0; i <= curIdx; i++) { const wk = kd.nextWeekKey(plan.startWeek, i); if (!known.has(wk) || i >= curIdx - 1) want.push(wk); }
   if (want.length > 30) want = want.slice(0, 28).concat(want.slice(-2));
-  const logs = await readLogs(fid, el.traineeId, kd.weekStart(want[0]), now.date);
+  const logs = await readLogs(fid, mid, kd.weekStart(want[0]), now.date);
   const meta = await bankMeta(logs);
   const modelRef = statsCol.doc('model');
   let model = (await modelRef.get()).data() || null;
@@ -103,7 +152,7 @@ async function runFamily(fid, { mode = 'daily', reason = 'schedule', nowMs = Dat
   if (!plan.refLevels && curIdx >= 1) {
     const w0 = weekDocs[plan.startWeek] || (await statsCol.doc(plan.startWeek).get()).data();
     plan.refLevels = SR.chooseRefLevels((w0 && w0.trainCells) || {});
-    await fam(fid).collection('aiState').doc('plan').set({ refLevels: plan.refLevels }, { merge: true });
+    await t.collection('aiState').doc('plan').set({ refLevels: plan.refLevels }, { merge: true });
   }
   // ---- speed model after the baseline (D.5); re-score every week once it exists
   if (!model && curIdx > SR.BASELINE_WEEKS) {
@@ -129,7 +178,7 @@ async function runFamily(fid, { mode = 'daily', reason = 'schedule', nowMs = Dat
     const a = summary.weeks[i - 1], b = summary.weeks[i];
     if (a.env && b.env && a.env !== b.env && b.idx > SR.BASELINE_WEEKS && !cps.some((c) => c.date === b.start)) cps.push({ date: b.start, kind: 'env' });
   }
-  if (cps.length !== (plan.changePoints || []).length) { plan.changePoints = cps; await fam(fid).collection('aiState').doc('plan').set({ changePoints: cps }, { merge: true }); }
+  if (cps.length !== (plan.changePoints || []).length) { plan.changePoints = cps; await t.collection('aiState').doc('plan').set({ changePoints: cps }, { merge: true }); }
 
   // ---- anchor comparison when the last completed week was an anchor week with a prior run of the same set
   const completed = summary.weeks.filter((w) => w.wk < curWk);
@@ -138,7 +187,7 @@ async function runFamily(fid, { mode = 'daily', reason = 'schedule', nowMs = Dat
     const prevWk = kd.nextWeekKey(lastDone.wk, -12);
     const [cur, prev] = await Promise.all([statsCol.doc(lastDone.wk).get(), statsCol.doc(prevWk).get()]);
     if (cur.exists && prev.exists) {
-      const exSnap = await db().collection('aiBank').where('anchorSet', '==', lastDone.anchorSet).where('excluded', '==', true).get();
+      const exSnap = await db().collection('aiBank').where('anchorSet', '==', bank.anchorKey(lastDone.anchorSet, L)).where('excluded', '==', true).get();
       const base = completed.filter((w) => w.idx >= 1 && w.idx <= 4);
       const B = require('./core/stats.js').baseline(base.map((w) => ({ n: w.n, sum: w.sum })));
       const pw = summary.weeks.find((w) => w.wk === prevWk);
@@ -156,9 +205,9 @@ async function runFamily(fid, { mode = 'daily', reason = 'schedule', nowMs = Dat
 
   // ---- signal engine
   const [notesSnap, thrSnap, assessSnap] = await Promise.all([
-    fam(fid).collection('aiNotes').where('from', '>=', kd.addDays(now.date, -180)).get(),
-    fam(fid).collection('aiOps').doc('thresholds').get(),
-    fam(fid).collection('assessments').orderBy('ts', 'desc').limit(1).get(),
+    t.collection('aiNotes').where('from', '>=', kd.addDays(now.date, -180)).get(),
+    t.collection('aiOps').doc('thresholds').get(),
+    fam(fid).collection('assessments').where('userId', '==', mid).orderBy('ts', 'desc').limit(1).get(),
   ]);
   const notes = notesSnap.docs.map((d) => ({ id: d.id, from: d.get('from'), to: d.get('to') || null, codes: d.get('codes') || [] })).sort((a, b) => (a.from < b.from ? -1 : 1));
   const days = {};
@@ -166,7 +215,7 @@ async function runFamily(fid, { mode = 'daily', reason = 'schedule', nowMs = Dat
     const d = weekDocs[wk] || (await statsCol.doc(wk).get()).data();
     if (d && d.days) Object.assign(days, d.days);
   }
-  const trainingDays = await fam(fid).collection('state').doc('plan').get();
+  const trainingDays = await t.collection('state').doc('plan').get();
   const planWeekdays = trainingDays.exists && Array.isArray(trainingDays.get('weekdays')) ? trainingDays.get('weekdays') : [0, 1, 2, 3, 4, 5, 6];
   const cp = (plan.changePoints || []).filter((c) => c.date > kd.addDays(plan.startDate, 35)).map((c) => c.date).sort().pop() || null;
   const asOf = kd.addDays(now.date, -1);
@@ -176,7 +225,7 @@ async function runFamily(fid, { mode = 'daily', reason = 'schedule', nowMs = Dat
   });
 
   // ---- aiSignals on/off; newly orange = off→orange or yellow→orange
-  const sigCol = fam(fid).collection('aiSignals');
+  const sigCol = t.collection('aiSignals');
   const open = await sigCol.where('on', '==', true).get();
   const openBy = new Map(open.docs.map((d) => [d.get('key'), d]));
   const newOrange = [];
@@ -209,41 +258,31 @@ async function runFamily(fid, { mode = 'daily', reason = 'schedule', nowMs = Dat
   if (today && today.startHour === 24) today.startHour = null;
   const lastW = completed[completed.length - 1];
   const assess = assessSnap.docs[0];
-  const aggId = `a-${now.date.replace(/-/g, '')}-${now.hhmm}${mode === 'alert' ? '-al' : ''}`;
+  const aggId = `a-${L}-${now.date.replace(/-/g, '')}-${now.hhmm}${mode === 'alert' ? '-al' : ''}`;
   const agg = buildAggregate({
-    id: aggId, asOfMs: nowMs, mode, pseudonym: cfg.pseudonym || '사용자 A', phase: SR.phaseOf(curIdx), eval: E, plan, today, notes: notes.filter((n) => !n.to || n.to >= kd.addDays(now.date, -56)).slice(-6), weeks: completed,
+    id: aggId, asOfMs: nowMs, mode, pseudonym: `사용자 ${L}`, phase: SR.phaseOf(curIdx), eval: E, plan, today, notes: notes.filter((n) => !n.to || n.to >= kd.addDays(now.date, -56)).slice(-6), weeks: completed,
     extra: { dateQWrong: lastW ? lastW.dateQ.wrong : null, iiv: lastW ? lastW.iiv : null, ies: lastW ? lastW.ies : null, checkTotal: assess ? assess.get('total') : null, checkDate: assess ? assess.get('date') : null },
   });
-  const aggDoc = { ...agg, expireAt: expireIn(RETENTION_DAYS.aggregates) };
+  // `s` (the letter) is server bookkeeping: aiRead strips it, purge uses it on consent withdrawal
+  const aggDoc = { ...agg, s: L, expireAt: expireIn(RETENTION_DAYS.aggregates) };
   await db().collection('aiAggregates').doc(aggId).set(aggDoc);
-  if (mode !== 'alert') await db().collection('aiAggregates').doc('current').set(aggDoc);
+  if (mode !== 'alert') await db().collection('aiAggregates').doc(`current-${L}`).set(aggDoc);
 
-  // ---- daily upkeep: measure packs (this + next 2 weeks), training packs, bank needs, status
+  // ---- daily upkeep for this trainee: measure packs (this + next 2 weeks), training packs (own themes)
   if (daily) {
     const levels = plan.refLevels || {};
     for (let k = 0; k <= 2; k++) {
       const wk = kd.nextWeekKey(curWk, k), idx = idxOf(wk);
-      if (idx >= 1) await bank.buildMeasurePack(fid, wk, SR.anchorSetFor(idx), levels);
+      if (idx >= 1) await bank.buildMeasurePack(fid, mid, L, wk, SR.anchorSetFor(idx), levels);
     }
-    await bank.reactivate();
-    await bank.rebuildPacks(fid);
-    const themesSnap = await fam(fid).collection('aiState').doc('themes').get();
-    const counts = await bank.bankCounts();
-    await bank.writeBankNeeds({ plan, themes: validThemes(themesSnap.exists ? themesSnap.get('words') : []), counts, validator: { version: VERSION } });
-    await bank.writeBankStatus(fid, counts);
+    await bank.rebuildPacks(fid, mid, await F.loadThemes(fid, mid));
   }
   await health.set({ server: { lastRun: FieldValue.serverTimestamp(), state: 'ok', reason }, thresholdsVer: E.thresholdsVer, phase: SR.phaseOf(curIdx), lastAggId: aggId }, { merge: true });
-  log.info('aggregate', { mode, reason, weeks: completed.length, signals: E.signals.length, newOrange: newOrange.length, phaseIdx: curIdx });
-  return { ran: true, aggId, newOrange, agg };
+  log.info('aggregate', { s: L, mode, reason, weeks: completed.length, signals: E.signals.length, newOrange: newOrange.length, phaseIdx: curIdx });
+  return { ran: true, L, aggId: aggDoc.id, newOrange, agg: aggDoc };
 }
 
-/** Theme words check (B.7): ≤ 8, 1–10 Hangul syllables each, no banned word, no PII, not a person name. */
-function validThemes(words) {
-  const { lexicon } = require('./core/lexicon.js');
-  const { bannedHit, piiHit } = require('./core/checks.js');
-  const lx = lexicon();
-  return (Array.isArray(words) ? words : []).filter((w) => typeof w === 'string' && /^[가-힣]{1,10}$/.test(w) && !bannedHit(lx, w) && !piiHit(lx, w) && !lx.names.has(w)).slice(0, 8);
-}
+const validThemes = F.validThemes;
 async function clearAggregates() {
   for (const col of ['aiAggregates', 'aiJobs']) {
     const s = await db().collection(col).limit(400).get();
@@ -252,4 +291,4 @@ async function clearAggregates() {
   }
 }
 
-module.exports = { runFamily, eligibility, loadPlan, validThemes, clearAggregates, CONSENT_KIND };
+module.exports = { runFamily, runTrainee, eligibility, familyGate, loadPlan, validThemes, clearAggregates, CONSENT_KIND };

@@ -6,15 +6,20 @@
  *                        The full item is stored as a JSON string in `json` (Firestore cannot store arrays inside
  *                        arrays: grids, maps, card pairs, logic facts); scalar fields beside it are for queries.
  * aiBankIndex/{format}   recent: [{h, s, w?, d}] ≤ 400 (dedupe: exact hash, MinHash sketch, word lists)
- * families/{fid}/aiPacks/{cd}-L{n}          itemsJson: ≤ 40 unseen ready training items of one cell
- * families/{fid}/aiPacks/measure-{YYYY-Www} referenceJson / anchorJson: measure items of that week
+ * families/{fid}/trainees/{mid}/aiPacks/{cd}-L{n}          itemsJson: ≤ 40 ready training items of one cell
+ *                                                          (theme items only for that trainee's themes)
+ * families/{fid}/trainees/{mid}/aiPacks/measure-{YYYY-Www} referenceJson / anchorJson: measure items of that week
+ *
+ * The bank and bank needs are SHARED by every trainee of the family (DESIGN-MULTI §4.3): an item consumed by
+ * anyone is used for everyone. Measure sets are per trainee: reference reservations carry refWeek = 'YYYY-Www:L',
+ * anchor sets are frozen as '<set>_<L>' ('A_A', 'B_A', … 'A_B'), each at that trainee's reference levels.
  */
 const { db, fam, FieldValue, Timestamp, expireIn } = require('./fb.js');
 const kd = require('./core/kdate.js');
 const { vlen } = require('./core/text.js');
 const { FORMATS } = require('./core/formats.js');
 const REF = require('./data/reference-v1.json');
-const { SPEC_VER, LIMITS } = require('./config.js');
+const { SPEC_VER, LIMITS, maxItemsFor } = require('./config.js');
 
 const CELL_DOMAINS = ['memory', 'attention', 'executive', 'language', 'visuospatial', 'orientation'];
 const FORMATS_OF = {};
@@ -22,7 +27,11 @@ for (const [f, def] of Object.entries(FORMATS)) (FORMATS_OF[def.cd] = FORMATS_OF
 const TRAINING_FORMATS = (cd) => (FORMATS_OF[cd] || []).filter((f) => f !== 'prospective');
 const INDEX_CAP = 400;
 const PACK_SIZE = 40;
-const CELL_TARGET = 20;
+const CELL_TARGET = 20;            // ready training items per cell, per active trainee
+const FMT_MIN = 6;                 // per format in a cell, per active trainee
+const ANCHOR_SETS = ['A', 'B', 'C'];
+const refWeekKey = (wk, L) => `${wk}:${L}`;
+const anchorKey = (set, L) => `${set}_${L}`;
 const bankId = (hash) => 'bk_' + hash.slice(0, 20);
 
 // ------------------------------------------------------------- dedupe index
@@ -112,14 +121,17 @@ function packItem(bankDoc) {
   delete o.review;
   return o;
 }
-async function rebuildPacks(fid, cells = null) {
+/** One trainee's training packs. Theme items only when the theme is one of that trainee's themes. */
+async function rebuildPacks(fid, mid, themes = [], cells = null) {
   const out = {};
   const todo = cells || CELL_DOMAINS.flatMap((cd) => [1, 2, 3, 4, 5].map((lv) => [cd, lv])).concat([['reminiscence', 2]]);
   const today = kd.kst().date;
+  const mine = new Set(themes || []);
+  const col = fam(fid).collection('trainees').doc(mid).collection('aiPacks');
   for (const [cd, lv] of todo) {
-    const q = await db().collection('aiBank').where('status', '==', 'ready').where('role', '==', 'training').where('cdomain', '==', cd).where('level', '==', lv).limit(PACK_SIZE * 2).get();
-    const items = q.docs.map((d) => d.data()).filter((d) => !(d.validTo && d.validTo < today)).slice(0, PACK_SIZE).map(packItem);
-    await fam(fid).collection('aiPacks').doc(`${cd}-L${lv}`).set({ v: 1, cd, lv, n: items.length, itemsJson: JSON.stringify(items), builtTs: FieldValue.serverTimestamp() });
+    const q = await db().collection('aiBank').where('status', '==', 'ready').where('role', '==', 'training').where('cdomain', '==', cd).where('level', '==', lv).limit(PACK_SIZE * 3).get();
+    const items = q.docs.map((d) => d.data()).filter((d) => !(d.validTo && d.validTo < today) && (!d.theme || mine.has(d.theme))).slice(0, PACK_SIZE).map(packItem);
+    await col.doc(`${cd}-L${lv}`).set({ v: 1, cd, lv, n: items.length, itemsJson: JSON.stringify(items), builtTs: FieldValue.serverTimestamp() });
     out[`${cd}|${lv}`] = items.length;
   }
   return out;
@@ -133,9 +145,10 @@ async function pick(where, n) {
   const s = await q.limit(n).get();
   return s.docs;
 }
-/** Reserve a reference set for week `wk` (status reserved, refWeek). Returns { ok, ids, missing }. */
-async function reserveReference(wk, levels) {
-  const ex = await db().collection('aiBank').where('refWeek', '==', wk).get();
+/** Reserve trainee L's reference set for week `wk` (status reserved, refWeek 'wk:L'). Returns { ok, ids, missing }. */
+async function reserveReference(wk, L, levels) {
+  const key = refWeekKey(wk, L);
+  const ex = await db().collection('aiBank').where('refWeek', '==', key).get();
   if (!ex.empty) return { ok: true, ids: ex.docs.map((d) => d.id), missing: [] };
   const chosen = [], missing = [];
   for (const { cd, format, n } of recipeList(REF.weekly)) {
@@ -145,11 +158,11 @@ async function reserveReference(wk, levels) {
   }
   if (missing.length) return { ok: false, ids: [], missing };
   const b = db().batch();
-  chosen.forEach((d) => b.update(d.ref, { status: 'reserved', refWeek: wk }));
+  chosen.forEach((d) => b.update(d.ref, { status: 'reserved', refWeek: key }));
   await b.commit();
   return { ok: true, ids: chosen.map((d) => d.id), missing };
 }
-/** Freeze an anchor set once (A, B or C). Content, choice order and positions never change afterwards. */
+/** Freeze an anchor set once (bank key '<A|B|C>_<L>'). Content, choice order and positions never change afterwards. */
 async function freezeAnchor(set, levels) {
   const ex = await db().collection('aiBank').where('anchorSet', '==', set).get();
   if (!ex.empty) return { ok: true, ids: ex.docs.map((d) => d.id), missing: [] };
@@ -165,11 +178,11 @@ async function freezeAnchor(set, levels) {
   await b.commit();
   return { ok: true, ids: chosen.map((d) => d.id), missing };
 }
-/** Write aiPacks/measure-{wk}: reserved reference set + the anchor set scheduled that week. */
-async function buildMeasurePack(fid, wk, anchorSet, levels) {
-  const ref = await reserveReference(wk, levels);
+/** Write trainees/{mid}/aiPacks/measure-{wk}: that trainee's reserved reference set + the anchor set scheduled that week. */
+async function buildMeasurePack(fid, mid, L, wk, anchorSet, levels) {
+  const ref = await reserveReference(wk, L, levels);
   let anchor = { ok: true, ids: [] };
-  if (anchorSet) anchor = await freezeAnchor(anchorSet, levels);
+  if (anchorSet) anchor = await freezeAnchor(anchorKey(anchorSet, L), levels);
   const load = async (ids) => (ids.length ? (await db().getAll(...ids.map((id) => db().collection('aiBank').doc(id)))).filter((s) => s.exists).map((s) => packItem(s.data())) : []);
   const reference = ref.ok ? await load(ref.ids) : [], anchorItems = anchor.ok && anchorSet ? await load(anchor.ids) : [];
   const doc = {
@@ -177,7 +190,7 @@ async function buildMeasurePack(fid, wk, anchorSet, levels) {
     referenceJson: JSON.stringify(reference), anchorJson: JSON.stringify(anchorItems),
     anchorSet: anchorSet || null, plan: { perDay: REF.perDay, firstPosition: 1 }, noFeedback: true, ready: ref.ok && anchor.ok, builtTs: FieldValue.serverTimestamp(),
   };
-  await fam(fid).collection('aiPacks').doc('measure-' + wk).set(doc);
+  await fam(fid).collection('trainees').doc(mid).collection('aiPacks').doc('measure-' + wk).set(doc);
   return { ref, anchor };
 }
 
@@ -208,50 +221,68 @@ async function bankCounts() {
   return c;
 }
 /**
- * aiAggregates/bankNeeds (bw.needs.v1): what the generator should make next. No scores, no names.
- * Priority under limits.maxItems: reference sets → anchor candidates → training cells.
+ * aiAggregates/bankNeeds (bw.needs.v1): what the generator should make next. No scores, no names, no member ids.
+ * Shared by every trainee: reference and anchor demand is summed over the trainees' own levels (letters only),
+ * training cells and the item cap scale with the number of active trainees. Priority under limits.maxItems:
+ * reference sets → anchor candidates → training cells.
+ * subjects: [{ L, plan }] (aiState/plan per trainee, sorted by letter); nTrainees: trainees in T (≥ 1).
  */
-async function writeBankNeeds({ plan, themes, counts, validator }) {
-  const levels = (plan && plan.refLevels) || {};
+async function writeBankNeeds({ subjects = [], nTrainees = 1, themes, counts, validator }) {
+  const n = Math.max(1, nTrainees || subjects.length || 1);
+  const subs = subjects.length ? subjects : [{ L: 'A', plan: null }];
+  const lvOf = (plan, cd) => ((plan && plan.refLevels) || {})[cd] || REF.defaultLevel;
   const needs = [];
   const weeksWanted = REF.reserveWeeksAhead + REF.spareWeeks;
-  for (const { cd, format, n } of recipeList(REF.weekly)) {
-    const lv = levels[cd] || REF.defaultLevel;
-    const have = counts.ref[`${format}|${lv}`] || 0;
-    const want = n * weeksWanted - have;
-    if (want > 0) needs.push({ cd, fmt: format, lv, role: 'reference', n: Math.min(want, n * 3) });
+  const refWant = new Map(), ancWant = new Map();     // 'cd|format|lv' → items wanted
+  for (const { L, plan } of subs) {
+    for (const { cd, format, n: k } of recipeList(REF.weekly)) { const key = `${cd}|${format}|${lvOf(plan, cd)}`; refWant.set(key, (refWant.get(key) || 0) + k * weeksWanted); }
+    const anchorsNeeded = ANCHOR_SETS.filter((set) => !counts.frozen[anchorKey(set, L)]).length;
+    if (anchorsNeeded) for (const { cd, format, n: k } of recipeList(REF.anchor)) { const key = `${cd}|${format}|${lvOf(plan, cd)}`; ancWant.set(key, (ancWant.get(key) || 0) + k * anchorsNeeded); }
   }
-  const anchorsNeeded = ['A', 'B', 'C'].filter((s) => !counts.frozen[s]).length;
-  if (anchorsNeeded) for (const { cd, format, n } of recipeList(REF.anchor)) {
-    const lv = levels[cd] || REF.defaultLevel;
-    const want = n * anchorsNeeded - (counts.anchorCand[`${format}|${lv}`] || 0);
-    if (want > 0) needs.push({ cd, fmt: format, lv, role: 'anchor_candidate', n: want });
+  for (const [key, want] of refWant) {
+    const [cd, format, lv] = key.split('|');
+    const per = recipeList(REF.weekly).find((x) => x.cd === cd && x.format === format).n;
+    const left = want - (counts.ref[`${format}|${lv}`] || 0);
+    if (left > 0) needs.push({ cd, fmt: format, lv: Number(lv), role: 'reference', n: Math.min(left, per * 3 * subs.length) });
   }
+  for (const [key, want] of ancWant) {
+    const [cd, format, lv] = key.split('|');
+    const left = want - (counts.anchorCand[`${format}|${lv}`] || 0);
+    if (left > 0) needs.push({ cd, fmt: format, lv: Number(lv), role: 'anchor_candidate', n: left });
+  }
+  const cellTarget = CELL_TARGET * n, fmtMin = FMT_MIN * n;
   for (const cd of CELL_DOMAINS) for (let lv = 1; lv <= 5; lv++) {
     const have = counts.cell[`${cd}|${lv}`] || 0;
-    if (have >= CELL_TARGET) continue;
+    if (have >= cellTarget) continue;
     const fmts = TRAINING_FORMATS(cd);
-    const missing = CELL_TARGET - have;
-    fmts.forEach((f, i) => {
-      const per = Math.max(Math.ceil(missing / fmts.length), 6 - (counts.fmt[`${cd}|${f}|${lv}`] || 0));
-      if (per > 0 && (i < missing || per > 0)) needs.push({ cd, fmt: f, lv, role: 'training', n: per });
+    const missing = cellTarget - have;
+    fmts.forEach((f) => {
+      const per = Math.max(Math.ceil(missing / fmts.length), fmtMin - (counts.fmt[`${cd}|${f}|${lv}`] || 0));
+      if (per > 0) needs.push({ cd, fmt: f, lv, role: 'training', n: per });
     });
   }
-  if ((counts.cell['reminiscence|2'] || 0) < 6 && counts.review < 10) needs.push({ cd: 'reminiscence', fmt: 'reminiscence', lv: 2, role: 'training', n: 6 });
+  if ((counts.cell['reminiscence|2'] || 0) < 6 * n && counts.review < 10) needs.push({ cd: 'reminiscence', fmt: 'reminiscence', lv: 2, role: 'training', n: 6 });
   // cap to maxItems in priority order
-  let left = LIMITS.maxItemsPerRun; const cells = [];
+  const maxItems = maxItemsFor(n);
+  let left = maxItems; const cells = [];
   for (const role of ['reference', 'anchor_candidate', 'training']) for (const x of needs.filter((y) => y.role === role)) {
-    if (left <= 0) break; const n = Math.min(x.n, left); cells.push({ ...x, n }); left -= n;
+    if (left <= 0) break; const k = Math.min(x.n, left); cells.push({ ...x, n: k }); left -= k;
   }
   const recentStems = {};
   const idx = await db().collection('aiBankIndex').get();
   idx.forEach((d) => { if (!d.id.startsWith('_')) recentStems[d.id] = (d.get('stems') || []).slice(-30); });
   const today = kd.kst().date;
+  const levelsOf = (plan) => Object.fromEntries(Object.keys(REF.weekly).map((cd) => [cd, lvOf(plan, cd)]));
   const doc = {
     schema: 'bw.needs.v1', asOf: new Date(Date.now() + 9 * 3600e3).toISOString().replace('Z', '+09:00').replace(/\.\d{3}/, ''),
-    today, specVer: SPEC_VER, cells, reference: { weeks: plannedWeeks(plan), specVer: SPEC_VER, levels: Object.fromEntries(Object.keys(REF.weekly).map((cd) => [cd, levels[cd] || REF.defaultLevel])) },
+    today, specVer: SPEC_VER, cells,
+    reference: {
+      weeks: plannedWeeks(subs.find((x) => x.plan) ? subs.find((x) => x.plan).plan : null), specVer: SPEC_VER,
+      levels: levelsOf(subs[0].plan),                                            // compat: the first subject's levels
+      levelSets: subs.map((x) => ({ s: x.L, levels: levelsOf(x.plan) })),
+    },
     dateWindow: { from: today, to: kd.addDays(today, 21) },
-    themes: themes || [], recentStems, limits: { maxItems: LIMITS.maxItemsPerRun }, validator: validator || null, expireAt: expireIn(90),
+    themes: themes || [], recentStems, limits: { maxItems }, validator: validator || null, expireAt: expireIn(90),
   };
   await db().collection('aiAggregates').doc('bankNeeds').set(doc);
   return doc;
@@ -278,10 +309,10 @@ async function addStems(items) {
 const QUAR_RT_FACTOR = 3;
 /**
  * Mark bank items seen in an itemLogs doc. Training: used (back to ready after 60 days, max 3 exposures).
- * Reference: used. Anchors: stay frozen. Applies quarantine rules ② (same wrong pick twice) and ③ (wrong and
+ * Reference: used. Anchors: stay frozen. Shared bank: whoever saw it, it is used for every trainee. Applies quarantine rules ② (same wrong pick twice) and ③ (wrong and
  * RT ≥ 3× the cell's running median) from §2.8 using a small per-cell running stat.
  */
-async function recordExposures(fid, log) {
+async function recordExposures(log) {
   const ids = [...new Set(log.items.map((x) => (x.id || '').split('#')[0]).filter((id) => /^bk_[0-9a-f]{20}$/.test(id)))];
   if (!ids.length) return { touched: [] };
   const snaps = await db().getAll(...ids.map((id) => db().collection('aiBank').doc(id)));
@@ -314,8 +345,8 @@ async function recordExposures(fid, log) {
   }
   b.set(cellsRef, cells);
   await b.commit();
-  if (touched.size) await rebuildPacks(fid, [...touched].map((k) => { const [cd, lv] = k.split('|'); return [cd, Number(lv)]; }));
-  return { touched: [...touched], quarantined };
+  // the caller rebuilds the packs of the touched cells (shared bank → every trainee's packs)
+  return { touched: [...touched], cells: [...touched].map((k) => { const [cd, lv] = k.split('|'); return [cd, Number(lv)]; }), quarantined };
 }
 /** Training items used ≥ 60 days ago with < 3 exposures go back to ready; reserved reference sets of past weeks become used. */
 async function reactivate() {
@@ -342,7 +373,9 @@ async function applyReview(itemId, decision) {
 async function writeBankStatus(fid, counts, extra = {}) {
   await fam(fid).collection('aiOps').doc('bank').set({
     cells: counts.cell, review: counts.review, quarantine: counts.quarantine, total: counts.total,
-    anchors: { A: counts.frozen.A || 0, B: counts.frozen.B || 0, C: counts.frozen.C || 0 }, reservedWeeks: [...counts.reservedWeeks].sort(),
+    // anchors: frozen items per set summed over trainees (A = A_A + A_B …); anchorSets: per '<set>_<L>'
+    anchors: Object.fromEntries(ANCHOR_SETS.map((set) => [set, Object.entries(counts.frozen).filter(([k]) => k === set || k.startsWith(set + '_')).reduce((a, [, v]) => a + v, 0)])),
+    anchorSets: counts.frozen, reservedWeeks: [...counts.reservedWeeks].sort(),
     ...extra, updatedTs: FieldValue.serverTimestamp(),
   }, { merge: true });
   const rev = await db().collection('aiBank').where('status', 'in', ['pending_review', 'quarantine']).limit(50).get();
@@ -355,5 +388,5 @@ async function writeBankStatus(fid, counts, extra = {}) {
 
 module.exports = {
   itemOf, CELL_DOMAINS, FORMATS_OF, bankId, loadRecent, takeQuota, insertAccepted, packItem, rebuildPacks, reserveReference, freezeAnchor,
-  buildMeasurePack, bankCounts, writeBankNeeds, addStems, recordExposures, reactivate, applyReview, writeBankStatus, textLen, Timestamp,
+  buildMeasurePack, bankCounts, refWeekKey, anchorKey, ANCHOR_SETS, writeBankNeeds, addStems, recordExposures, reactivate, applyReview, writeBankStatus, textLen, Timestamp,
 };

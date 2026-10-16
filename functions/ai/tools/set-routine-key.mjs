@@ -8,7 +8,10 @@
  * 1. generates a 48-character random key (A–Z a–z 0–9, ~285 bits)
  * 2. writes it ONCE to a local file with mode 600 (default ./routine-key.txt, refuses to overwrite)
  * 3. writes ONLY sha256(key) to Firestore aiConfig/main.routineKeyHash (Admin SDK, Application Default Credentials)
- *    plus familyId / pseudonym / enabled when given. The key itself is never printed, logged or stored in the DB.
+ *    plus familyId / enabled when given, and maxTrainees = 4. When --family names a DIFFERENT family than the stored
+ *    one, the pseudonym map aiConfig/main.subjects is reset (letters A–Z restart for the new family's trainees);
+ *    the same family keeps its letters (key rotation never renames anyone). The legacy `pseudonym` field is removed.
+ *    The key itself is never printed, logged or stored in the DB.
  * Then paste the key into the routine environment's setup script (see brain-walk-ai/SETUP.md) and delete the file.
  * Rotating = run again with a new --out file; the old key stops working within 60 s (config cache).
  * Revoking without a new key: --revoke (deletes routineKeyHash → endpoints answer 503).
@@ -42,9 +45,13 @@ const hash = crypto.createHash('sha256').update(key, 'utf8').digest('hex');
 
 fs.writeFileSync(out, key + '\n', { mode: 0o600, flag: 'wx' });
 fs.chmodSync(out, 0o600);
-const upd = { routineKeyHash: hash, keyRotatedTs: FieldValue.serverTimestamp() };
-const fam = arg('--family'); if (fam) upd.familyId = fam;
-if (arg('--pseudonym')) upd.pseudonym = arg('--pseudonym');
+const upd = { routineKeyHash: hash, keyRotatedTs: FieldValue.serverTimestamp(), maxTrainees: 4, pseudonym: FieldValue.delete() };
+const fam = arg('--family');
+if (fam) {
+  const cur = await ref.get();
+  if (!cur.exists || cur.get('familyId') !== fam) upd.subjects = FieldValue.delete();   // merge would keep old keys of {}
+  upd.familyId = fam;
+}
 if (process.argv.includes('--enable')) upd.enabled = true;
 if (arg('--app-url')) upd.appUrl = arg('--app-url');
 await ref.set(upd, { merge: true });

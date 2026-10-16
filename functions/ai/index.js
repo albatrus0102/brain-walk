@@ -2,13 +2,15 @@
 /**
  * AI question bank and admin reports — Cloud Functions v2, region asia-northeast3 (Firestore Seoul).
  *
- *   aiRead        HTTPS GET   routine reads: current aggregate | bank needs | wake job (+its aggregate)
+ *   aiRead        HTTPS GET   routine reads: subjects | current aggregate of one letter | bank needs | wake job
  *   aiSubmit      HTTPS POST  routine writes one aiInbox doc (items | report)
  *   aiOnInbox     aiInbox/{id} created → validate items / report instantly
- *   aiOnItemLog   families/{fid}/itemLogs/{sid} created → bank exposures, quarantine rules, packs
- *   aiOnProgress  families/{fid}/progress/{pid} → course done → aggregate + signals → wake on new orange
+ *   aiOnItemLog   families/{fid}/itemLogs/{sid} created by a trainee with consent → bank exposures, quarantine
+ *                 rules, packs of the touched cells (every trainee: the bank is shared)
+ *   aiOnProgress  families/{fid}/progress/{pid} → that trainee's course done → aggregate + signals → wake on new orange
  *   aiOnReview    families/{fid}/aiReview/{itemId} created (admin) → approve / retire / flag a bank item
- *   aiDaily       06:50 KST → weekly stats, signals, aggregate, measure/training packs, bank needs
+ *   aiDaily       06:50 KST → per trainee (sequential): weekly stats, signals, aggregate, measure/training packs;
+ *                 then the shared bank needs and bank status
  *   aiTick        every 10 min → queued Telegram, 08:30 template fallback, wake timeouts, stall alerts
  *   aiTgFlush     08:00 KST → queued Telegram (02:00–08:00 hold, early report notices) as ONE digest
  *   aiPurge       04:30 KST → retention backstop (TTL does inbox/aggregates/jobs/rejects)
@@ -22,7 +24,8 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { SECRETS, getConfig } = require('./config.js');
 const endpoints = require('./endpoints.js');
 const { processInbox } = require('./inbox.js');
-const { runFamily } = require('./pipeline.js');
+const { runFamily, eligibility } = require('./pipeline.js');
+const F = require('./family.js');
 const { afterCourse } = require('./course.js');
 const { tick } = require('./tick.js');
 const { flushOutbox } = require('./telegram.js');
@@ -49,10 +52,13 @@ exports.aiOnInbox = onDocumentCreated({ document: 'aiInbox/{id}', region: REGION
 exports.aiOnItemLog = onDocumentCreated({ document: 'families/{fid}/itemLogs/{sid}', region: REGION, retry: false }, async (event) => {
   const cfg = await getConfig();
   if (!event.data || event.params.fid !== cfg.familyId || cfg.enabled === false) return;
-  const L = sanitizeLog(event.data.data(), event.params.sid);
-  if (!L) { log.warn('itemlog_invalid', {}); return; }
-  const r = await bank.recordExposures(event.params.fid, L);
-  log.info('itemlog', { items: L.items.length, cells: r.touched ? r.touched.length : 0, quarantined: r.quarantined || 0 });
+  const lg = sanitizeLog(event.data.data(), event.params.sid);
+  if (!lg) { log.warn('itemlog_invalid', {}); return; }
+  const el = await eligibility(event.params.fid, lg.userId);      // in state/trainees + consent ok
+  if (!el.ok) { log.info('itemlog_skip', { why: el.why }); return; }
+  const r = await bank.recordExposures(lg);
+  if (r.cells && r.cells.length) await F.rebuildAllPacks(event.params.fid, r.cells);
+  log.info('itemlog', { items: lg.items.length, cells: r.touched ? r.touched.length : 0, quarantined: r.quarantined || 0 });
 });
 
 exports.aiOnProgress = onDocumentWritten({ document: 'families/{fid}/progress/{pid}', region: REGION, retry: false, timeoutSeconds: 300, memory: '512MiB', secrets: ALL }, async (event) => {
@@ -61,7 +67,9 @@ exports.aiOnProgress = onDocumentWritten({ document: 'families/{fid}/progress/{p
   if (!after || after.status !== 'done' || (before && before.status === 'done') || after.kind !== 'course') return;
   const cfg = await getConfig();
   if (event.params.fid !== cfg.familyId || cfg.enabled === false) return;
-  try { await afterCourse(event.params.fid); } catch (e) { log.error('after_course_failed', { code: e && e.code ? String(e.code) : 'error' }); }
+  const T = await F.loadTrainees(event.params.fid);
+  if (typeof after.userId !== 'string' || !T.ids.includes(after.userId)) return;
+  try { await afterCourse(event.params.fid, after.userId); } catch (e) { log.error('after_course_failed', { code: e && e.code ? String(e.code) : 'error' }); }
 });
 
 exports.aiOnReview = onDocumentCreated({ document: 'families/{fid}/aiReview/{itemId}', region: REGION, retry: false }, async (event) => {
@@ -70,7 +78,7 @@ exports.aiOnReview = onDocumentCreated({ document: 'families/{fid}/aiReview/{ite
   const d = event.data.data();
   const to = await bank.applyReview(event.params.itemId, d.decision);
   await event.data.ref.update({ result: to, processedTs: FieldValue.serverTimestamp() });
-  await bank.rebuildPacks(event.params.fid);
+  await F.rebuildAllPacks(event.params.fid);
   await bank.writeBankStatus(event.params.fid, await bank.bankCounts());
   log.info('review', { decision: d.decision, result: to });
 });

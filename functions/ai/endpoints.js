@@ -2,8 +2,12 @@
 /**
  * The only two HTTPS endpoints the routine can reach.
  *
- *   aiRead   GET  ?doc=current | ?doc=bankNeeds | ?doc=job&job=w-YYYYMMDD-HHMM-xx
- *            → { ok:true, doc } (pseudonymized aggregate / bank needs / { job, aggregate })
+ *   aiRead   GET  ?doc=subjects | ?doc=current&s=<A-Z> | ?doc=bankNeeds | ?doc=job&job=w-YYYYMMDD-HHMM-xx
+ *            → { ok:true, doc }:
+ *              subjects  { subjects: [{ s:'A', id:'a-A-…' }, …] }  letters with a current-{L} aggregate of today (KST)
+ *              current   aiAggregates/current-{L} (pseudonymized aggregate of trainee L)
+ *              bankNeeds shared bank needs · job { job, aggregate }
+ *            `?doc=current` without `s` is a 400. Member ids and labels never leave the server.
  *   aiSubmit POST { kind:'items'|'report', runId:'YYYYMMDD-HHMM', jobId?, payload:{…} }
  *            → { ok:true, id } — one aiInbox doc; the aiInbox trigger validates it
  *
@@ -48,7 +52,8 @@ function plain(v) {
   if (Array.isArray(v)) return v.map(plain);
   const o = {}; for (const [k, x] of Object.entries(v)) o[k] = plain(x); return o;
 }
-const strip = (d) => { const o = plain(d); delete o.expireAt; return o; };
+const strip = (d) => { const o = plain(d); delete o.expireAt; delete o.s; return o; };
+const LETTER_RE = /^[A-Z]$/;
 
 /** Remember when the key was used; flag use outside the routine windows (tick sends one Telegram). */
 async function noteKeyUse(kind) {
@@ -82,11 +87,12 @@ async function aiRead(req, res) {
     const q = req.query || {};
     const keys = Object.keys(q);
     const docName = q.doc;
-    const shapeOk = (docName === 'current' || docName === 'bankNeeds') ? keys.length === 1
-      : docName === 'job' ? keys.length === 2 && typeof q.job === 'string' && JOB_RE.test(q.job) : false;
+    const shapeOk = (docName === 'subjects' || docName === 'bankNeeds') ? keys.length === 1
+      : docName === 'current' ? keys.length === 2 && typeof q.s === 'string' && LETTER_RE.test(q.s)
+        : docName === 'job' ? keys.length === 2 && typeof q.job === 'string' && JOB_RE.test(q.job) : false;
     const cfg = await authOr(res, req);
     if (!cfg) return;
-    if (!shapeOk) return fail(res, 400, 'doc=current|bankNeeds|job&job=<id>');
+    if (!shapeOk) return fail(res, 400, 'doc=subjects|current&s=<A-Z>|bankNeeds|job&job=<id>');
     await noteKeyUse('read:' + docName);
     let out;
     if (docName === 'job') {
@@ -95,8 +101,13 @@ async function aiRead(req, res) {
       const job = j.data();
       const a = job.aggregateId ? await db().collection('aiAggregates').doc(job.aggregateId).get() : null;
       out = { job: strip(job), aggregate: a && a.exists ? strip(a.data()) : null };
+    } else if (docName === 'subjects') {
+      const letters = [...new Set(Object.values(cfg.subjects || {}).filter((L) => LETTER_RE.test(L)))].sort();
+      const today = kst().date;
+      const snaps = letters.length ? await db().getAll(...letters.map((L) => db().collection('aiAggregates').doc(`current-${L}`))) : [];
+      out = { subjects: snaps.filter((s) => s.exists && String(s.get('asOf')).slice(0, 10) === today).map((s) => ({ s: s.get('s'), id: s.get('id') })) };
     } else {
-      const s = await db().collection('aiAggregates').doc(docName).get();
+      const s = await db().collection('aiAggregates').doc(docName === 'current' ? `current-${q.s}` : docName).get();
       if (!s.exists) return fail(res, 404);
       out = strip(s.data());
     }

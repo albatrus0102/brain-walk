@@ -2,7 +2,7 @@
 /**
  * "간단판" (template) report: built by the server from the aggregate with fixed sentences,
  * used when the routine is late, fails, or its report is rejected. Same bw.report.v1 shape,
- * passes the same checkReport, filled the same way.
+ * passes the same checkReport, filled the same way. The person is named only as {{who}} (the app fills the label).
  */
 const NAME = { composite: '전체', memory: '기억', attention: '주의', executive: '계산·순서', language: '언어', visuospatial: '모양·공간', speed: '반응 속도', participation: '참여', anchor: '같은 문제 다시 풀기' };
 const LIGHT = { green: '평소 범위 안이에요.', blue: '평소보다 좋은 쪽이에요. 연습 효과일 수 있어요.', yellow: '경계선을 넘어 지켜보는 중이에요.', orange: '몇 주째 이어진 변화예요.', gray: '아직 판단하기 일러요.' };
@@ -40,12 +40,12 @@ function templateReport(agg, jobId = 'scheduled') {
   const headline = agg.mode === 'alert' ? '주의 신호가 있어요. 아래 설명을 확인해 주세요.'
     : orange ? '몇 주째 이어진 변화가 있어 살펴볼 만해요.' : yellow ? '대부분 평소 범위이고, 지켜보는 항목이 있어요.' : '기록의 흐름이 평소 범위 안이에요.';
   const summary = [
-    agg.phase === 'monitoring' ? '처음 네 주의 평소 실력과 비교한 흐름이에요.' : '아직 평소 실력을 재는 기간이라 판단은 뒤로 미뤄요.',
+    agg.phase === 'monitoring' ? '{{who}}의 처음 네 주의 평소 실력과 비교한 흐름이에요.' : '{{who}}의 평소 실력을 아직 재는 기간이라 판단은 뒤로 미뤄요.',
     orange ? '의사와 이야기해 볼 만해요. 급한 상황을 뜻하지는 않아요.' : '하루 숫자는 원래 흔들려서, 몇 주의 흐름을 함께 지켜봐요.',
   ];
   const confounders = agg.confounders.slice(0, 5).map((c) => `${CONF[c.code] || '메모'} {{${c.from}}}${c.to ? `~{{${c.to}}}` : ''}`);
   const doctorPoints = orange
-    ? [{ text: '이 리포트의 그래프를 보여 드리고, 최근 잠·약·기분의 변화를 함께 이야기해 보세요. 의사와 상담해 보시길 권해요.', evidence: agg.signals.filter((s) => s.level === 'orange').flatMap((s) => s.evidence).slice(0, 6) }]
+    ? [{ text: '이 리포트의 그래프를 보여 드리고, {{who}}의 최근 잠·약·기분의 변화를 함께 이야기해 보세요. 의사와 상담해 보시길 권해요.', evidence: agg.signals.filter((s) => s.level === 'orange').flatMap((s) => s.evidence).slice(0, 6) }]
     : [{ text: '지금은 급하게 상의할 일은 없어요. 정기 진료 때 흐름을 함께 보여 드리면 충분해요.', evidence: [] }];
   const glossary = agg.glossaryKeys.filter((k) => GLOSS[k]).slice(0, 8).map((k) => ({ key: k, plain: GLOSS[k][0], analogy: GLOSS[k][1] }));
   const rep = {

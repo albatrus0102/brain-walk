@@ -7,8 +7,9 @@
  *
  * Owner rule: nothing is sent between 02:00 and 08:00 KST. Messages produced in that window (and morning/weekly
  * report announcements made before 08:00) are queued in the server-only `tgOutbox` collection and delivered as ONE
- * combined digest at 08:00 KST (aiTgFlush; aiTick re-flushes later as a backstop), one line per kind (repeats of the
- * same kind are merged; the orange count is the largest one queued).
+ * combined digest at 08:00 KST (aiTgFlush; aiTick re-flushes later as a backstop), one line per kind. Entries carry
+ * the trainee's letter `s` (never a name or label): repeats of a kind for the same trainee are merged (largest orange
+ * count), several trainees show as "· {n}명" with the orange counts summed.
  */
 const { secret, getConfig, appUrlParam } = require('./config.js');
 const kd = require('./core/kdate.js');
@@ -25,11 +26,11 @@ const KIND = {
   key_offschedule: '루틴 키가 예정에 없던 시각에 쓰였어요. 루틴 상태를 확인해 주세요',
   test: '알림 시험이에요',
 };
-/** The exact text that will be sent (exported for tests: no digits other than the count, no names). */
-function messageText(kind, orangeCount, appUrl) {
+const tail = (people, orange) => `${Number.isInteger(people) && people > 1 ? ` · ${people}명` : ''}${Number.isInteger(orange) && orange > 0 ? ` · 주의 신호 ${orange}건` : ''}`;
+/** The exact text that will be sent (exported for tests: no digits other than the counts, no names). */
+function messageText(kind, orangeCount, appUrl, people = 1) {
   const k = KIND[kind] || KIND.test;
-  const n = Number.isInteger(orangeCount) && orangeCount > 0 ? ` · 주의 신호 ${orangeCount}건` : '';
-  return `🧠 오늘의 두뇌 산책\n${k}${n}\n${appUrl}`;
+  return `🧠 오늘의 두뇌 산책\n${k}${tail(people, orangeCount)}\n${appUrl}`;
 }
 async function appUrl() {
   let cfg = {}; try { cfg = await getConfig(); } catch { /* default */ }
@@ -44,13 +45,24 @@ const HOLD_FROM = 2, HOLD_TO = 8;          // KST hours: [02:00, 08:00) nothing 
 const inHold = (nowMs) => { const h = kd.kst(nowMs).hour; return h >= HOLD_FROM && h < HOLD_TO; };
 const KIND_ORDER = Object.keys(KIND);
 
-/** Digest text for queued entries [{kind, n}] (exported for tests). One line per kind, max count per kind. */
+/**
+ * Digest text for queued entries [{kind, n, s?}] (exported for tests). One line per kind; per kind the trainees
+ * (letters `s`) are counted ("· 2명" when more than one) and their orange counts summed (max per trainee).
+ */
 function digestText(entries, appUrl) {
-  const by = new Map();
-  for (const e of entries) if (KIND[e.kind]) by.set(e.kind, Math.max(by.get(e.kind) || 0, Number(e.n) || 0));
+  const by = new Map();                                   // kind → Map(subject → max orange)
+  for (const e of entries) {
+    if (!KIND[e.kind]) continue;
+    const subj = typeof e.s === 'string' && /^[A-Z]$/.test(e.s) ? e.s : '_';
+    if (!by.has(e.kind)) by.set(e.kind, new Map());
+    const m = by.get(e.kind);
+    m.set(subj, Math.max(m.get(subj) || 0, Number(e.n) || 0));
+  }
+  const sum = (m) => [...m.values()].reduce((a, x) => a + x, 0);
+  const people = (m) => [...m.keys()].filter((k) => k !== '_').length;
   const kinds = [...by.keys()].sort((a, b) => KIND_ORDER.indexOf(a) - KIND_ORDER.indexOf(b));
-  if (kinds.length === 1) return messageText(kinds[0], by.get(kinds[0]), appUrl);
-  const lines = kinds.map((k) => `· ${KIND[k]}${by.get(k) > 0 ? ` · 주의 신호 ${by.get(k)}건` : ''}`);
+  if (kinds.length === 1) return messageText(kinds[0], sum(by.get(kinds[0])), appUrl, people(by.get(kinds[0])));
+  const lines = kinds.map((k) => `· ${KIND[k]}${tail(people(by.get(k)), sum(by.get(k)))}`);
   return `🧠 오늘의 두뇌 산책\n${lines.join('\n')}\n${appUrl}`;
 }
 
@@ -71,10 +83,10 @@ async function deliver(text, kindForLog) {
   }
 }
 
-/** Put a message in tgOutbox (delivered by flushOutbox). */
-async function enqueue(kind, orangeCount, nowMs) {
+/** Put a message in tgOutbox (delivered by flushOutbox). s = the trainee's letter or null. */
+async function enqueue(kind, orangeCount, nowMs, s = null) {
   const { db, FieldValue, expireIn } = require('./fb.js');
-  await db().collection('tgOutbox').add({ kind, n: Number(orangeCount) || 0, date: kd.kst(nowMs).date, status: 'queued', createdTs: FieldValue.serverTimestamp(), expireAt: expireIn(7, nowMs) });
+  await db().collection('tgOutbox').add({ kind, n: Number(orangeCount) || 0, s: typeof s === 'string' && /^[A-Z]$/.test(s) ? s : null, date: kd.kst(nowMs).date, status: 'queued', createdTs: FieldValue.serverTimestamp(), expireAt: expireIn(7, nowMs) });
   log.info('telegram_queued', { kind });
   return 'queued';
 }
@@ -82,9 +94,11 @@ async function enqueue(kind, orangeCount, nowMs) {
 /**
  * Every server Telegram goes through here. Returns 'sent' | 'failed' | 'queued'.
  * opts.holdUntil8: also queue before 08:00 outside the 02–08 window (morning/weekly report announcements).
+ * opts.queue: always queue (the caller flushes right after, so several trainees become one digest).
+ * opts.s: the trainee's letter (digest grouping only; never shown).
  */
 async function sendTelegram(kind, orangeCount = 0, nowMs = Date.now(), opts = {}) {
-  if (inHold(nowMs) || (opts.holdUntil8 && kd.kst(nowMs).hour < HOLD_TO)) return enqueue(kind, orangeCount, nowMs);
+  if (opts.queue || inHold(nowMs) || (opts.holdUntil8 && kd.kst(nowMs).hour < HOLD_TO)) return enqueue(kind, orangeCount, nowMs, opts.s);
   return (await deliver(messageText(kind, orangeCount, await appUrl()), kind)) ? 'sent' : 'failed';
 }
 
@@ -116,7 +130,7 @@ async function flushOutbox(nowMs = Date.now()) {
     const dead = s.docs.filter((d) => (d.get('tries') || 0) >= MAX_TRIES), live = s.docs.filter((d) => (d.get('tries') || 0) < MAX_TRIES);
     if (dead.length) { const b = db().batch(); dead.forEach((d) => b.delete(d.ref)); await b.commit(); log.warn('telegram_dropped', { n: dead.length }); }
     if (!live.length) return { sent: 0, dropped: dead.length };
-    const entries = live.map((d) => ({ kind: d.get('kind'), n: d.get('n') }));
+    const entries = live.map((d) => ({ kind: d.get('kind'), n: d.get('n'), s: d.get('s') || null }));
     const ok = await deliver(digestText(entries, await appUrl()), 'digest');
     const b = db().batch();
     live.forEach((d) => (ok ? b.delete(d.ref) : b.update(d.ref, { tries: FieldValue.increment(1) })));
