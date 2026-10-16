@@ -137,7 +137,7 @@ const openCourse = async (page) => { await startDemo(page); await page.waitForSe
 {
   const { page } = await newPage(browser, { tag: 'newgames-default', seed: { 'bw.aiDemo': true, 'bw.localdb': { 'consents/local': ACK() } } });
   await startDemo(page); await page.waitForSelector('#btn-main');
-  const games = await page.evaluate(() => { const c = window.__S.plan; return Object.keys(c.games).filter(k => c.games[k].on); });
+  const games = await page.evaluate(async () => { const c = (await import(location.origin + '/brain-walk/js/data.js')).getPlan(); return Object.keys(c.games).filter(k => c.games[k].on); });
   must(!['story', 'shapes', 'route', 'think', 'letters', 'olden'].some(g => games.includes(g)) && games.length === 9, '기본 계획: 새 게임 여섯 개는 꺼져 있고 기존 아홉 개만 켜져 있어요 (' + games.length + ')');
   const course = await page.evaluate(async () => { const m = await import(location.origin + '/brain-walk/js/program.js'); const r = await import(location.origin + '/brain-walk/js/games/registry.js'); return { ids: r.GAME_ORDER, c: m.buildCourse(null, '2027-03-15', r.catalog()) }; });
   must(course.ids.slice(-6).join() === 'story,shapes,route,think,letters,olden' && course.c.length === 5 && !course.c.some(g => ['story', 'shapes', 'route', 'think', 'letters', 'olden'].includes(g)), '새 게임은 목록 끝에 덧붙고, 기본 코스는 그대로 5개');

@@ -66,7 +66,7 @@ export async function playGame(page, o = {}) {
 export const ymdNow = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 export const pack = (cd, lv, items) => ({ ['trainees/local/aiPacks/' + cd + '-L' + lv]: { v: 1, cd, lv, n: items.length, itemsJson: JSON.stringify(items), builtTs: Date.now() } });
 export const measure = (ref, anchor = [], plan = {}) => ({ ['trainees/local/aiPacks/measure-' + weekKey(ymdNow())]: { v: 1, week: weekKey(ymdNow()), nRef: ref.length, nAnchor: anchor.length, referenceJson: JSON.stringify(ref), anchorJson: JSON.stringify(anchor), anchorSet: anchor.length ? 'A' : null, plan: Object.assign({ perDay: 9, firstPosition: 1 }, plan), noFeedback: true, ready: true, builtTs: Date.now() } });
-export const noSeed = () => ({ 'aiState/demoSeed': { v: 1, date: ymdNow() } });
+export const noSeed = () => ({ 'aiState/demoSeed': { v: 2, date: ymdNow() } });   // v = SEED_V in js/ai/seed.js
 let n = 0;
 export const bk = (o) => Object.assign({ id: 'bk_' + (0xabc000 + ++n).toString(16).padStart(20, '0'), role: 'training', specVer: null, theme: null, prompt: null, speak: null, body: {}, choices: null, options: null, present: null, explain: null, validFrom: null, validTo: null, noFeedback: false }, o);
 export const choiceItem = (o) => bk(Object.assign({ format: 'lang_category', cdomain: 'language', level: 1, prompt: '다음 중 ‘과일’이 아닌 것을 골라 주세요.', body: { category: '과일', mode: 'odd_one_out', members: ['사과', '포도'], odd: '의자' }, choices: [{ t: '사과', err: 'SEM_FAR' }, { t: '의자', ok: true }, { t: '포도', err: 'SEM_FAR' }] }, o));

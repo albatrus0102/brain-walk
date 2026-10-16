@@ -23,7 +23,7 @@ async function open(ua, o = {}) {
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) errors.push('console: ' + m.text()); });
   await page.route('**/firebase-config.js', r => r.fulfill({ contentType: 'text/javascript', body: FILLED }));
   await page.route('https://www.gstatic.com/**', r => r.abort());
-  await page.addInitScript(o2 => { window.__DEBUG = true; localStorage.setItem('bw.role', JSON.stringify('family')); if (o2.size) localStorage.setItem('bw.size', JSON.stringify(o2.size)); if (o2.standalone) Object.defineProperty(navigator, 'standalone', { value: true }); }, o);
+  await page.addInitScript(o2 => { window.__DEBUG = true; try { sessionStorage.setItem('bw.extTried', '1'); } catch (e) {} localStorage.setItem('bw.role', JSON.stringify('family'));   /* 카카오톡·앱 안에서는 앱이 처음 한 번 기본 브라우저로 넘어가요(initInstall): 이 시험은 넘어가지 않고 남는 카드를 확인해요 */ if (o2.size) localStorage.setItem('bw.size', JSON.stringify(o2.size)); if (o2.standalone) Object.defineProperty(navigator, 'standalone', { value: true }); }, o);
   return page;
 }
 /* 연결 실패 → 체험 모드로 앱을 열어요 (url 은 ?join=… 처럼 주소 확인용) */

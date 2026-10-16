@@ -106,7 +106,7 @@ await common('family', 'back-family');
 }
 /* 가족 화면: 뒤로 가기 버튼은 들어온 곳(홈·설정·점검 탭)으로 돌아가요. 대화방에도 뒤로 가기가 있어요 */
 {
-  const { page } = await newPage(browser, { tag: 'back-fam-tabs', seed: { 'bw.role': 'family', 'bw.aiDemo': true } }); await startDemo(page); await page.waitForSelector('#dash');
+  const { page } = await newPage(browser, { tag: 'back-fam-tabs', seed: { 'bw.role': 'family', 'bw.aiDemo': true, 'bw.selT': 'local' } }); await startDemo(page); await page.waitForSelector('#dash');
   const scr = () => page.evaluate(() => window.__S.screen);
   const step = async (sel, want, msg) => { await page.click(sel); await page.waitForTimeout(200); must((await scr()) === want, msg + ' → ' + want + ' (' + await scr() + ')'); };
   await step('#tile-ai', 'aiReports', '홈 AI 신호 타일'); await step('#btn-back', 'home', '  뒤로: 홈');

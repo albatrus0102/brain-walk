@@ -103,7 +103,7 @@ for (const dark of [false, true]) {
   const d2 = Object.entries(await readDb(page)).filter(([x]) => x.startsWith('trainees/local/aiNotes/n') && !x.includes('example') && x !== k).map(e => e[1])[0];
   must(d2 && d2.to === null && d2.codes.join() === 'event', '"아직 계속" 은 to:null');
   await noHScroll(page, '메모(최대 글자·360px)'); await page.screenshot({ path: SHOTS + '/ai-notes.png', fullPage: true });
-  await page.click('#ai-n-del-' + k.slice(8)); await page.waitForSelector('.dialog'); await page.click('#dlg-btn-1'); await page.waitForTimeout(300);
+  await page.click('#ai-n-del-' + k.split('/').pop()); await page.waitForSelector('.dialog'); await page.click('#dlg-btn-1'); await page.waitForTimeout(300);
   must(!(await readDb(page))[k], '메모 지우기');
   await page.close();
 }
