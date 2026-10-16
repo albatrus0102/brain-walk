@@ -147,7 +147,7 @@ function confirmTyped(title, text, onOk) {
 export async function confirmDeleteAll() {
   let owner = false; try { owner = await isOwner(); } catch (e) {}
   if (!owner) {
-    dialog('내 기록을 모두 삭제할까요?', isTrainee() ? '내 훈련·점검 기록이 지워지고 되돌릴 수 없어요. 설문·잠 기록처럼 가족만 보는 기록은 관리자가 지울 수 있어요.' : '내 훈련·점검·생활 체크 기록이 지워지고 되돌릴 수 없어요. 가족방의 대화와 다른 가족의 기록은 그대로예요. (가족방 전체 삭제는 방을 만든 분만 할 수 있어요.)', [
+    dialog('내 기록을 모두 삭제할까요?', isTrainee() ? '내 훈련·점검 기록이 지워지고 되돌릴 수 없어요. 설문·잠 기록·시계 그림처럼 가족만 보는 기록은 관리자가 지울 수 있어요.' : '내 훈련·점검·생활 체크 기록이 지워지고 되돌릴 수 없어요. 가족방의 대화와 다른 가족의 기록은 그대로예요. (가족방 전체 삭제는 방을 만든 분만 할 수 있어요.)', [
       { label: '취소', kind: 'text' }, { label: '내 기록 삭제', kind: 'filled', run: async () => { try { await deleteMyRecords(); setTimeout(reloadHome, 600); } catch (e) { toast(Store.explain(e)); } } }]);
     return;
   }

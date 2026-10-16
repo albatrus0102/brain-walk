@@ -22,13 +22,13 @@ const navKey = s => NAV_OF[s] || s;
 /* 하단 메뉴의 꼭지 화면. 그 밖의 화면을 꼭지에서 열었으면 어디서 왔는지 기억해 뒀다가, 뒤로 가기가 그곳으로 돌아가요 (같은 화면을 홈·설정·점검 어디서든 열 수 있어서) */
 const TABS = ['home', 'family', 'assess', 'chat', 'settings'];
 export const backTarget = (name, dflt) => { const o = S.origin && S.origin[name]; return o && o !== name ? o : dflt; };
-export const BACK_TO = { setMine: 'settings', setNotify: 'settings', surveys: 'assess', clinical: 'assess', assessView: 'assess', clinicalForm: 'clinical', surveyIntro: 'surveys', surveyDone: 'surveys' };
+export const BACK_TO = { setMine: 'settings', setNotify: 'settings', surveys: 'assess', clinical: 'assess', clocks: 'assess', assessView: 'assess', clinicalForm: 'clinical', surveyIntro: 'surveys', surveyDone: 'surveys' };
 /* 훈련하는 분이 열 수 있는 화면: 흐름(훈련·쉬는 화면·점검·생활 체크·축하), 가족 대화, 가족이 도와줄 때 여는 설정. 나머지는 눌러도 홈으로. */
-const TRAINEE_SCREENS = ['home', 'game', 'result', 'courseBreak', 'checkIntro', 'checkin', 'courseDone', 'chat', 'settings', 'assess', 'assessStep', 'assessBreak', 'assessDone', 'surveyIntro', 'surveyQ', 'surveyDone'];
+const TRAINEE_SCREENS = ['home', 'game', 'result', 'courseBreak', 'checkIntro', 'checkin', 'courseDone', 'chat', 'settings', 'assess', 'assessStep', 'assessBreak', 'assessDone', 'surveyIntro', 'surveyQ', 'surveyDone', 'clock', 'clockDone'];
 /* 방 주인(관리자)이 훈련하는 분일 때, 설정 안의 '가족방 관리'에서 여는 관리 화면 */
 const ADMIN_SCREENS = ['adminDisplay', 'adminPlan', 'members'];
 export const ADMIN_SUBSCREENS = ADMIN_SCREENS;
-const TITLES = { setMine: '내 화면', setNotify: '알림', clinical: '병원 검사 기록', clinicalForm: '검사 결과 기록', assessBreak: '두뇌 건강 점검', surveys: '설문', surveyIntro: '설문', surveyQ: '설문', surveyDone: '설문', assessView: '두뇌 건강 점검 결과', home: '오늘의 두뇌 산책', pick: '골라서 하기', assess: '두뇌 건강 점검', assessStep: '두뇌 건강 점검', assessDone: '점검 결과', game: '', result: '훈련 결과', courseDone: '오늘의 훈련', courseBreak: '오늘의 훈련', checkIntro: '두뇌 점검', family: '가족이 보는 기록', checkin: '오늘의 생활 체크', settings: '설정', chat: '우리 가족 대화방', adminPlan: '훈련 계획', members: '가족 구성원', aiReports: 'AI 리포트', aiReport: 'AI 리포트', aiTrend: '흐름 그래프', aiAnchor: '같은 문제 다시 풀기', aiNotes: '메모', aiBank: '문제 은행', aiOps: '루틴 상태', aiSettings: 'AI 리포트 설정' };
+const TITLES = { setMine: '내 화면', setNotify: '알림', clinical: '병원 검사 기록', clinicalForm: '검사 결과 기록', clock: '시계 그리기', clockDone: '시계 그리기', clocks: '시계 그림', assessBreak: '두뇌 건강 점검', surveys: '설문', surveyIntro: '설문', surveyQ: '설문', surveyDone: '설문', assessView: '두뇌 건강 점검 결과', home: '오늘의 두뇌 산책', pick: '골라서 하기', assess: '두뇌 건강 점검', assessStep: '두뇌 건강 점검', assessDone: '점검 결과', game: '', result: '훈련 결과', courseDone: '오늘의 훈련', courseBreak: '오늘의 훈련', checkIntro: '두뇌 점검', family: '가족이 보는 기록', checkin: '오늘의 생활 체크', settings: '설정', chat: '우리 가족 대화방', adminPlan: '훈련 계획', members: '가족 구성원', aiReports: 'AI 리포트', aiReport: 'AI 리포트', aiTrend: '흐름 그래프', aiAnchor: '같은 문제 다시 풀기', aiNotes: '메모', aiBank: '문제 은행', aiOps: '루틴 상태', aiSettings: 'AI 리포트 설정' };
 const BARE = n => n === 'setup' || n.indexOf('ob-') === 0;   // 설정 안내·가입 화면: 뒤로가기/설정 버튼 없음
 
 const guard = name => (isTrainee() && !BARE(name) && !TRAINEE_SCREENS.includes(name) && !(ADMIN_SCREENS.includes(name) && isAdmin())) ? 'home' : name;
@@ -40,8 +40,8 @@ export function go(name) {
 }
 
 /* ================= 뒤로 가기 (History API, nav.js) ================= */
-/* 하던 일이 있는 화면: 게임, 설문 문항, 생활 체크. 여기서 Back 은 바로 나가지 않고 물어요. */
-const TASK_SCREENS = ['game', 'surveyQ', 'checkin'];
+/* 하던 일이 있는 화면: 게임, 설문 문항, 시계 그리기, 생활 체크. 여기서 Back 은 바로 나가지 않고 물어요. */
+const TASK_SCREENS = ['game', 'surveyQ', 'clock', 'checkin'];
 const QUIT_TEXT = '지금 하던 게임은 처음부터 다시 해요. 앞에서 마친 게임은 저장돼 있어요. 홈에서 ‘이어서 하기’를 누르면 돼요.';
 /* 하던 일을 그만둘지 묻기: 계속하기(기본)·그만두기. 그만두기는 화면마다 원래의 그만두기 길을 따라가요. */
 export function confirmQuit(then) {
@@ -49,6 +49,7 @@ export function confirmQuit(then) {
   let title = '게임을 그만둘까요?', text = QUIT_TEXT;
   if (!then) {
     if (sc === 'surveyQ') { title = '설문을 그만둘까요?'; text = '지금까지 답한 것은 저장되지 않아요.'; then = () => go(isTrainee() ? 'home' : 'surveys'); }
+    else if (sc === 'clock') { title = '그림 그리기를 그만둘까요?'; text = '지금 그린 그림은 저장되지 않아요.'; then = () => go('pick'); }
     else if (sc === 'checkin') { title = '생활 체크를 그만둘까요?'; text = '체크한 것은 저장되지 않아요.'; then = () => { S.ciFlow = false; go('home'); }; }
     else then = () => go('home');
   }

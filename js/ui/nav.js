@@ -8,7 +8,7 @@ import { S } from '../state.js';
  *   i>=2 화면 이동, 열려 있는 창(대화상자·시트)이 한 칸씩
  * Chrome 은 사용자가 아무것도 누르지 않고 쌓은 칸을 Back 이 건너뛰게 해요. 그래서 지킴이 칸은 첫 터치·키 입력 뒤에 쌓아요.
  * 화면 그리기·대화상자 만들기는 shell.js 가 hooks 로 알려 줘요 (이 파일은 state.js 만 알아요). */
-const FLOW_SCREENS = ['game', 'result', 'courseBreak', 'checkIntro', 'checkin', 'courseDone', 'assessStep', 'assessBreak', 'assessDone', 'surveyIntro', 'surveyQ', 'surveyDone'];
+const FLOW_SCREENS = ['game', 'result', 'courseBreak', 'checkIntro', 'checkin', 'courseDone', 'assessStep', 'assessBreak', 'assessDone', 'surveyIntro', 'surveyQ', 'surveyDone', 'clock', 'clockDone'];
 export const isFlowScreen = n => FLOW_SCREENS.includes(n) || n === 'setup' || String(n).indexOf('ob-') === 0;
 
 let hooks = null, armed = false, exiting = false;

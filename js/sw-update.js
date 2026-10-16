@@ -3,7 +3,7 @@
  * 다음에 앱을 열 때 새 버전으로 열려요. 새로고침 반복을 막으려고 60초 안에는 다시 새로고침하지 않아요. */
 export const SAFE_SCREENS = ['home', 'ob-start', 'setup', 'ob-error'];
 /* 진행 중인 흐름(게임·설문·점검 등) 화면. 여기서는 새로고침하지 않고, 흐름이 끝나 다른 화면으로 가면 그때 해요. */
-export const BUSY_SCREENS = ['game', 'result', 'courseBreak', 'checkIntro', 'checkin', 'courseDone', 'assessStep', 'assessBreak', 'assessDone', 'surveyIntro', 'surveyQ', 'surveyDone', 'chat', 'ob-name', 'ob-join', 'ob-role', 'ob-transfer'];
+export const BUSY_SCREENS = ['game', 'result', 'courseBreak', 'checkIntro', 'checkin', 'courseDone', 'assessStep', 'assessBreak', 'assessDone', 'surveyIntro', 'surveyQ', 'surveyDone', 'clock', 'clockDone', 'chat', 'ob-name', 'ob-join', 'ob-role', 'ob-transfer'];
 export const RELOAD_GAP_MS = 60000;
 const KEY = 'bw.swReloadAt';
 

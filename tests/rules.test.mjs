@@ -172,8 +172,23 @@ await t('B (not owner) cannot list A devices', getDocs(collection(dB, `families/
   await t('trainee cannot read taskRun (family-only)', getDoc(doc(dA, `families/${F}/taskRuns/r1`)), false);
   await t('trainee cannot list taskRuns', getDocs(collection(dA, `families/${F}/taskRuns`)), false);
 }
-// ---- sleeplogs / iadl 설문
+// ---- clocks (시계 그림, 가족 전용) / sleeplogs / iadl 설문
 {
+  const png = 'data:image/png;base64,' + 'A'.repeat(1000);
+  const ck = (who, extra = {}) => Object.assign({ date: today, ts: Date.now(), userId: who, img: png, w: 320, h: 320 }, extra);
+  await t('trainee saves clock drawing', setDoc(doc(dA, `families/${F}/clocks/c1`), ck('mA')));
+  await t('trainee cannot read clock', getDoc(doc(dA, `families/${F}/clocks/c1`)), false);
+  await t('trainee cannot list clocks', getDocs(collection(dA, `families/${F}/clocks`)), false);
+  await t('family reads clock', getDoc(doc(dB, `families/${F}/clocks/c1`)));
+  await t('clock forged userId denied', setDoc(doc(dB, `families/${F}/clocks/c2`), ck('mA')), false);
+  await t('clock not an image denied', setDoc(doc(dA, `families/${F}/clocks/c3`), ck('mA', { img: 'http://evil/x.png' })), false);
+  await t('clock > 200KB denied', setDoc(doc(dA, `families/${F}/clocks/c4`), ck('mA', { img: 'data:image/png;base64,' + 'A'.repeat(200001) })), false);
+  await t('clock 190KB ok', setDoc(doc(dA, `families/${F}/clocks/c5`), ck('mA', { img: 'data:image/png;base64,' + 'A'.repeat(190000) })));
+  await t('clock img with quote (XSS) denied', setDoc(doc(dA, `families/${F}/clocks/c6`), ck('mA', { img: 'data:image/png;base64,AAAA" onerror="alert(1)' })), false);
+  await t('clock img svg denied', setDoc(doc(dA, `families/${F}/clocks/c7`), ck('mA', { img: 'data:image/svg+xml;base64,AAAA' })), false);
+  await t('clock update denied', updateDoc(doc(dA, `families/${F}/clocks/c1`), { w: 1 }), false);
+  await t('trainee cannot delete clock', deleteDoc(doc(dA, `families/${F}/clocks/c1`)), false);
+  await t('family deletes clock', deleteDoc(doc(dB, `families/${F}/clocks/c5`)));
   const sl = (who, extra = {}) => Object.assign({ date: today, ts: Date.now(), userId: who, bed: '22:30', wake: '06:40', wakings: 2, quality: 3 }, extra);
   await t('sleep log own id', setDoc(doc(dA, `families/${F}/sleeplogs/${today}-mA`), sl('mA')));
   await t('sleep log readable by family', getDoc(doc(dB, `families/${F}/sleeplogs/${today}-mA`)));
@@ -476,7 +491,7 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   // -- trainee: role, family-only reads, forging
   await t('F3: trainee cannot switch own role', updateDoc(doc(dT, `${P}/members/t`), { role: 'family' }), false);
   await t('F3: trainee cannot read surveys', getDocs(collection(dT, `${P}/surveys`)), false);
-  await t('F3: clocks collection fully denied (read)', getDocs(collection(dT, `${P}/clocks`)), false);
+  await t('F3: trainee cannot read clocks', getDocs(collection(dT, `${P}/clocks`)), false);
   await t('F3: trainee cannot delete the trainee list', deleteDoc(doc(dT, `${P}/state/trainees`)), false);
   await t('F3: trainee cannot remove self from the list', setDoc(doc(dT, `${P}/state/trainees`), tsDoc('t', [], {})), false);
   const today3 = new Date().toISOString().slice(0, 10);
@@ -932,7 +947,7 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('F5: t2 assessment', setDoc(doc(U.t2, `${P}/assessments/a1`), { date: today, ts: Date.now(), scores: { memory: 80 }, total: 80, userId: 't2' }));
   await t('F5: t2 sleep log', setDoc(doc(U.t2, `${P}/sleeplogs/${today}-t2`), { date: today, ts: Date.now(), userId: 't2', bed: '22:00', wake: '06:00' }));
   await t('F5: t1 task run', setDoc(doc(U.t1, `${P}/taskRuns/r1`), { date: today, ts: Date.now(), userId: 't1', v: 1, tasks: {} }));
-  await t('F5: clocks collection fully denied (write)', setDoc(doc(U.t1, `${P}/clocks/c1`), { date: today, ts: Date.now(), userId: 't1', img: 'data:image/png;base64,AAAA' }), false);
+  await t('F5: t1 clock drawing', setDoc(doc(U.t1, `${P}/clocks/c1`), { date: today, ts: Date.now(), userId: 't1', img: 'data:image/png;base64,AAAA' }));
   const sv = (by, subj, o = {}) => Object.assign({ kind: 'iqcode', version: '1', answers: [3, 3], score: 3, ts: Date.now(), date: today, mode: 'family', answeredBy: by, relation: '딸', subjectId: subj }, o);
   await t('F5: family survey about t2', setDoc(doc(U.f, `${P}/surveys/v1`), sv('f', 't2')));
   await t('F5: survey about a removed trainee denied', setDoc(doc(U.f, `${P}/surveys/v2`), sv('f', 't3')), false);
@@ -941,7 +956,7 @@ await t('B (now owner) can delete family doc', deleteDoc(doc(dB, 'families', F))
   await t('F5: admin records clinical test for t1', setDoc(doc(U.a, `${P}/clinicalTests/k1`), ct('a', 't1')));
   await t('F5: clinical test about a family member denied', setDoc(doc(U.a, `${P}/clinicalTests/k2`), ct('a', 'f')), false);
   await t('F5: t1 cannot record a clinical test', setDoc(doc(U.t1, `${P}/clinicalTests/k3`), ct('t1', 't2')), false);
-  for (const c of ['surveys', 'clinicalTests', 'sleeplogs', 'taskRuns', 'itemLogs']) {
+  for (const c of ['surveys', 'clocks', 'clinicalTests', 'sleeplogs', 'taskRuns', 'itemLogs']) {
     await t(`F5: owner lists ${c}`, getDocs(collection(U.o, `${P}/${c}`)));
     await t(`F5: admin lists ${c}`, getDocs(collection(U.a, `${P}/${c}`)));
     await t(`F5: plain family lists ${c}`, getDocs(collection(U.f, `${P}/${c}`)));

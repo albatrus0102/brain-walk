@@ -12,7 +12,7 @@ const hs = page => page.evaluate(() => ({ len: history.length, st: history.state
   const page = await mk('family');
   await page.mouse.click(5, 400); await page.waitForTimeout(200);
   const base = (await hs(page)).len;
-  const names = ['pick', 'family', 'settings', 'home', 'chat', 'assess', 'surveys'];
+  const names = ['pick', 'family', 'settings', 'home', 'chat', 'assess', 'surveys', 'clocks'];
   for (let n = 0; n < 50; n++) { await page.evaluate(s => window.__go(s), names[n % names.length]); await page.waitForTimeout(40); }
   await page.waitForTimeout(800);
   const r = await hs(page);

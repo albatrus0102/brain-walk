@@ -311,7 +311,7 @@ export async function deleteFamily() {
   if (set.ids.includes(FA.mid)) { try { await removeTrainee(FA.mid); } catch (e) {} }
   else { try { await F.updateDoc(FA._ref('members/' + FA.mid), { role: 'family' }); } catch (e) {} }
   for (const id of set.ids) for (const k of ['plan', 'display', 'alarm', 'levels', 'program']) { try { await F.deleteDoc(FA._ref('trainees/' + id + '/state/' + k)); } catch (e) {} }
-  for (const c of ['messages', 'sessions', 'assessments', 'checkins', 'taskRuns', 'sleeplogs', 'surveys', 'clinicalTests', 'reads', 'reminders', 'progress', 'presence', 'pushState']) await deleteRefs(await refsOf(c));
+  for (const c of ['messages', 'sessions', 'assessments', 'checkins', 'taskRuns', 'sleeplogs', 'surveys', 'clocks', 'clinicalTests', 'reads', 'reminders', 'progress', 'presence', 'pushState']) await deleteRefs(await refsOf(c));
   // AI 문항 기록·메모·안내 동의·검토 결정 (읽을 수 없는 칸이 있어도 삭제는 계속해요. 서버가 만든 aiStats·aiReports 등은 서버가 하루 안에 지워요)
   for (const c of ['itemLogs', 'aiNotes', 'consents', 'aiReview']) { try { await deleteRefs(await refsOf(c)); } catch (e) {} }
   const memberRefs = await refsOf('members');
@@ -329,12 +329,12 @@ export async function deleteFamily() {
 export async function deleteMyRecords() {
   const { F } = FA.sdk;
   for (const c of ['sessions', 'assessments', 'checkins', 'progress']) await deleteRefs(await refsOf(c, [F.where('userId', '==', FA.mid)]));
-  // 내가 쓴 가족 전용 기록(설문·잠 기록·과제 상세 등)은 role 이 'family' 일 때만 찾을 수 있어요.
+  // 내가 쓴 가족 전용 기록(설문·시계 그림·잠 기록·과제 상세 등)은 role 이 'family' 일 때만 찾을 수 있어요.
   // 훈련하는 분이면 지우는 동안만 role 을 바꿨다가 되돌려요 (deleteFamily 와 같은 방식).
   const role = (FA.members()[FA.mid] || {}).role;
   if (role !== 'family') { try { await F.updateDoc(FA._ref('members/' + FA.mid), { role: 'family' }); } catch (e) {} }
   try {
-    for (const [c, f] of [['taskRuns', 'userId'], ['sleeplogs', 'userId'], ['surveys', 'answeredBy'], ['clinicalTests', 'recordedBy'], ['itemLogs', 'userId']]) { try { await deleteRefs(await refsOf(c, [F.where(f, '==', FA.mid)])); } catch (e) {} }
+    for (const [c, f] of [['taskRuns', 'userId'], ['sleeplogs', 'userId'], ['surveys', 'answeredBy'], ['clocks', 'userId'], ['clinicalTests', 'recordedBy'], ['itemLogs', 'userId']]) { try { await deleteRefs(await refsOf(c, [F.where(f, '==', FA.mid)])); } catch (e) {} }
   } finally {
     if (role && role !== 'family') { try { await F.updateDoc(FA._ref('members/' + FA.mid), { role }); } catch (e) {} }
   }

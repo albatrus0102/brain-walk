@@ -32,6 +32,7 @@ SCREENS.pick = {
       DOMAINS.map(d => '<section aria-labelledby="dom-' + d.id + '"><h2 class="t-title-m" id="dom-' + d.id + '">' + d.name + '</h2><div class="pick-list mt">' +
         gamesOf(d.id).filter(id => !GAMES[id].defOff || getPlan().games[id].on).map(id => '<button type="button" class="gamebtn" id="game-' + id + '" data-act="game" data-id="' + id + '"><span><strong>' + esc(GAMES[id].name) + '</strong></span><span class="t-small" style="text-align:right">' + effectiveLevel(id, getPlan(), getLevel(id)) + '단계<br>' + levelDots(effectiveLevel(id, getPlan(), getLevel(id))) + '</span></button>').join('') +
         '</div></section>').join('') +
-      (tr ? '<h2 class="t-title">더 해 보기 (선택)</h2><section class="card outlined" aria-labelledby="svp-h"><h3 class="t-title-m" id="svp-h">마음·기억 설문</h3><div class="mt"><button class="btn tonal" id="btn-open-surveys" type="button" data-act="nav" data-to="surveys">설문 보기</button></div></section>' : '') + '</div>';
+      (tr ? '<h2 class="t-title">더 해 보기 (선택)</h2><section class="card outlined" aria-labelledby="clk-p"><h3 class="t-title-m" id="clk-p">시계 그리기 (한 달에 한 번)</h3><div class="mt"><button class="btn tonal" id="btn-open-clock" type="button" data-act="nav" data-to="clock">그리러 가기</button></div></section>' +
+        '<section class="card outlined" aria-labelledby="svp-h"><h3 class="t-title-m" id="svp-h">마음·기억 설문</h3><div class="mt"><button class="btn tonal" id="btn-open-surveys" type="button" data-act="nav" data-to="surveys">설문 보기</button></div></section>' : '') + '</div>';
   }
 };

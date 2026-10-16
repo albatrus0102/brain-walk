@@ -6,6 +6,7 @@ import { RECORD_TABS, liHtml, listHtml, tabsHtml } from '../widgets.js';
 export const HUB_ITEMS = [
   { to: 'surveys', id: 'hub-surveys', title: '설문', icon: 'list' },
   { act: 'svopen', k: 'iadl', id: 'hub-iadl', title: '일상생활 체크', icon: 'clip' },
+  { to: 'clocks', id: 'hub-clocks', title: '시계 그림', icon: 'clock' },
   { to: 'clinical', id: 'hub-clinical', title: '병원 검사 기록', icon: 'hospital' },
   { to: 'assessView', id: 'hub-assess', title: '두뇌 건강 점검 결과', icon: 'trend' },
   { to: 'aiReports', id: 'hub-ai', title: 'AI 리포트', icon: 'sparkle', admin: true }

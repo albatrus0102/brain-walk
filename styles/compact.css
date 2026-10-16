@@ -301,6 +301,9 @@
 :root[data-ui="compact"] .choices{gap:8px}
 :root[data-ui="compact"] .q-text{font-size:var(--md-sys-typescale-title-large-size)}
 :root[data-ui="compact"] .reacts button{min-width:44px;min-height:44px;font-size:calc(22px * var(--text-scale));border-width:1px}
+:root[data-ui="compact"] .thumbs{grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
+:root[data-ui="compact"] .thumbs img{border-width:1px}
+:root[data-ui="compact"] .canvas-wrap{border-width:2px}
 :root[data-ui="compact"] #install-slot .btn{width:auto;align-self:flex-start;min-height:40px}
 :root[data-ui="compact"] #install-slot [data-install]{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 :root[data-ui="compact"] #install-slot .t-display{font-size:var(--md-sys-typescale-title-large-size)}

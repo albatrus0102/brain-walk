@@ -21,7 +21,7 @@ Object.assign(S, {
   program: LS.get('bw.program', null), assessLocal: LS.get('bw.assess', []), ciLocal: LS.get('bw.checkins', {}),
   dbAssess: null, dbCheckins: null, dbMsgs: [], pendingMsgs: {}, messages: [], msgsReady: false, msgLimit: 100, msgHasMore: false,
   reads: {}, ci: {}, notifyFamily: true, notifyPending: false, interacted: false, hist: LS.get('bw.hist', {}),
-  surveys: [], iadl: [], clinical: [], taskRuns: [], sleeplogs: [], sv: null, cl: null,
+  surveys: [], iadl: [], clocks: [], clinical: [], taskRuns: [], sleeplogs: [], sv: null, cl: null,
   reply: null, attach: null, alarmDue: false, remDue: false, nudgeShown: {}, icsText: '',
   /* 관리자·원격 설정·실시간 진행 (DESIGN.md §4.2) */
   eff: null, family: { ownerMemberId: null, admins: [] },
