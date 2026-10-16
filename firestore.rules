@@ -39,7 +39,8 @@ service cloud.firestore {
     function joinCodePath(code) { return /databases/$(database)/documents/joinCodes/$(code); }
     function transferPath(code) { return /databases/$(database)/documents/transferCodes/$(code); }
 
-    function traineePath(fid) { return /databases/$(database)/documents/families/$(fid)/state/trainee; }
+    // 훈련하는 분 목록 (DESIGN-MULTI §1.1): families/{fid}/state/trainees = { v, ids[≤4], labels{id:호칭}, updatedBy, updatedTs }
+    function tsPath(fid) { return /databases/$(database)/documents/families/$(fid)/state/trainees; }
 
     function isMember(fid) { return signedIn() && exists(linkPath(fid)); }
     function myId(fid) { return get(linkPath(fid)).data.memberId; }
@@ -60,10 +61,16 @@ service cloud.firestore {
     function isAdmin(fid) {
       return isMember(fid) && (isOwner(fid) || (myId(fid) in adminsOf(fid) && isFamilyRole(fid)));
     }
-    // 지금 state/trainee 로 지정된 사람이 나인가
-    function isAssignedTrainee(fid) {
-      return exists(traineePath(fid)) && get(traineePath(fid)).data.userId == myId(fid);
-    }
+    // 훈련하는 분 목록 T (없으면 아무도 훈련하는 분이 아니에요)
+    function tIds(fid) { return exists(tsPath(fid)) ? get(tsPath(fid)).data.ids : []; }
+    function inT(fid, id) { return id in tIds(fid); }
+    // 내가 T 에 있나 (이름은 예전과 같아요: 쓰던 곳이 그대로 동작해요)
+    function isAssignedTrainee(fid) { return inT(fid, myId(fid)); }
+    // 가족 전용 자료를 읽을 수 있는 사람: role 'family' 이고 T 에 없는 사람 (M4)
+    function isFamilyOnlyReader(fid) { return isFamilyRole(fid) && !isAssignedTrainee(fid); }
+    // 서버가 계산한 AI 자료를 읽는 사람: 관리자이면서 가족 전용 자료를 읽을 수 있는 사람
+    function isAiAdmin(fid) { return isAdmin(fid) && isFamilyOnlyReader(fid); }
+    function isCurrentTrainee(fid, mid) { return inT(fid, mid); }
 
     // ---- 새 가족방 만들기는 '만들기 코드'를 아는 사람만 (코드 N = 대문자, 공백·줄표 없는 12글자. 앱이 보내는 증거 proof = sha256hex(N), appConfig/creation.codeHash = sha256hex(sha256hex(N)). toHexString() 은 대문자라서 .lower() 로 맞춰요).
     // appConfig 는 앱에서 읽을 수 없고, 코드 문서가 없으면 아무도 새 가족방을 못 만들어요. 이미 있는 가족방은 영향이 없어요.
@@ -290,7 +297,24 @@ service cloud.firestore {
       }
 
       // ---- members (people)
-      // { name, role: 'trainee'|'family', joinedTs, lastNudgeAt?, leftTs? }
+      // { name, role: 'trainee'|'family', joinedTs, nudgeAt?{traineeId: serverTs}, leftTs? }
+      // T 에 있는 사람은 'family' 로 바꿀 수 없어요 (같은 배치에서 T 에서 빼면 돼요)
+      function roleOkAfter(m) {
+        return newData().role == 'trainee' || !existsAfter(tsPath(fid)) || !(m in getAfter(tsPath(fid)).data.ids);
+      }
+      // 훈련 알림 도장: 받는 사람(T)마다 따로 115분
+      function okNudgeKey(ids, i) {
+        let o = oldData().get('nudgeAt', {});
+        let n = newData().get('nudgeAt', {});
+        return ids.size() <= i || !(ids[i] in n.diff(o).affectedKeys())
+          || (n[ids[i]] == request.time && o.get(ids[i], timestamp.value(0)) < request.time - duration.value(115, 'm'));
+      }
+      function okNudgeAt() {
+        let ids = tIds(fid);
+        return newData().nudgeAt is map
+          && newData().nudgeAt.diff(oldData().get('nudgeAt', {})).affectedKeys().hasOnly(ids)
+          && okNudgeKey(ids, 0) && okNudgeKey(ids, 1) && okNudgeKey(ids, 2) && okNudgeKey(ids, 3);
+      }
       match /members/{mid} {
         allow read: if isMember(fid);
         // only in the same batch that creates my first link to this family
@@ -303,27 +327,25 @@ service cloud.firestore {
           && newData().role in ['trainee', 'family']
           && newData().joinedTs == request.time;
         allow update: if isMember(fid) && (
-            // myself: name, nudge stamp, leaving. (role is NOT here: see below)
+            // myself: name, nudge stamps, leaving. (role is NOT here: see below)
             (mid == myId(fid)
-              && changed().hasOnly(['name', 'lastNudgeAt', 'leftTs'])
+              && changed().hasOnly(['name', 'nudgeAt', 'leftTs'])
               && nonEmpty(newData().name, 20)
-              // nudge rate limit: lastNudgeAt can only move to "now", and only if
-              // the previous nudge is ≥115 min old (app enforces 2 h on its side)
-              && (!('lastNudgeAt' in changed()) || (
-                    newData().lastNudgeAt == request.time
-                    && oldData().get('lastNudgeAt', timestamp.value(0)) < request.time - duration.value(115, 'm')))
+              // nudge rate limit per target: nudgeAt.{t} can only move to "now", and only if
+              // the previous nudge to t is ≥115 min old (app enforces 2 h on its side)
+              && (!('nudgeAt' in changed()) || okNudgeAt())
               && (!('leftTs' in changed()) || newData().leftTs == request.time))
-            // myself, role, only during the initial join (≤30 min after joining) and only if I am not
-            // the assigned trainee. ("이미 훈련하는 분이 있어요 → 가족으로 쓸게요" in onboarding.)
+            // myself, role, only during the initial join (≤30 min after joining), never to 'family' while in T
          || (mid == myId(fid)
               && changed().hasOnly(['role'])
               && newData().role in ['trainee', 'family']
               && oldData().joinedTs > request.time - duration.value(30, 'm')
-              && !isAssignedTrainee(fid))
-            // admin changes anyone's role (including their own)
+              && roleOkAfter(mid))
+            // admin changes anyone's role (including their own), never to 'family' while in T
          || (isAdmin(fid)
               && changed().hasOnly(['role'])
-              && newData().role in ['trainee', 'family'])
+              && newData().role in ['trainee', 'family']
+              && roleOkAfter(mid))
             // admin removes someone else (never the owner)
          || (mid != myId(fid) && isAdmin(fid) && mid != ownerId(fid)
               && changed().hasOnly(['leftTs'])
@@ -352,11 +374,10 @@ service cloud.firestore {
       //   toId?(nudge), expireAt? }
       function validNudge() {
         return newData().toId is string
-          && newData().toId == get(/databases/$(database)/documents/families/$(fid)/state/trainee).data.userId
+          && inT(fid, newData().toId)
           && newData().toId != myId(fid)
-          // the same batch must stamp my member doc (which enforces the 115-min gap)
-          && getAfter(memberPath(fid, myId(fid))).data.lastNudgeAt == request.time
-          && get(memberPath(fid, myId(fid))).data.get('lastNudgeAt', timestamp.value(0)) < request.time - duration.value(115, 'm');
+          // the same batch must stamp my member doc nudgeAt.{toId} (which enforces the 115-min gap per target)
+          && getAfter(memberPath(fid, myId(fid))).data.get('nudgeAt', {}).get(newData().toId, null) == request.time;
       }
       function validNewMessage() {
         return newData().keys().hasOnly(['authorId', 'text', 'ts', 'sts', 'kind', 'push', 'replyTo', 'record',
@@ -459,7 +480,7 @@ service cloud.firestore {
 
       // ---- 점검 과제 상세 (낱말·점 잇기·숫자 기억 등): 한 번의 월간 점검의 과제별 점수와 세부 수치. 가족만 읽기(훈련하는 분은 쓰기만).
       match /taskRuns/{rid} {
-        allow read: if isMember(fid) && isFamilyRole(fid);
+        allow read: if isMember(fid) && isFamilyOnlyReader(fid);
         allow create: if isMember(fid) && okId(rid)
           && newData().keys().hasOnly(['date', 'ts', 'userId', 'v', 'tasks'])
           && newData().userId == myId(fid)
@@ -473,7 +494,7 @@ service cloud.firestore {
       // 훈련하는 분이 직접 답한 설문도 저장은 되지만(create) 읽을 수는 없어요.
       function validSurvey() {
         return newData().keys().hasOnly(['kind', 'version', 'answers', 'score', 'ts', 'date', 'mode', 'answeredBy', 'subjectId', 'relation'])
-          && newData().keys().hasAll(['kind', 'version', 'answers', 'score', 'ts', 'date', 'mode', 'answeredBy'])
+          && newData().keys().hasAll(['kind', 'version', 'answers', 'score', 'ts', 'date', 'mode', 'answeredBy', 'subjectId'])
           && newData().kind in ['iqcode', 'kdsq', 'smcq', 'gds', 'phq9', 'iadl']
           && str(newData().version, 10)
           && newData().answers is list && newData().answers.size() <= 30
@@ -481,20 +502,20 @@ service cloud.firestore {
           && okMs(newData().ts) && okDate(newData().date)
           && newData().mode in ['self', 'family']
           && newData().answeredBy == myId(fid)
-          && (!('subjectId' in newData()) || okId(newData().subjectId))
+          && okId(newData().subjectId) && inT(fid, newData().subjectId)
           && optStr('relation', 20);
       }
       match /surveys/{sid} {
-        allow read: if isMember(fid) && isFamilyRole(fid);
+        allow read: if isMember(fid) && isFamilyOnlyReader(fid);
         allow create: if isMember(fid) && okId(sid) && validSurvey();
         allow update: if false;
-        allow delete: if isMember(fid) && isFamilyRole(fid) && (resource.data.answeredBy == myId(fid) || isAdmin(fid));
+        allow delete: if isMember(fid) && isFamilyOnlyReader(fid) && (resource.data.answeredBy == myId(fid) || isAdmin(fid));
       }
 
       // ---- 시계 그림: 훈련하는 분이 그리면 저장(create)되고, 가족만 볼 수 있어요. 자동 채점 없음.
       // img 는 작게 줄인 data URL (PNG/JPEG, 200KB 이하).
       match /clocks/{cid} {
-        allow read: if isMember(fid) && isFamilyRole(fid);
+        allow read: if isMember(fid) && isFamilyOnlyReader(fid);
         allow create: if isMember(fid) && okId(cid)
           && newData().keys().hasOnly(['date', 'ts', 'userId', 'img', 'w', 'h'])
           && newData().keys().hasAll(['date', 'ts', 'userId', 'img'])
@@ -506,7 +527,7 @@ service cloud.firestore {
           && optNum('w') && optNum('h');
         allow update: if false;
         // 그린 사람(훈련하는 분)은 자기 그림을 읽을 수 없으니, 지우는 일은 가족 역할인 사람이 해요.
-        allow delete: if isMember(fid) && isFamilyRole(fid);
+        allow delete: if isMember(fid) && isFamilyOnlyReader(fid);
       }
 
       // ---- 수면 기록: checkins 처럼 사람마다 하루 한 개 (문서 id = YYYY-MM-DD-memberId). 가족만 읽기(훈련하는 분은 쓰기만).
@@ -521,7 +542,7 @@ service cloud.firestore {
             && (!('wakings' in newData()) || (newData().wakings is number && newData().wakings >= 0 && newData().wakings <= 20))
             && (!('quality' in newData()) || newData().quality == null || (newData().quality is number && newData().quality >= 1 && newData().quality <= 5));
         }
-        allow read: if isMember(fid) && isFamilyRole(fid);
+        allow read: if isMember(fid) && isFamilyOnlyReader(fid);
         allow create: if isMember(fid) && validSleep();
         allow update: if isMember(fid) && oldData().userId == myId(fid) && validSleep();
         allow delete: if isMember(fid) && (oldData().userId == myId(fid) || isAdmin(fid));
@@ -529,8 +550,9 @@ service cloud.firestore {
 
       // ---- 병원 검사 기록: 가족이 직접 적은 '점수'만 저장해요 (검사 문항·내용은 없음). 가족 전용: 훈련하는 분은 읽기·쓰기 모두 불가.
       function validClinical() {
-        return newData().keys().hasOnly(['test', 'testLabel', 'date', 'score', 'max', 'place', 'result', 'memo', 'recordedBy', 'ts'])
-          && newData().keys().hasAll(['test', 'date', 'recordedBy', 'ts'])
+        return newData().keys().hasOnly(['test', 'testLabel', 'date', 'score', 'max', 'place', 'result', 'memo', 'recordedBy', 'ts', 'subjectId'])
+          && newData().keys().hasAll(['test', 'date', 'recordedBy', 'ts', 'subjectId'])
+          && okId(newData().subjectId) && inT(fid, newData().subjectId)
           && newData().test in ['cist', 'mmse_ds', 'k_mmse', 'moca', 'snsb', 'cerad', 'cdr', 'gds_global', 'other']
           && optStr('testLabel', 30) && optStr('place', 40) && optStr('memo', 500)
           && okDate(newData().date) && okMs(newData().ts)
@@ -542,10 +564,10 @@ service cloud.firestore {
           && (!('result' in newData()) || newData().result == null || newData().result in ['정상', '인지저하', '경도인지장애', '치매', '기타']);
       }
       match /clinicalTests/{tid} {
-        allow read: if isMember(fid) && isFamilyRole(fid);
-        allow create: if isMember(fid) && isFamilyRole(fid) && okId(tid) && validClinical();
-        allow update: if isMember(fid) && isFamilyRole(fid) && oldData().recordedBy == myId(fid) && validClinical();
-        allow delete: if isMember(fid) && isFamilyRole(fid) && (resource.data.recordedBy == myId(fid) || isAdmin(fid));
+        allow read: if isMember(fid) && isFamilyOnlyReader(fid);
+        allow create: if isMember(fid) && isFamilyOnlyReader(fid) && okId(tid) && validClinical();
+        allow update: if isMember(fid) && isFamilyOnlyReader(fid) && oldData().recordedBy == myId(fid) && validClinical();
+        allow delete: if isMember(fid) && isFamilyOnlyReader(fid) && (resource.data.recordedBy == myId(fid) || isAdmin(fid));
       }
 
       // ---- per-person small docs
@@ -572,20 +594,10 @@ service cloud.firestore {
         allow delete: if isMember(fid) && isOwner(fid);
       }
 
-      // ---- shared family state
-      // levels  : 적응 난이도 기록. 지정된 훈련하는 분의 기기가 판마다 써요 (관리자도 가능).
-      // program : 프로그램 시작일. 처음 한 번 아무 구성원이나 만들 수 있고, 바꾸는 건 관리자.
-      // trainee : 훈련하는 분 지정. 관리자만. 단, 아직 아무도 지정되지 않았으면 '훈련하는 분' 역할로 막 들어온 사람(1시간 안)이 자기를 지정할 수 있어요 (처음 가입).
+      // ---- 훈련하는 분 한 사람씩의 설정 (trainees/{tid}/state/{key}, DESIGN-MULTI §1.2)
+      // levels  : 적응 난이도 기록. 그 훈련하는 분의 기기가 판마다 써요 (관리자도 가능).
+      // program : 프로그램 시작일. 처음 한 번 그 훈련하는 분이나 관리자가 만들고, 바꾸는 건 관리자.
       // alarm / plan / display : 관리자만 (DESIGN.md §2)
-      function canWriteState(key, isCreate) {
-        return isAdmin(fid)
-          || (key == 'levels' && isAssignedTrainee(fid))
-          || (key == 'program' && isCreate)
-          || (key == 'trainee' && isCreate
-              && newData().userId == myId(fid)
-              && myMember(fid).role == 'trainee'
-              && myMember(fid).joinedTs > request.time - duration.value(1, 'h'));
-      }
       function validState(key) {
         return (key == 'levels'
                   && newData().keys().hasOnly(['levels', 'updatedTs'])
@@ -594,11 +606,6 @@ service cloud.firestore {
           || (key == 'program'
                   && newData().keys().hasOnly(['startDate'])
                   && okDate(newData().startDate))
-          || (key == 'trainee'
-                  && newData().keys().hasOnly(['userId', 'displayLabel'])
-                  && okId(newData().userId)
-                  && exists(memberPath(fid, newData().userId))
-                  && nonEmpty(newData().displayLabel, 12))
           || (key == 'alarm'
                   && newData().keys().hasOnly(['time', 'days', 'updatedBy', 'updatedTs'])
                   && okHHMM(newData().time)
@@ -643,15 +650,76 @@ service cloud.firestore {
           && d.updatedBy == myId(fid)
           && okMs(d.updatedTs);
       }
-      match /state/{key} {
+
+      // ---- 훈련하는 분 목록 state/trainees (state/ 아래 유일한 문서)
+      // 관리자: 한 번에 한 명을 끝에 더하거나(그 사람은 같은 배치에서 role 'trainee', 떠나지 않은 사람), 아무나 빼기, 호칭 바꾸기. 최대 4명.
+      // 처음 가입: 목록이 아직 없으면 '훈련하는 분' 역할로 막 들어온 사람(1시간 안)이 자기만 넣어 만들 수 있어요.
+      function okLbl(d, i) { return d.ids.size() <= i || nonEmpty(d.labels[d.ids[i]], 12); }
+      function validTrainees() {
+        let d = newData();
+        return d.keys().hasOnly(['v', 'ids', 'labels', 'updatedBy', 'updatedTs']) && d.keys().hasAll(['v', 'ids', 'labels', 'updatedBy', 'updatedTs'])
+          && d.v == 1 && d.ids is list && d.ids.size() <= 4 && d.ids.toSet().size() == d.ids.size()
+          && d.labels is map && d.labels.keys().toSet() == d.ids.toSet()
+          && okLbl(d, 0) && okLbl(d, 1) && okLbl(d, 2) && okLbl(d, 3)
+          && d.updatedBy == myId(fid) && okMs(d.updatedTs);
+      }
+      function grantableT(m) {
+        return okId(m) && exists(memberPath(fid, m)) && !('leftTs' in get(memberPath(fid, m)).data)
+          && getAfter(memberPath(fid, m)).data.role == 'trainee';
+      }
+      // 한 번에 하나만: 빼기·호칭(목록은 줄거나 같음) 또는 끝에 한 명 더하기 (validAdminsChange 와 같은 방식)
+      function tsChange(before) {
+        let after = newData().ids;
+        return (after.size() <= before.size() && before.hasAll(after))
+          || (after.size() == before.size() + 1 && after.hasAll(before)
+              && !(after[after.size() - 1] in before) && grantableT(after[after.size() - 1]));
+      }
+      match /state/trainees {
         allow read: if isMember(fid);
-        allow create: if isMember(fid) && validState(key) && canWriteState(key, true);
-        allow update: if isMember(fid) && validState(key) && canWriteState(key, false);
-        allow delete: if isMember(fid) && isAdmin(fid);
+        allow create: if isMember(fid) && validTrainees() && (
+             (isAdmin(fid) && tsChange([]))
+          || (newData().ids == [myId(fid)] && myMember(fid).role == 'trainee'
+              && myMember(fid).joinedTs > request.time - duration.value(1, 'h')));
+        allow update: if isMember(fid) && isAdmin(fid) && validTrainees() && tsChange(resource.data.ids);
+        allow delete: if false;
+      }
+
+      // ---- 훈련하는 분마다의 하위 자료 trainees/{tid}/… (부모 문서는 없어요)
+      match /trainees/{tid} {
+        function tOK() { return inT(fid, tid); }
+        function canWriteT(key, isCreate) {
+          return isAdmin(fid) || (key == 'levels' && tid == myId(fid)) || (key == 'program' && isCreate && tid == myId(fid));
+        }
+        match /state/{key} {
+          allow read: if isMember(fid);
+          allow create: if isMember(fid) && tOK() && key in ['plan', 'display', 'alarm', 'levels', 'program'] && validState(key) && canWriteT(key, true);
+          allow update: if isMember(fid) && tOK() && key in ['plan', 'display', 'alarm', 'levels', 'program'] && validState(key) && canWriteT(key, false);
+          allow delete: if isAdmin(fid);
+        }
+        // 쓸 문항 묶음 (서버가 만들어요): 그 훈련하는 분 본인과 가족 전용 자료를 읽는 사람
+        match /aiPacks/{k} {
+          allow read: if isMember(fid) && (tid == myId(fid) || isFamilyOnlyReader(fid));
+          allow write: if false;
+        }
+        // plan(서버) / themes(관심사 낱말, 관리자)
+        match /aiState/{k} {
+          allow read: if isMember(fid);
+          allow create, update: if isAdmin(fid) && tOK() && k == 'themes' && validThemes();
+          allow delete: if false;
+        }
+        // 서버가 계산한 숫자·신호·리포트·운영 기록: AI 관리자만 읽어요. 쓰기는 서버만.
+        match /aiStats/{k} { allow read: if isAiAdmin(fid); allow write: if false; }
+        match /aiSignals/{k} { allow read: if isAiAdmin(fid); allow write: if false; }
+        match /aiReports/{k} { allow read: if isAiAdmin(fid); allow write: if false; }
+        match /aiOps/{k=**} { allow read: if isAiAdmin(fid); allow write: if false; }
+        match /aiNotes/{nid} {
+          allow read, delete: if isAiAdmin(fid);
+          allow create, update: if isAiAdmin(fid) && okId(nid) && validNote();
+        }
       }
 
       // ---- 오늘 진행 상황 (가족 화면 실시간): progress/{YYYY-MM-DD}-{memberId}
-      // 지정된 훈련하는 분의 기기가 게임을 시작할 때와 끝낼 때 써요. js/program.js progressStart/progressFinish 모양.
+      // 훈련하는 분(T)의 기기가 자기 문서만 게임을 시작할 때와 끝낼 때 써요. js/program.js progressStart/progressFinish 모양.
       match /progress/{pid} {
         function validProgress() {
           let d = newData();
@@ -696,7 +764,7 @@ service cloud.firestore {
       // 서버(Cloud Functions, Admin SDK)가 계산하고 쓰는 문서는 클라이언트 쓰기 금지예요.
       // AI 루틴은 Firestore 에 직접 접근하지 않아요(HTTPS 함수 aiRead/aiSubmit 만). 그래서 AI 를 위한 규칙은 없어요.
 
-      // ---- 문항별 기록: 게임 한 판 = 문서 1개. 지정된 훈련하는 분의 기기만 만들어요. 배열 안쪽은 크기만 보고 서버가 정리해요.
+      // ---- 문항별 기록: 게임 한 판 = 문서 1개. 훈련하는 분(T) 본인의 기기만 만들어요. 배열 안쪽은 크기만 보고 서버가 정리해요.
       function validItemLog() {
         let d = newData();
         return d.keys().hasOnly(['v', 'userId', 'date', 'ts', 'sts', 'gameId', 'inCourse', 'level', 'speechOn', 'size', 'device', 'hour', 'abandoned', 'items'])
@@ -711,19 +779,13 @@ service cloud.firestore {
           && optStr('size', 10) && optStr('device', 20);
       }
       match /itemLogs/{sid} {
-        allow read: if isMember(fid) && isFamilyRole(fid);
+        allow read: if isMember(fid) && isFamilyOnlyReader(fid);
         allow create: if isMember(fid) && okId(sid) && isAssignedTrainee(fid) && validItemLog();
         allow update: if false;
         allow delete: if isMember(fid) && (resource.data.userId == myId(fid) || isAdmin(fid));
       }
 
-      // ---- 쓸 문항 묶음 (서버가 만들어요): 가족 구성원 모두 읽기 (훈련하는 분의 기기가 받아 써요)
-      match /aiPacks/{k} {
-        allow read: if isMember(fid);
-        allow write: if false;
-      }
-
-      // ---- AI 상태: plan(서버) / themes(관심사 낱말, 관리자) / switch(AI 리포트 켜기·끄기, 관리자)
+      // ---- AI 상태 (가족 전체): switch(AI 리포트 켜기·끄기, 관리자). 훈련하는 분마다의 plan·themes 는 trainees/{tid}/aiState.
       function okThemeAt(l, i) { return l.size() <= i || (l[i] is string && l[i].size() >= 1 && l[i].size() <= 10); }
       function validThemes() {
         let d = newData();
@@ -740,31 +802,17 @@ service cloud.firestore {
       }
       match /aiState/{k} {
         allow read: if isMember(fid);
-        allow create, update: if isAdmin(fid) && ((k == 'themes' && validThemes()) || (k == 'switch' && validSwitch()));
+        allow create, update: if isAdmin(fid) && k == 'switch' && validSwitch();
         allow delete: if false;
       }
 
-      // ---- 서버가 계산한 숫자·신호·리포트·운영 기록: 관리자만 읽어요 (리포트는 모든 관리자). 쓰기는 서버만.
-      // 훈련하는 분은 방 주인이어도 못 읽어요: 관리자이면서 role 'family' 이고, 지금 지정된 훈련하는 분이 아니어야 해요.
-      function isAiAdmin(fid) { return isAdmin(fid) && isFamilyRole(fid) && !isAssignedTrainee(fid); }
-      match /aiStats/{k} {
-        allow read: if isAiAdmin(fid);
-        allow write: if false;
-      }
-      match /aiSignals/{k} {
-        allow read: if isAiAdmin(fid);
-        allow write: if false;
-      }
-      match /aiReports/{k} {
-        allow read: if isAiAdmin(fid);
-        allow write: if false;
-      }
+      // ---- 가족 전체 운영 기록 (aiOps/bank, aiOps/review, aiOps/wakes 가족 한도): AI 관리자만 읽어요. 쓰기는 서버만.
       match /aiOps/{k=**} {
         allow read: if isAiAdmin(fid);
         allow write: if false;
       }
 
-      // ---- 관리자 메모: 기간 + 분류 코드 + 자유 글(200자). 자유 글은 AI 에 보내지 않아요(서버는 분류 코드와 날짜만 써요).
+      // ---- 관리자 메모 모양 (trainees/{tid}/aiNotes): 기간 + 분류 코드 + 자유 글(200자). 자유 글은 AI 에 보내지 않아요(서버는 분류 코드와 날짜만 써요).
       function validNote() {
         let d = newData();
         return d.keys().hasOnly(['from', 'to', 'codes', 'text', 'by', 'ts']) && d.keys().hasAll(['from', 'codes', 'by', 'ts'])
@@ -774,11 +822,6 @@ service cloud.firestore {
           && d.codes.hasOnly(['sleep', 'illness', 'med_change', 'hospital', 'event', 'travel', 'device', 'mood', 'other'])
           && optStr('text', 200)
           && d.by == myId(fid) && okMs(d.ts);
-      }
-      match /aiNotes/{nid} {
-        allow read: if isAiAdmin(fid);
-        allow create, update: if isAiAdmin(fid) && okId(nid) && validNote();
-        allow delete: if isAiAdmin(fid);
       }
 
       // ---- 관리자의 문항 검토 결정 (옛날 이야기 내보내기, 모호 의심 문항 은퇴·신고). 서버 트리거가 처리해요.
@@ -797,11 +840,8 @@ service cloud.firestore {
         return d.keys().hasOnly(['kind', 'version', 'ackTs', 'withFamily']) && d.keys().hasAll(['kind', 'version', 'ackTs'])
           && d.kind == 'ai-report-notice' && nonEmpty(d.version, 20) && d.ackTs == request.time && optBool('withFamily');
       }
-      // 관리자가 훈련하는 분을 대신해 켜기 ("AI 기록 관찰"): 지금 지정된 훈련하는 분의 문서만, byAdmin = 내 memberId, 서버 시각.
+      // 관리자가 훈련하는 분을 대신해 켜기 ("AI 기록 관찰"): T 에 있는 사람의 문서만, byAdmin = 내 memberId, 서버 시각.
       // 관리자가 훈련하는 분 본인이면(isAiAdmin 이 아니므로) 이 길은 못 써요.
-      function isCurrentTrainee(fid, mid) {
-        return exists(traineePath(fid)) && get(traineePath(fid)).data.userId == mid;
-      }
       function validAdminConsentCreate() {
         let d = newData();
         return d.keys().hasOnly(['kind', 'version', 'ackTs', 'withFamily', 'byAdmin']) && d.keys().hasAll(['kind', 'version', 'ackTs', 'byAdmin'])
