@@ -74,7 +74,7 @@ const plan = o => ({ 'bw.localdb': { 'trainees/local/state/plan': o } });
   await page.click('#dlg-btn-0'); await page.waitForTimeout(100);
   must(await vis(page, '#btn-main'), '"아니요, 쉴게요"');
   // 진행 현황이 기록돼요 (체험 모드에서는 이 기기의 로컬 문서)
-  const prog = await page.evaluate(() => { const db = JSON.parse(localStorage.getItem('bw.localdb')); const k = Object.keys(db).find(x => x.startsWith('progress/')); return k ? db[k] : null; });
+  const prog = await page.evaluate(() => { const db = JSON.parse(localStorage.getItem('bw.localdb')); const k = Object.keys(db).find(x => x.startsWith('progress/') && db[x].userId === 'local'); return k ? db[k] : null; });
   must(prog && prog.status === 'done' && prog.results.length === 2 && prog.planned.length === 2 && prog.kind === 'course', '진행 문서: 2개 모두 끝남 (planned 2, results 2, done)');
   await page.close();
 }

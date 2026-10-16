@@ -176,7 +176,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
 
 /* ---------- 6) 가족 홈의 현황 (체험 모드에서 상태를 흉내) ---------- */
 {
-  const { page } = await newPage(browser, { tag: 'dash', tz: 'Asia/Seoul', seed: { 'bw.role': 'family' } });
+  const { page } = await newPage(browser, { tag: 'dash', tz: 'Asia/Seoul', seed: { 'bw.role': 'family', 'bw.selT': 'local', 'bw.localdb': { 'trainees/local/state/alarm': { time: '23:59', days: [0, 1, 2, 3, 4, 5, 6], updatedBy: 'local', updatedTs: 1 } } } });
   await startDemo(page);
   const put = (path, doc) => page.evaluate(async ([p, d]) => window.__Store.setDoc(p, d), [path, doc]);
   const ymdOf = off => page.evaluate(o => { const t = new Date(); t.setDate(t.getDate() + o); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); }, off);
