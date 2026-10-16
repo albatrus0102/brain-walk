@@ -65,20 +65,30 @@ async function call(fnName, { method = 'GET', query = '', key = KEY, body, rawBo
 }
 const setConfig = async (cfg) => { await db.doc('aiConfig/main').set(cfg); await sleep(1300); };   // emulator cache TTL is 1 s
 const FID = 'famAI';
+const CFG = (extra = {}) => ({ familyId: FID, pseudonym: '사용자 A', enabled: true, routineKeyHash: KEY_HASH, subjects: { t: 'A' }, maxTrainees: 4, ...extra });
 
 // =============================================================== A. endpoints
-await t('A1 aiRead answers 503 while no key hash is configured', async () => { const r = await call('aiRead', { query: '?doc=current' }); assert(r.status === 503, r.status); });
+await t('A1 aiRead answers 503 while no key hash is configured', async () => { const r = await call('aiRead', { query: '?doc=current&s=A' }); assert(r.status === 503, r.status); });
 await t('A2 aiSubmit answers 503 while no key hash is configured', async () => { const r = await call('aiSubmit', { method: 'POST', body: {} }); assert(r.status === 503, r.status); });
-await setConfig({ familyId: FID, pseudonym: '사용자 A', enabled: true, routineKeyHash: 'abc' });
-await t('A3 a hash shorter than 16 chars is treated as not configured (503)', async () => { assert((await call('aiRead', { query: '?doc=current' })).status === 503); });
-await setConfig({ familyId: FID, pseudonym: '사용자 A', enabled: true, routineKeyHash: KEY_HASH });
-await db.doc('aiAggregates/current').set({ schema: 'bw.agg.v1', id: 'a-seed', mode: 'daily', numbers: {}, expireAt: Timestamp.fromMillis(Date.now() + 864e5) });
-await t('A4 wrong key → 401', async () => { const r = await call('aiRead', { query: '?doc=current', key: KEY.slice(0, -1) + (KEY.endsWith('A') ? 'B' : 'A') }); assert(r.status === 401, r.status); });
-await t('A5 missing Authorization → 401', async () => { assert((await call('aiRead', { query: '?doc=current', key: null })).status === 401); });
-await t('A6 right key → 200 with the aggregate (no expireAt)', async () => { const r = await call('aiRead', { query: '?doc=current' }); assert(r.status === 200 && r.json.doc.id === 'a-seed' && !('expireAt' in r.json.doc), r.status); });
-await t('A7 X-Routine-Key header also works', async () => { assert((await call('aiRead', { query: '?doc=current', key: null, headers: { 'X-Routine-Key': KEY } })).status === 200); });
+await setConfig(CFG({ routineKeyHash: 'abc' }));
+await t('A3 a hash shorter than 16 chars is treated as not configured (503)', async () => { assert((await call('aiRead', { query: '?doc=current&s=A' })).status === 503); });
+await setConfig(CFG());
+await db.doc('aiAggregates/current-A').set({ schema: 'bw.agg.v1', id: 'a-seed', s: 'A', asOf: new Date().toISOString(), mode: 'daily', numbers: {}, expireAt: Timestamp.fromMillis(Date.now() + 864e5) });
+await t('A4 wrong key → 401', async () => { const r = await call('aiRead', { query: '?doc=current&s=A', key: KEY.slice(0, -1) + (KEY.endsWith('A') ? 'B' : 'A') }); assert(r.status === 401, r.status); });
+await t('A5 missing Authorization → 401', async () => { assert((await call('aiRead', { query: '?doc=current&s=A', key: null })).status === 401); });
+await t('A6 right key → 200 with the aggregate (no expireAt)', async () => { const r = await call('aiRead', { query: '?doc=current&s=A' }); assert(r.status === 200 && r.json.doc.id === 'a-seed' && !('expireAt' in r.json.doc), r.status); });
+await t('A7 X-Routine-Key header also works', async () => { assert((await call('aiRead', { query: '?doc=current&s=A', key: null, headers: { 'X-Routine-Key': KEY } })).status === 200); });
 await t('A8 unknown doc → 400', async () => { assert((await call('aiRead', { query: '?doc=aiConfig' })).status === 400); });
-await t('A9 extra query parameter → 400', async () => { assert((await call('aiRead', { query: '?doc=current&x=1' })).status === 400); });
+await t('A9 extra query parameter → 400', async () => { assert((await call('aiRead', { query: '?doc=current&s=A&x=1' })).status === 400); });
+await t('A9b current without s, with a lowercase or two-letter s → 400; the old family-wide ?doc=current is gone', async () => {
+  for (const q of ['?doc=current', '?doc=current&s=a', '?doc=current&s=AB', '?doc=current&s=../x']) assert((await call('aiRead', { query: q })).status === 400, q);
+});
+await t('A9c unknown letter → 404; subjects lists the letters with an aggregate of today (letters only)', async () => {
+  assert((await call('aiRead', { query: '?doc=current&s=B' })).status === 404);
+  const r = await call('aiRead', { query: '?doc=subjects' });
+  assert(r.status === 200 && r.json.doc.subjects.length === 1 && r.json.doc.subjects[0].s === 'A' && r.json.doc.subjects[0].id === 'a-seed', JSON.stringify(r.json));
+  assert(!r.text.includes('"t"'), 'no member id');
+});
 await t('A10 malformed job id → 400', async () => { assert((await call('aiRead', { query: '?doc=job&job=../aiConfig/main' })).status === 400); });
 await t('A11 missing job → 404', async () => { assert((await call('aiRead', { query: '?doc=job&job=w-20270101-0101-zz' })).status === 404); });
 await t('A12 bankNeeds not built yet → 404', async () => { assert((await call('aiRead', { query: '?doc=bankNeeds' })).status === 404); });
@@ -92,10 +102,10 @@ await t('A15 shape errors → 400 (kind, runId, extra keys, report without jobId
   assert((await call('aiSubmit', { method: 'POST', rawBody: '{"kind":' })).status === 400);
 });
 await t('A16 disabling AI in aiConfig closes the endpoints (503) without a redeploy', async () => {
-  await setConfig({ familyId: FID, pseudonym: '사용자 A', enabled: false, routineKeyHash: KEY_HASH });
-  assert((await call('aiRead', { query: '?doc=current' })).status === 503);
-  await setConfig({ familyId: FID, pseudonym: '사용자 A', enabled: true, routineKeyHash: KEY_HASH });
-  assert((await call('aiRead', { query: '?doc=current' })).status === 200);
+  await setConfig(CFG({ enabled: false }));
+  assert((await call('aiRead', { query: '?doc=current&s=A' })).status === 503);
+  await setConfig(CFG());
+  assert((await call('aiRead', { query: '?doc=current&s=A' })).status === 200);
 });
 
 // ======================================================= B. pipeline (family)
@@ -106,9 +116,9 @@ const ackMs = Date.now() - 86 * 864e5;
   await f.set({ createdBy: 'uO', createdTs: Timestamp.now(), ownerMemberId: 'o', joinCode: 'AIA234', name: '시험가족' });
   await f.collection('members').doc('o').set({ name: '시험아들', role: 'family', joinedTs: Timestamp.now() });
   await f.collection('members').doc('t').set({ name: '시험아버지', role: 'trainee', joinedTs: Timestamp.now() });
-  await f.collection('state').doc('trainee').set({ userId: 't', displayLabel: '아버지' });
+  await f.collection('state').doc('trainees').set({ v: 1, ids: ['t'], labels: { t: '아버지' }, updatedBy: 'o', updatedTs: Date.now() });
   await f.collection('consents').doc('t').set({ kind: 'ai-report-notice', version: '2026-11-v1', ackTs: Timestamp.fromMillis(ackMs) });
-  await f.collection('aiState').doc('themes').set({ words: ['낚시', '등산'], updatedBy: 'o', updatedTs: Date.now() });
+  await f.collection('trainees').doc('t').collection('aiState').doc('themes').set({ words: ['낚시', '등산'], updatedBy: 'o', updatedTs: Date.now() });
 }
 
 await t('B1 items via aiSubmit are validated by the aiInbox trigger (accepted → bank, bad → rejects)', async () => {
@@ -122,11 +132,11 @@ await t('B1 items via aiSubmit are validated by the aiInbox trigger (accepted �
   const bank = await db.collection('aiBank').get(); assert(bank.size === Object.keys(good).length);
   assert(bank.docs.some((d) => d.get('status') === 'pending_review'), 'reminiscence waits for review');
   const rej = await db.collection('aiRejects').get(); assert(rej.size === 1 && rej.docs[0].get('codes').includes('recompute'));
-  const packs = await db.collection(`families/${FID}/aiPacks`).get(); assert(packs.size >= 25, `packs ${packs.size}`);
-  const mem = JSON.parse((await db.doc(`families/${FID}/aiPacks/memory-L2`).get()).get('itemsJson'));
+  const packs = await db.collection(`families/${FID}/trainees/t/aiPacks`).get(); assert(packs.size >= 25, `packs ${packs.size}`);
+  const mem = JSON.parse((await db.doc(`families/${FID}/trainees/t/aiPacks/memory-L2`).get()).get('itemsJson'));
   assert(mem.some((x) => x.format === 'card_theme'), 'card_theme in memory-L2');
   assert(mem.every((x) => !('qa' in x) && !('hash' in x) && !('sketch' in x) && !('json' in x)), 'pack items carry no qa/hash');
-  const vis = JSON.parse((await db.doc(`families/${FID}/aiPacks/visuospatial-L3`).get()).get('itemsJson'));
+  const vis = JSON.parse((await db.doc(`families/${FID}/trainees/t/aiPacks/visuospatial-L3`).get()).get('itemsJson'));
   assert(vis.length === 0, 'reference items are not in training packs');
   const g = (await db.collection('aiBank').where('format', '==', 'grid_rotate').get()).docs[0];
   assert(JSON.parse(g.get('json')).options.every((o) => Array.isArray(o.grid)), 'server-built grids stored');
@@ -169,7 +179,7 @@ const nowMs = Date.parse(`${today}T14:10:00+09:00`);
 const { afterCourse } = require('./ai/course.js');
 let course = null;
 await t('B3 course done → aggregate + signals → new orange → one wake of the reporter routine', async () => {
-  course = await afterCourse(FID, nowMs);
+  course = await afterCourse(FID, 't', nowMs);
   assert(course.ran, 'pipeline ran');
   assert(course.newOrange.length >= 1, `new orange ${course.newOrange.length}`);
   assert(course.wake && course.wake.action === 'wake' && course.wake.ok, JSON.stringify(course.wake && course.wake.action));
@@ -178,16 +188,16 @@ await t('B3 course done → aggregate + signals → new orange → one wake of t
   assert(f.headers.authorization === `Bearer ${SECRETS.ROUTINE_REPORTER_TOKEN}` && f.headers['anthropic-version'] === '2023-06-01', 'fire headers');
   const text = JSON.parse(f.body.text);
   assert(text.v === 1 && /^w-\d{8}-\d{4}-[a-z0-9]{2}$/.test(text.job) && text.rules.length && Object.keys(text).join() === 'v,job,rules,why', 'fire text = codes only');
-  const sig = await db.collection(`families/${FID}/aiSignals`).where('on', '==', true).get();
+  const sig = await db.collection(`families/${FID}/trainees/t/aiSignals`).where('on', '==', true).get();
   assert(sig.docs.some((d) => d.get('level') === 'orange'));
-  const cur = await call('aiRead', { query: '?doc=current' });
+  const cur = await call('aiRead', { query: '?doc=current&s=A' });
   assert(cur.json.doc.schema === 'bw.agg.v1' && cur.json.doc.subject === '사용자 A' && cur.json.doc.phase === 'monitoring');
   const s = JSON.stringify(cur.json.doc);
   for (const bad of ['famAI', '시험아버지', '시험아들', '시험가족', 'ref-']) assert(!s.includes(bad), 'aggregate leaks ' + bad);
 });
 await t('B4 same signal again the same day → no second wake (still on / cooldown)', async () => {
-  await db.doc(`families/${FID}/aiOps/health`).set({ lastProgressRunMs: 0 }, { merge: true });
-  const r = await afterCourse(FID, nowMs + 20 * 60e3);
+  await db.doc(`families/${FID}/trainees/t/aiOps/health`).set({ lastProgressRunMs: 0 }, { merge: true });
+  const r = await afterCourse(FID, 't', nowMs + 20 * 60e3);
   assert(r.ran && r.newOrange.length === 0 && fires.length === 1, `fires ${fires.length}`);
 });
 let job = null;
@@ -205,9 +215,9 @@ await t('B6 report via aiSubmit → validated, filled and stored for admins → 
   const tg0 = tgs.length;
   const r = await call('aiSubmit', { method: 'POST', body: { kind: 'report', runId: `${today.replace(/-/g, '')}-1415`, jobId: job.job.job, payload: rep } });
   assert(r.status === 200, `submit ${r.status}`);
-  const stored = await waitFor(async () => { const s = await db.doc(`families/${FID}/aiReports/r-${agg.id}`).get(); return s.exists ? s.data() : null; }, 60000);
+  const stored = await waitFor(async () => { const s = await db.doc(`families/${FID}/trainees/t/aiReports/r-${agg.id}`).get(); return s.exists ? s.data() : null; }, 60000);
   assert(stored.generatedBy === 'routine' && stored.kind === 'alert' && stored.report.headline === rep.headline, stored.generatedBy);
-  assert(!JSON.stringify(stored.report).includes('{{'), 'placeholders filled');
+  assert(!JSON.stringify(stored.report).replace(/\{\{who\}\}/g, '').includes('{{'), 'placeholders filled (only {{who}} stays for the app)');
   assert(stored.lights.composite === agg.domains.find((d) => d.domain === 'composite').light, 'lights copied from the server');
   await waitFor(async () => (await db.doc(`aiJobs/${job.job.job}`).get()).get('status') === 'reported', 20000);
   const h = kd.kst().hour;
@@ -222,12 +232,12 @@ await t('B6 report via aiSubmit → validated, filled and stored for admins → 
   assert(/^🧠 오늘의 두뇌 산책\n살펴볼 변화 설명이 올라왔어요 · 주의 신호 \d+건\nhttps:\/\/example\.test\/brain-walk\/$/.test(m.body.text), 'fixed text only');
 });
 await t('B7 a report with a digit outside placeholders is rejected and replaced by the template', async () => {
-  const cur = (await call('aiRead', { query: '?doc=current' })).json.doc;
+  const cur = (await call('aiRead', { query: '?doc=current&s=A' })).json.doc;
   const rep = templateReport(cur, 'scheduled'); rep.summary[0] = '정답률이 45%로 관찰 중이에요.';
   const r = await call('aiSubmit', { method: 'POST', body: { kind: 'report', runId: `${today.replace(/-/g, '')}-0731`, jobId: 'scheduled', payload: rep } });
   const inbox = await waitFor(async () => { const s = await db.doc(`aiInbox/${r.json.id}`).get(); return s.get('status') === 'done' ? s.data() : null; }, 60000);
   assert(inbox.result.ok === false && inbox.result.codes.includes('digits'), JSON.stringify(inbox.result));
-  const stored = await db.doc(`families/${FID}/aiReports/r-${cur.id}`).get();
+  const stored = await db.doc(`families/${FID}/trainees/t/aiReports/r-${cur.id}`).get();
   assert(stored.get('generatedBy') === 'template' && stored.get('rejectCodes').includes('digits'));
 });
 await t('B8 wake failure → no retry, template alert report + rule-only Telegram', async () => {
@@ -237,30 +247,30 @@ await t('B8 wake failure → no retry, template alert report + rule-only Telegra
   const alertId = course.agg.id + '-al';
   const alertAgg = (await db.doc(`aiAggregates/${alertId}`).get()).data();
   const before = fires.length, tg0 = tgs.length;
-  const w = await maybeWake(FID, {
+  const w = await maybeWake(FID, 't', { L: 'A',
     newOrange: [{ key: 'S5:anchor', rule: 'S5', why: ['anchor_rci_orange'] }], aggregateId: alertId, nowMs: nowMs + 3600e3,
-    onFailure: async (jobId) => { await storeTemplate(FID, { ...alertAgg, id: alertId + '-f' }, { jobId, rejectCodes: ['wake_failed'] }); await announce(FID, 'rule_only', alertAgg, nowMs + 3600e3); },
+    onFailure: async (jobId) => { await storeTemplate(FID, 't', { ...alertAgg, id: alertId + '-f' }, { jobId, rejectCodes: ['wake_failed'] }); await announce(FID, 't', 'rule_only', alertAgg, nowMs + 3600e3); },
   });
   assert(w.action === 'wake' && w.ok === false && fires.length === before + 1, `exactly one attempt (${w.action})`);
   const j = await db.doc(`aiJobs/${w.job}`).get(); assert(j.get('status') === 'failed');
-  const rep = await db.doc(`families/${FID}/aiReports/r-${alertId}-f`).get(); assert(rep.get('generatedBy') === 'template');
+  const rep = await db.doc(`families/${FID}/trainees/t/aiReports/r-${alertId}-f`).get(); assert(rep.get('generatedBy') === 'template');
   assert(tgs.length === tg0 + 1 && tgs[tgs.length - 1].body.text.includes('주의 신호가 있어요'), 'rule-only Telegram');
   fireStatus = 200;
 });
 await t('B9 third wake on the same day is capped (left for the morning report)', async () => {
   const { maybeWake } = require('./ai/waker.js');
-  const r = await maybeWake(FID, { newOrange: [{ key: 'S2:memory', rule: 'S2', why: ['x'] }], aggregateId: 'a-x', nowMs: nowMs + 2 * 3600e3 });
+  const r = await maybeWake(FID, 't', { L: 'A', newOrange: [{ key: 'S2:memory', rule: 'S2', why: ['x'] }], aggregateId: 'a-x', nowMs: nowMs + 2 * 3600e3 });
   assert(r.action === 'cap', r.action);
-  const q = await maybeWake(FID, { newOrange: [{ key: 'S2:language', rule: 'S2', why: ['x'] }], aggregateId: 'a-x', nowMs: Date.parse(`${today}T21:30:00+09:00`) });
+  const q = await maybeWake(FID, 't', { L: 'A', newOrange: [{ key: 'S2:language', rule: 'S2', why: ['x'] }], aggregateId: 'a-x', nowMs: Date.parse(`${today}T21:30:00+09:00`) });
   assert(q.action === 'quiet', q.action);
 });
 await t('B10 measure packs, bank status and admin-only ops docs exist; no key anywhere in Firestore ops', async () => {
   const { runFamily } = require('./ai/pipeline.js');
   await runFamily(FID, { mode: 'daily', reason: 'test', nowMs, daily: true });
-  const m = await db.collection(`families/${FID}/aiPacks`).where('week', '==', curWk).get();
+  const m = await db.collection(`families/${FID}/trainees/t/aiPacks`).where('week', '==', curWk).get();
   assert(m.size === 1, 'measure pack for this week');
   const bank = await db.doc(`families/${FID}/aiOps/bank`).get(); assert(bank.exists && bank.get('total') > 0);
-  const ops = JSON.stringify((await db.collection(`families/${FID}/aiOps`).get()).docs.map((d) => d.data()));
+  const ops = JSON.stringify([...(await db.collection(`families/${FID}/aiOps`).get()).docs, ...(await db.collection(`families/${FID}/trainees/t/aiOps`).get()).docs].map((d) => d.data()));
   assert(!ops.includes(KEY) && !ops.includes(KEY_HASH));
 });
 await t('B11 retention purge keeps fresh data and removes expired inbox docs', async () => {
@@ -279,8 +289,8 @@ await t('B12 Telegram gate: nothing sent 02:00–08:00 KST; queued messages go o
   assert(await sendTelegram('key_offschedule', 0, at('03:10')) === 'queued');
   assert(await sendTelegram('key_offschedule', 0, at('04:00')) === 'queued');
   assert(await sendTelegram('rule_only', 1, at('05:00')) === 'queued', 'even alerts wait');
-  const cur = (await db.doc('aiAggregates/current').get()).data();
-  assert(await announce(FID, 'morning', cur, at('07:41')) === 'queued', 'morning report notice waits for 08:00');
+  const cur = (await db.doc('aiAggregates/current-A').get()).data();
+  assert(await announce(FID, 't', 'morning', cur, at('07:41')) === 'queued', 'morning report notice waits for 08:00');
   assert(tgs.length === tg0, 'nothing sent in the hold window');
   assert((await flushOutbox(at('07:59'))).held, 'flush does nothing before 08:00');
   const f = await flushOutbox(at('08:00'));
@@ -307,11 +317,11 @@ await t('B12a 08:00: aiTgFlush and aiTick flushing at the same moment send ONE d
 await t('B12b tick: no report by 08:30 → template + "간단판" Telegram; tick also flushes a leftover outbox', async () => {
   const { tick } = require('./ai/tick.js');
   await db.doc(`families/${FID}/aiOps/health`).set({ morningDone: null }, { merge: true });
-  const cur = (await db.doc('aiAggregates/current').get()).data();
-  await db.doc(`families/${FID}/aiReports/r-${cur.id}`).delete();
+  const cur = (await db.doc('aiAggregates/current-A').get()).data();
+  await db.doc(`families/${FID}/trainees/t/aiReports/r-${cur.id}`).delete();
   const tg0 = tgs.length;
   await tick(Date.parse(`${today}T08:40:00+09:00`));
-  const rep = await db.doc(`families/${FID}/aiReports/r-${cur.id}`).get();
+  const rep = await db.doc(`families/${FID}/trainees/t/aiReports/r-${cur.id}`).get();
   assert(rep.exists && rep.get('generatedBy') === 'template', 'template report');
   assert(tgs.slice(tg0).some((m) => m.body.text.includes('간단판')), 'template Telegram');
 });
@@ -320,7 +330,9 @@ await t('B13 deleting the family: the purge removes every leftover AI doc under 
   const { purge } = require('./ai/purge.js');
   const r = await purge();
   assert(r.orphanFamily === 1);
-  for (const c of ['aiReports', 'aiStats', 'aiSignals', 'aiOps', 'aiPacks', 'itemLogs', 'aiState']) assert((await db.collection(`families/${FID}/${c}`).limit(1).get()).empty, c);
+  for (const c of ['aiOps', 'itemLogs', 'aiState']) assert((await db.collection(`families/${FID}/${c}`).limit(1).get()).empty, c);
+  for (const c of ['aiReports', 'aiStats', 'aiSignals', 'aiOps', 'aiPacks', 'aiState']) assert((await db.collection(`families/${FID}/trainees/t/${c}`).limit(1).get()).empty, 'trainees/t/' + c);
+  assert((await db.collection(`families/${FID}/state`).limit(1).get()).empty, 'state/trainees (registry) goes with the family');
   assert((await db.collection('aiAggregates').limit(1).get()).empty && (await db.collection('aiJobs').limit(1).get()).empty);
 });
 await t('C1 no response body ever contained the routine key or its hash', async () => {
@@ -328,7 +340,7 @@ await t('C1 no response body ever contained the routine key or its hash', async 
 });
 await t('C2 after 10 wrong keys from one IP in an hour, requests get 429 (cheap per-IP limit)', async () => {
   let saw429 = false;
-  for (let i = 0; i < 12; i++) { const r = await call('aiRead', { query: '?doc=current', key: 'x'.repeat(48) }); if (r.status === 429) { saw429 = true; break; } }
+  for (let i = 0; i < 12; i++) { const r = await call('aiRead', { query: '?doc=current&s=A', key: 'x'.repeat(48) }); if (r.status === 429) { saw429 = true; break; } }
   assert(saw429);
 });
 

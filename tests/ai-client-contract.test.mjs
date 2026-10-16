@@ -65,7 +65,9 @@ const BK = { train: 'bk_' + hex(1), ref: 'bk_' + hex(2), anchor: 'bk_' + hex(3),
     b.set(adb.doc(`${P}/uids/${uid}`), { memberId: mid, via: 'join' });
     b.set(adb.doc(`${P}/members/${mid}`), { name: 'm-' + mid, role });
   }
-  b.set(adb.doc(`${P}/state/trainee`), { userId: 't', displayLabel: 'x' });
+  b.set(adb.doc(`${P}/state/trainees`), { v: 1, ids: ['t'], labels: { t: 'x' }, updatedBy: 'o', updatedTs: Date.now() });
+  // aiOnItemLog records exposures only for a trainee in state/trainees whose consent is acknowledged (seeded here; C2 starts from a clean slate)
+  b.set(adb.doc(`${P}/consents/t`), { kind: 'ai-report-notice', version: '2026-11-v1', ackTs: Timestamp.now() });
   const bank = (id, o) => b.set(adb.doc(`aiBank/${id}`), Object.assign({ id, json: '{}', exposures: [], nExp: 0, level: 3 }, o));
   bank(BK.train, { status: 'ready', role: 'training', cdomain: 'memory', format: 'word_recog' });
   bank(BK.ref, { status: 'reserved', role: 'reference', cdomain: 'executive', format: 'shop_calc', refWeek: '2099-W01' });
@@ -73,7 +75,7 @@ const BK = { train: 'bk_' + hex(1), ref: 'bk_' + hex(2), anchor: 'bk_' + hex(3),
   bank(BK.story, { status: 'reserved', role: 'reference', cdomain: 'memory', format: 'story_recall', refWeek: '2099-W01' });
   bank(BK.pend, { status: 'pending_review', role: 'training', cdomain: 'reminiscence', format: 'reminiscence', level: 2 });
   bank(BK.cardT, { status: 'ready', role: 'training', cdomain: 'memory', format: 'card_theme' });
-  b.set(adb.doc('aiConfig/main'), { familyId: FID, pseudonym: '사용자 C', enabled: true, routineKeyHash: 'f'.repeat(64) });
+  b.set(adb.doc('aiConfig/main'), { familyId: FID, pseudonym: '사용자 C', enabled: true, routineKeyHash: 'f'.repeat(64), subjects: { t: 'C' }, maxTrainees: 4 });
   await b.commit();
   await sleep(1500);            // function config cache (AI_CONFIG_TTL_SEC=1)
 }
@@ -180,12 +182,13 @@ await t('C1.10 server weekStats counts them: reference answered, anchor rows, DE
 
 // ===================================================================== C2. consents
 await t('C2.1 trainee acknowledges: create with server ackTs (+ withFamily) is accepted', async () => {
+  await adb.doc(`${P}/consents/t`).delete();   // drop the seeded consent: the trainee's device creates its own now
   const w = consentWrite(null, true); assert(w.op === 'set');
   await T.setDoc('consents/t', w.data);
   const s = await adb.doc(`${P}/consents/t`).get();
   assert(s.get('kind') === CONSENT_KIND && s.get('ackTs') instanceof Timestamp && s.get('withFamily') === true && consentState(s.data()) === 'ok');
 });
-await t('C2.2 server eligibility: ok after the acknowledgement', async () => { const e = await eligibility(FID); assert(e.ok === true && e.traineeId === 't', JSON.stringify(e)); });
+await t('C2.2 server eligibility: ok after the acknowledgement', async () => { const e = await eligibility(FID, 't'); assert(e.ok === true && !!e.consentTs, JSON.stringify(e)); });
 await t('C2.3 a second create attempt with a client time is denied; nobody else can write the trainee\'s consent', async () => {
   assert(await denied(T.setDoc('consents/t', { kind: CONSENT_KIND, version: 'x', ackTs: Date.now() })));
   assert(await denied(A.setDoc('consents/t', consentWrite(null, false).data)) && await denied(O.updateDoc('consents/t', withdrawPatch())));
@@ -194,14 +197,14 @@ await t('C2.4 withdraw (server time only) → server stops: no_consent', async (
   await T.updateDoc('consents/t', withdrawPatch());
   const s = await adb.doc(`${P}/consents/t`).get();
   assert(s.get('withdrawnTs') instanceof Timestamp && consentState(s.data()) === 'withdrawn');
-  assert((await eligibility(FID)).why === 'no_consent');
+  assert((await eligibility(FID, 't')).why === 'no_consent');
 });
 await t('C2.5 re-acknowledge after withdrawal (update, withdrawnTs deleted) → eligible again', async () => {
   const cur = (await adb.doc(`${P}/consents/t`).get()).data();
   const w = consentWrite(cur, false); assert(w.op === 'update');
   await T.updateDoc('consents/t', w.data);
   const s = await adb.doc(`${P}/consents/t`).get();
-  assert(!('withdrawnTs' in s.data()) && consentState(s.data()) === 'ok' && (await eligibility(FID)).ok === true);
+  assert(!('withdrawnTs' in s.data()) && consentState(s.data()) === 'ok' && (await eligibility(FID, 't')).ok === true);
 });
 await t('C2.6 a pending (not yet acknowledged by the server) ackTs reads as acknowledged, so the screen is not shown again', async () => {
   assert(consentState({ kind: CONSENT_KIND, version: '2026-11-v1', ackTs: null }) === 'ok' && consentState({ kind: CONSENT_KIND, version: '2026-11-v1', ackTs: null, withdrawnTs: null }) === 'withdrawn' && consentState(null) === 'none');
@@ -212,19 +215,19 @@ await t('C2.7 admins read the consent list (루틴 상태 row); a plain family m
 });
 await t('C2.8 admin-made consent (byAdmin): create → eligible; admin off → no_consent; admin on again → eligible; the extra key breaks nothing server side', async () => {
   await adb.doc(`${P}/consents/t`).delete();
-  assert((await eligibility(FID)).why === 'no_consent');
+  assert((await eligibility(FID, 't')).why === 'no_consent');
   const w = adminConsentWrite(null, 'a'); assert(w.op === 'set');
   await A.setDoc('consents/t', w.data);
   let s = await adb.doc(`${P}/consents/t`).get();
   assert(s.get('byAdmin') === 'a' && s.get('ackTs') instanceof Timestamp && consentState(s.data()) === 'ok');
-  const e = await eligibility(FID); assert(e.ok === true && e.traineeId === 't' && e.consentTs, JSON.stringify(e));
+  const e = await eligibility(FID, 't'); assert(e.ok === true && e.consentTs, JSON.stringify(e));
   await A.updateDoc('consents/t', adminWithdrawPatch('a'));
   s = await adb.doc(`${P}/consents/t`).get();
-  assert(consentState(s.data()) === 'withdrawn' && (await eligibility(FID)).why === 'no_consent');
+  assert(consentState(s.data()) === 'withdrawn' && (await eligibility(FID, 't')).why === 'no_consent');
   const w2 = adminConsentWrite(s.data(), 'o'); assert(w2.op === 'update');
   await O.updateDoc('consents/t', w2.data);
   s = await adb.doc(`${P}/consents/t`).get();
-  assert(!('withdrawnTs' in s.data()) && s.get('byAdmin') === 'o' && (await eligibility(FID)).ok === true);
+  assert(!('withdrawnTs' in s.data()) && s.get('byAdmin') === 'o' && (await eligibility(FID, 't')).ok === true);
   assert(await denied(Fm.setDoc('consents/t', adminConsentWrite(null, 'f').data)) && await denied(T.setDoc('consents/t', adminConsentWrite(null, 't').data)));
 });
 
@@ -232,21 +235,21 @@ await t('C2.8 admin-made consent (byAdmin): create → eligible; admin off → n
 await t('C3.1 admin note (dates, codes, free text) is accepted; the server reads only dates and codes', async () => {
   const r = noteDoc({ from: '2027-02-28', to: '2027-03-06', ongoing: false, codes: ['illness', 'sleep'], text: '  기침약 3일  ' }, 'a', Date.now());
   assert(!r.error && r.doc.text === '기침약 3일');
-  const id = noteId(); await A.setDoc('aiNotes/' + id, r.doc);
-  const s = await adb.doc(`${P}/aiNotes/${id}`).get(); assert(s.get('to') === '2027-03-06' && s.get('codes').length === 2);
+  const id = noteId(); await A.setDoc('trainees/t/aiNotes/' + id, r.doc);
+  const s = await adb.doc(`${P}/trainees/t/aiNotes/${id}`).get(); assert(s.get('to') === '2027-03-06' && s.get('codes').length === 2);
 });
 await t('C3.2 ongoing note (to: null) and owner note are accepted', async () => {
   const r = noteDoc({ from: '2027-03-01', ongoing: true, codes: ['med_change'], text: '' }, 'o', Date.now());
   assert(r.doc.to === null && !('text' in r.doc));
-  await O.setDoc('aiNotes/' + noteId(), r.doc);
+  await O.setDoc('trainees/t/aiNotes/' + noteId(), r.doc);
 });
 await t('C3.3 the builder refuses bad input before writing (end before start, no code)', async () => {
   assert(noteDoc({ from: '2027-03-05', to: '2027-03-01', codes: ['sleep'] }, 'a', 1).error && noteDoc({ from: '2027-03-05', ongoing: true, codes: [] }, 'a', 1).error);
 });
 await t('C3.4 a non-admin family member and the trainee cannot write or read notes', async () => {
   const r = noteDoc({ from: '2027-03-01', ongoing: true, codes: ['sleep'] }, 'f', Date.now());
-  assert(await denied(Fm.setDoc('aiNotes/' + noteId(), r.doc)) && await denied(T.setDoc('aiNotes/' + noteId(), Object.assign({}, r.doc, { by: 't' }))));
-  assert(await denied(T.query('aiNotes', { limit: 5 })) && await denied(Fm.query('aiNotes', { limit: 5 })));
+  assert(await denied(Fm.setDoc('trainees/t/aiNotes/' + noteId(), r.doc)) && await denied(T.setDoc('trainees/t/aiNotes/' + noteId(), Object.assign({}, r.doc, { by: 't' }))));
+  assert(await denied(T.query('trainees/t/aiNotes', { limit: 5 })) && await denied(Fm.query('trainees/t/aiNotes', { limit: 5 })));
 });
 
 // ===================================================================== C4. aiReview
@@ -267,16 +270,16 @@ await t('C4.3 a second decision on the same item is denied (create only), and no
 
 // ===================================================================== C5. aiState/themes, aiState/switch
 await t('C5.1 admin saves interest words; the server keeps the Hangul words', async () => {
-  await A.setDoc('aiState/themes', themesDoc(['낚시', '등산', '트로트'], 'a', Date.now()));
-  const w = (await adb.doc(`${P}/aiState/themes`).get()).get('words');
+  await A.setDoc('trainees/t/aiState/themes', themesDoc(['낚시', '등산', '트로트'], 'a', Date.now()));
+  const w = (await adb.doc(`${P}/trainees/t/aiState/themes`).get()).get('words');
   assert(JSON.stringify(validThemes(w)) === JSON.stringify(['낚시', '등산', '트로트']));
 });
-await t('C5.2 a non-admin family member cannot change the words', async () => { assert(await denied(Fm.setDoc('aiState/themes', themesDoc(['바둑'], 'f', Date.now())))); });
+await t('C5.2 a non-admin family member cannot change the words', async () => { assert(await denied(Fm.setDoc('trainees/t/aiState/themes', themesDoc(['바둑'], 'f', Date.now())))); });
 await t('C5.3 AI off → server eligibility switched_off; on again → ok', async () => {
   await A.setDoc('aiState/switch', switchDoc(false, 'a', Date.now()));
-  assert((await eligibility(FID)).why === 'switched_off');
+  assert((await eligibility(FID, 't')).why === 'switched_off');
   await O.setDoc('aiState/switch', switchDoc(true, 'o', Date.now()));
-  assert((await eligibility(FID)).ok === true);
+  assert((await eligibility(FID, 't')).ok === true);
 });
 await t('C5.4 the trainee cannot switch AI off', async () => { assert(await denied(T.setDoc('aiState/switch', switchDoc(false, 't', Date.now())))); });
 

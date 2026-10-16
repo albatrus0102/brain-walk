@@ -64,13 +64,13 @@ try {
     ok(M.normalizeCreateCode(' ab-cd ef\u2013gh ') === 'ABCDEFGH', '입력 정리: 대문자, 공백·줄표 제거');
     ok(/^[2-9A-HJ-NP-Z]{6}$/.test(r.code), '가족 만들기 + 6글자 코드 ' + r.code);
     ok(FA.me().id === r.mid && FA.me().name === '아버지', 'me() = memberId');
-    ok((await FA.getDoc('state/trainee')).userId === r.mid, 'state/trainee 설정');
+    { const ts = await FA.getDoc('state/trainees'); ok(ts && ts.ids.length === 1 && ts.ids[0] === r.mid && ts.labels[r.mid] === '아버지', 'state/trainees 목록 (ids=[A], 호칭 아버지)'); }
     signal('created', { code: r.code, mid: r.mid });
     const j = await wait('joined');
     await sleep(500);
     ok((await FA.profiles([j.mid]))[j.mid].name === '큰아들', '프로필: 가입한 가족 이름');
     const today = new Date().toISOString().slice(0, 10);
-    await FA.setDoc('surveys/a1', { kind: 'smcq', version: '1', answers: Array(14).fill(0), score: 0, ts: Date.now(), date: today, mode: 'self', answeredBy: FA.mid, relation: '본인' });
+    await FA.setDoc('surveys/a1', { kind: 'smcq', version: '1', answers: Array(14).fill(0), score: 0, ts: Date.now(), date: today, mode: 'self', answeredBy: FA.mid, subjectId: FA.mid, relation: '본인' });
     ok(true, '훈련하는 분이 직접 답한 설문 저장(create)');
     ok(await denied(FA.query('surveys', { orderBy: ['ts', 'desc'], limit: 10 })), '훈련하는 분은 설문을 읽을 수 없음');
     signal('a-survey', {});
@@ -93,7 +93,7 @@ try {
     ok((await FA.getDoc('sessions/s1')).roundSec === 4, '세션 저장 (roundSec 평균)');
     await FA.setDoc('checkins/2026-10-09-' + FA.mid, { date: '2026-10-09', ts: Date.now(), mood: 4, sleepHours: 7, exercise: true, social: false, meals: true, userId: FA.mid });
     ok(true, '생활 체크 저장');
-    await FA.setDoc('state/alarm', { time: '09:30', days: [1, 2], updatedBy: FA.mid, updatedTs: Date.now() });
+    await FA.setDoc('trainees/' + r.mid + '/state/alarm', { time: '09:30', days: [1, 2], updatedBy: FA.mid, updatedTs: Date.now() });
     ok(true, '알람 저장');
     const t = await M.createTransferCode();
     signal('transfer', { code: t.code });
@@ -112,8 +112,8 @@ try {
     await M.renameSelf('아버님'); await sleep(400); ok((await FA.profiles([FA.mid]))[FA.mid].name === '아버님', '이름 바꾸기');
     await M.renameSelf('아버지'); await sleep(300);
     // ===== 관리자·원격 설정·실시간 진행 (DESIGN.md) =====
-    const seenDisp = []; const unsubD = FA.subscribe('state/display', {}, d => seenDisp.push(d));
-    const seenPlan = []; const unsubP = FA.subscribe('state/plan', {}, d => seenPlan.push(d));
+    const seenDisp = []; const unsubD = FA.subscribe('trainees/' + r.mid + '/state/display', {}, d => seenDisp.push(d));
+    const seenPlan = []; const unsubP = FA.subscribe('trainees/' + r.mid + '/state/plan', {}, d => seenPlan.push(d));
     signal('p1', { mid: r.mid });
     await wait('b-denied');
     await M.grantAdmin(j.mid); ok(true, '방 주인이 B(가족 역할)를 관리자로 지정');
@@ -122,7 +122,7 @@ try {
     await wait('b-saved');
     ok(await until(() => seenDisp.some(d => d && d.size === 'max' && d.font === 'noto')), '훈련하는 분 기기가 관리자의 화면 설정을 실시간으로 받아요 (display)');
     ok(await until(() => seenPlan.some(d => d && d.gamesPerDay === 3 && d.autoNextSec === 5)), '훈련 계획도 실시간 (gamesPerDay 3, autoNextSec 5)');
-    const alarm = await FA.getDoc('state/alarm'); ok(alarm && alarm.time === '08:30' && alarm.days.join() === '1,2,3,4,5', '계획과 알람이 한 배치로 저장');
+    const alarm = await FA.getDoc('trainees/' + r.mid + '/state/alarm'); ok(alarm && alarm.time === '08:30' && alarm.days.join() === '1,2,3,4,5', '계획과 알람이 한 배치로 저장');
     unsubD(); unsubP();
     // 훈련하는 분 기기가 진행 상황과 접속 기록을 써요
     const day = ymdNow(), pid = day + '-' + r.mid, planned = ['odd', 'words'];
@@ -139,15 +139,14 @@ try {
     signal('a-hb', {});
     // 관리자 B 가 훈련하는 분을 B 로 바꾸면 A 의 진행 쓰기는 거부돼요
     await wait('b-assigned');
-    ok((await FA.getDoc('state/trainee')).userId === j.mid, 'B 가 훈련하는 분으로 정해졌어요');
-    await sleep(300); ok((FA.members()[r.mid] || {}).role === 'family', '이전 훈련하는 분(A)은 가족 역할로');
-    ok(await denied(FA.setDoc('progress/' + pid, Object.assign({}, prog, { updatedTs: Date.now() }))), '훈련하는 분이 아니면 진행 문서를 쓸 수 없어요');
+    { const ts = await FA.getDoc('state/trainees'); ok(ts.ids.length === 2 && ts.ids[0] === r.mid && ts.ids[1] === j.mid && ts.labels[j.mid] === '어머니', '관리자 B 가 목록 끝에 자신을 더했어요 (A 는 그대로, 최대 4명 중 2명)'); }
+    await sleep(300); ok((FA.members()[j.mid] || {}).role === 'trainee' && (FA.members()[r.mid] || {}).role === 'trainee', '두 사람 모두 훈련하는 분 역할 (A 는 그대로)');
     signal('a-saw-assign', {});
     // B 는 훈련하는 분(트레이니) 역할이 되어 더 이상 관리자가 아니에요 → 방 주인이 해제하고 되돌려요
-    await M.clearTrainee(j.mid); await sleep(300);
-    ok(!(await FA.getDoc('state/trainee')) && (FA.members()[j.mid] || {}).role === 'family', '방 주인이 훈련하는 분을 해제 (B 는 가족 역할로)');
-    await M.assignTrainee(r.mid, '아버지', null); await sleep(300);
-    ok((await FA.getDoc('state/trainee')).userId === r.mid && (FA.members()[r.mid] || {}).role === 'trainee', '방 주인이 다시 A 를 훈련하는 분으로 (역할도 함께)');
+    await M.removeTrainee(j.mid); await sleep(300);
+    { const ts = await FA.getDoc('state/trainees'); ok(ts.ids.length === 1 && ts.ids[0] === r.mid && !ts.labels[j.mid] && (FA.members()[j.mid] || {}).role === 'family', '방 주인이 B 를 목록에서 뺐어요 (B 는 가족 역할로, A 는 그대로)'); }
+    await M.setTraineeLabel(r.mid, '아버님'); ok((await FA.getDoc('state/trainees')).labels[r.mid] === '아버님', '호칭 바꾸기');
+    await M.setTraineeLabel(r.mid, '아버지');
     ok(await denied(FA.query('taskRuns', { limit: 5 })), '다시 훈련하는 분: 가족 전용 자료는 못 읽어요');
     signal('a-restored', {});
     // 방 주인 넘기기 (훈련하는 분 역할이라 관리자로 남기기는 안 돼요)
@@ -180,16 +179,16 @@ try {
     const r = await M.joinFamily({ code: c.code, name: '큰아들', role: 'family' });
     ok(r.mid && !r.needsConfirm, '가족으로 들어가기');
     signal('joined', { mid: r.mid });
-    const t0 = await FA.getDoc('state/trainee'); ok(t0.userId === c.mid, '아버지가 훈련하는 분');
+    const t0 = await FA.getDoc('state/trainees'); ok(t0.ids.length === 1 && t0.ids[0] === c.mid, '아버지가 훈련하는 분');
     await FA.setDoc('messages/' + mid1(), msg('안녕하세요 아버지'));
     await FA.setDoc('messages/' + mid1(), msg('이번 주 요약', 'summary'));
     ok(true, '메시지 보내기');
     const n1 = mid1();
-    await FA.setDoc('messages/' + n1, msg('아버지 훈련하셨어요?', 'nudge'));
+    await FA.setDoc('messages/' + n1, Object.assign(msg('아버지 훈련하셨어요?', 'nudge'), { toId: c.mid }));
     ok(true, '넛지 보내기 (members.lastNudgeAt 와 한 번에)');
-    ok(await denied(FA.setDoc('messages/' + mid1(), msg('또 보내요', 'nudge'))), '넛지 2시간 제한(규칙)');
-    ok(await denied(FA.updateDoc('state/trainee', { userId: 'nope', displayLabel: 'x' })), '없는 사람은 훈련하는 분이 될 수 없음');
-    ok(await denied(FA.deleteDoc('state/trainee')), '소유자가 아니면 훈련하는 분 해제 불가');
+    ok(await denied(FA.setDoc('messages/' + mid1(), Object.assign(msg('또 보내요', 'nudge'), { toId: c.mid }))), '넛지 2시간 제한(규칙)');
+    ok(await denied(FA.updateDoc('state/trainees', { ids: [c.mid, 'nope'], labels: { [c.mid]: '아버지', nope: 'x' }, updatedBy: FA.mid, updatedTs: Date.now() })), '관리자가 아니면 훈련하는 분 목록을 바꿀 수 없음');
+    ok(await denied(FA.deleteDoc('state/trainees')), '소유자가 아니면 훈련하는 분 목록을 지울 수 없음');
     ok(await denied(M.createTransferCode(c.mid)), '방금 들어온 가족은 아버지(방 주인)의 복구 코드를 만들 수 없음');
     await wait('a-survey');
     const svs = await FA.query('surveys', { orderBy: ['ts', 'desc'], limit: 10 });
@@ -198,16 +197,16 @@ try {
     ok(true, '가족이 정보제공자 설문 저장');
     signal('b-sent', {});
     await wait('p1');
-    ok(await denied(M.savePlan({ gamesPerDay: 3 }, CAT, FA.mid, '08:30')), '관리자가 아닌 가족은 훈련 계획을 저장할 수 없어요 (permission-denied)');
-    ok(await denied(M.saveDisplay({ size: 'max' }, FA.mid)), '관리자가 아닌 가족은 화면 설정을 저장할 수 없어요');
-    ok(await denied(FA.setDoc('state/alarm', { time: '09:00', days: [1], updatedBy: FA.mid, updatedTs: Date.now() })), '알람도 관리자만');
-    ok(await denied(M.assignTrainee(FA.mid, '어머니', null)), '훈련하는 분 정하기는 관리자만');
+    ok(await denied(M.savePlan(c.mid, { gamesPerDay: 3 }, CAT, FA.mid, '08:30')), '관리자가 아닌 가족은 훈련 계획을 저장할 수 없어요 (permission-denied)');
+    ok(await denied(M.saveDisplay(c.mid, { size: 'max' }, FA.mid)), '관리자가 아닌 가족은 화면 설정을 저장할 수 없어요');
+    ok(await denied(FA.setDoc('trainees/' + c.mid + '/state/alarm', { time: '09:00', days: [1], updatedBy: FA.mid, updatedTs: Date.now() })), '알람도 관리자만');
+    ok(await denied(M.addTrainee(FA.mid, '어머니')), '훈련하는 분 더하기는 관리자만');
     ok(await denied(M.removeMember(c.mid)), '내보내기는 관리자만');
     signal('b-denied', {});
     await wait('granted');
     const seenProg = []; const unsubG = FA.subscribe('progress', { orderBy: ['date', 'desc'], limit: 14 }, l => seenProg.push(l));
-    await M.savePlan({ gamesPerDay: 3, autoNextSec: 5, weekdays: [1, 2, 3, 4, 5] }, CAT, FA.mid, '08:30'); ok(true, '관리자가 된 B 가 훈련 계획 저장 (계획+알람 한 번에)');
-    await M.saveDisplay({ font: 'noto', size: 'max', contrast: true, rate: 1.05 }, FA.mid); ok(true, 'B 가 화면 설정 저장');
+    await M.savePlan(c.mid, { gamesPerDay: 3, autoNextSec: 5, weekdays: [1, 2, 3, 4, 5] }, CAT, FA.mid, '08:30'); ok(true, '관리자가 된 B 가 훈련 계획 저장 (계획+알람 한 번에)');
+    await M.saveDisplay(c.mid, { font: 'noto', size: 'max', contrast: true, rate: 1.05 }, FA.mid); ok(true, 'B 가 화면 설정 저장');
     ok(await denied(M.revokeAdmin(FA.mid)), '관리자는 관리자 목록을 바꿀 수 없어요 (방 주인만)');
     signal('b-saved', {});
     const a1 = await wait('a-p1');
@@ -219,12 +218,12 @@ try {
     unsubG();
     await wait('a-hb');
     const pres = await FA.getDoc('presence/' + c.mid); ok(pres && pres.lastSeen && pres.device === 'smoke', '가족이 훈련하는 분의 마지막 접속 시간을 읽어요');
-    await M.assignTrainee(FA.mid, '어머니', c.mid); ok(true, '관리자 B 가 자신을 훈련하는 분으로 (배치: trainee + 두 사람 역할)');
-    ok(await denied(M.clearTrainee(FA.mid)), '훈련하는 분 역할이 된 B 는 관리자가 아니에요 (관리자 목록에 있어도 역할이 가족일 때만)');
+    await M.addTrainee(FA.mid, '어머니'); ok(true, '관리자 B 가 자신을 훈련하는 분으로 더하기 (배치: 목록 + B 의 역할)');
+    ok(await denied(M.removeTrainee(FA.mid)), '훈련하는 분 역할이 된 B 는 관리자가 아니에요 (관리자 목록에 있어도 역할이 가족일 때만)');
     signal('b-assigned', {});
     await wait('a-saw-assign');
     await wait('a-restored'); await sleep(300);
-    ok((FA.members()[FA.mid] || {}).role === 'family' && await denied(M.savePlan({ gamesPerDay: 2 }, CAT, FA.mid, '09:00')) === false, '가족 역할로 돌아오면 B 는 다시 관리자');
+    ok((FA.members()[FA.mid] || {}).role === 'family' && await denied(M.savePlan(c.mid, { gamesPerDay: 2 }, CAT, FA.mid, '09:00')) === false, '가족 역할로 돌아오면 B 는 다시 관리자');
     await wait('a-handed');
     await M.transferOwnership(c.mid, true); ok(true, 'B 가 방 주인을 A 에게 돌려주고 관리자로 남기 (한 번의 쓰기)');
     signal('b-back', {});
