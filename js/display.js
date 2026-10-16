@@ -1,4 +1,4 @@
-import { isTrainee } from './data.js';
+import { displayOf, isTrainee, myTrainee } from './data.js';
 import { effectiveDisplay } from './program.js';
 import { effectiveSound, speechRate, stopSpeech } from './sound.js';
 import { S } from './state.js';
@@ -11,7 +11,8 @@ import { render } from './ui/shell.js';
 export { effectiveSound, speechRate };
 export const localDisplay = () => ({ font: S.prefs.font, size: S.prefs.size, contrast: S.prefs.contrast, voice: S.prefs.sound, rate: 0.9 });
 /* 이 기기가 관리자 설정을 따르고 있는지 (훈련하는 분 기기이고 설정 문서가 있을 때) */
-export const followsAdmin = () => !!(S.displayRemote && isTrainee());
+const myDisplay = () => { const me = myTrainee(); return me ? displayOf(me) : null; };
+export const followsAdmin = () => !!(myDisplay() && isTrainee());
 
 /* 가족·관리자 화면은 촘촘한(M3 기본 밀도) 모드, 훈련하는 분 화면과 게임 흐름·가입 화면은 큰 글자 그대로예요 (styles/compact.css) */
 const LARGE_SCREENS = ['game', 'result', 'courseBreak', 'checkIntro', 'checkin', 'courseDone', 'assessStep', 'assessBreak', 'assessDone', 'clock', 'clockDone', 'setup', 'ob-loading'];
@@ -23,7 +24,7 @@ export function syncDensity() {
 
 let lastKey = '';
 export function applyDisplay(opts) {
-  const eff = effectiveDisplay(S.displayRemote, localDisplay(), isTrainee()), r = document.documentElement;
+  const eff = effectiveDisplay(myDisplay(), localDisplay(), isTrainee()), r = document.documentElement;
   S.eff = eff;
   r.setAttribute('data-size', eff.size); r.setAttribute('data-font', eff.font);
   syncDensity();

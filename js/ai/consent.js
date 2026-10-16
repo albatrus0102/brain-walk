@@ -1,4 +1,4 @@
-import { dbReady, traineeId } from '../data.js';
+import { dbReady, focusId } from '../data.js';
 import { S } from '../state.js';
 import { Store } from '../store/store.js';
 import { LS } from '../util.js';
@@ -12,15 +12,13 @@ export { CONSENT_KIND, CONSENT_VERSION };
 export const aiDemoOff = () => Store.mode === 'local' && LS.get('bw.aiDemo', true) === false;   // 시험용: 체험 모드에서 AI 화면을 끔
 
 /* 지금 훈련하는 분의 기록 상태: 'none' | 'old' | 'withdrawn' | 'ok' (켜져 있으면 ok) */
-export function observationState(consents) {
-  const tid = traineeId() || (Store.mode === 'local' ? 'local' : null);
+export function observationState(consents, tid = focusId()) {
   return consentState((consents || []).find(c => c.id === tid) || null);
 }
 
 /* 켜기/끄기. 관리자만 (규칙이 막아요). 성공하면 true */
-export async function setObservation(on) {
+export async function setObservation(on, tid = focusId()) {
   await dbReady;
-  const tid = traineeId() || (Store.mode === 'local' ? 'local' : null);
   if (!Store.adapter || !tid) return false;
   const id = 'consents/' + tid, adminId = S.myId || 'local';
   try {

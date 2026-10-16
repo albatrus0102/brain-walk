@@ -73,17 +73,17 @@ export function weeklySummary(sessions, checkinMap, flag, today) {
   if (flag && flag.flag) lines.push('- 최근 점수가 낮아지고 있어요. 병원 상담을 권해요. (진단이 아니에요)');
   return { text: lines.join('\n'), days, avg: avgA == null ? null : Math.round(avgA), delta };
 }
-/* ---- 알림(넛지) 제한: 보낸 사람당 2시간에 1번 ---- */
+/* ---- 알림(넛지) 제한: 보낸 사람·받는 사람마다 2시간에 1번 ---- */
 const NUDGE_COOLDOWN = 2 * 3600 * 1000;
-export function nudgeCooldown(messages, myId, nowTs) {
+export function nudgeCooldown(messages, myId, toId, nowTs) {
   let last = 0;
-  messages.forEach(m => { if (m && m.kind === 'nudge' && !m.deleted && m.authorId === myId && m.ts > last) last = m.ts; });
+  messages.forEach(m => { if (m && m.kind === 'nudge' && !m.deleted && m.authorId === myId && m.toId === toId && m.ts > last) last = m.ts; });
   const wait = last ? Math.max(0, last + NUDGE_COOLDOWN - nowTs) : 0;
   return { ok: wait === 0, waitMs: wait, last };
 }
 export function fmtWait(ms) { const m = Math.ceil(ms / 60000); return m >= 60 ? Math.floor(m / 60) + '시간 ' + (m % 60 ? (m % 60) + '분' : '') : m + '분'; }
 export function nudgesToday(messages, today) { return messages.filter(m => m && m.kind === 'nudge' && !m.deleted && ymd(new Date(m.ts)) === today); }
-export function unackedNudges(messages, myId, today) { return nudgesToday(messages, today).filter(m => m.authorId !== myId && !(m.acks && m.acks[myId])); }
+export function unackedNudges(messages, myId, today) { return nudgesToday(messages, today).filter(m => m.authorId !== myId && m.toId === myId && !(m.acks && m.acks[myId])); }
 export function fmtClock(ts) { const d = new Date(ts), h = d.getHours(); return (h < 12 ? '오전 ' : '오후 ') + (h % 12 || 12) + ':' + pad2(d.getMinutes()); }
 /* ---- 알람 표시 조건 ---- */
 export function alarmShouldShow(cfg, now, courseDone, snoozeUntil) {

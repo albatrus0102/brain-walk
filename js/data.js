@@ -8,6 +8,7 @@ import { checkNudgeDialog } from './nudge.js';
 import { Platform } from './platform.js';
 import { normalizePlan, progressId } from './program.js';
 import { startHeartbeat, stopHeartbeat } from './progress.js';
+import { inSet, labelOf, normalizeTrainees, pickOne, pickSel } from './trainees.js';
 import { courseLen } from './session.js';
 import { S } from './state.js';
 import { FirebaseAdapter } from './store/firebase-adapter.js';
@@ -17,21 +18,68 @@ import { toast } from './ui/dom.js';
 import { render, renderChrome } from './ui/shell.js';
 import { LS, clampLv, ymd } from './util.js';
 
-/* ================= 데이터 접근 ================= */
-export const getLevel = id => clampLv(S.levels[id] || 1);
-export const todayS = () => ymd(new Date());
-export const traineeId = () => (S.trainee && S.trainee.userId) || null;
-/* 가족 화면(진행 현황)이 보는 사람: 가족방은 지정된 훈련하는 분, 체험 모드는 이 기기의 '나' */
-export const dashTraineeId = () => traineeId() || (Store.mode === 'local' ? 'local' : null);
-/* 관리자 설정 (훈련 계획): 문서가 없어도 기본값으로 완전한 계획이 나와요 */
-export function setPlanRaw(raw) { S.planRaw = raw || null; S.plan = normalizePlan(S.planRaw, catalog()); }
-export const getPlan = () => S.plan || (S.plan = normalizePlan(S.planRaw, catalog()));
-const forTrainee = list => { const t = traineeId(); return t ? list.filter(x => !x.userId || x.userId === t) : list; };
-export function role() {
-  if (S.trainee && S.trainee.userId && S.myId) return S.trainee.userId === S.myId ? 'trainee' : 'family';
-  return S.roleLocal === 'family' ? 'family' : 'trainee';
+/* ================= 훈련하는 분 (DESIGN-MULTI §1.4) =================
+ * S.trainees = { ids, labels }  (state/trainees)
+ * S.T[mid]   = { planRaw, plan, display, alarm, levels, program, progressList, sessions, assess, checkins, presence }
+ * 훈련하는 분 기기는 자기 것만, 가족 기기는 훈련하는 분마다 구독해요. 화면은 focusId() (기기 주인 / 고른 사람) 를 봐요. */
+const EMPTY_T = Object.freeze({ planRaw: null, plan: null, display: null, alarm: null, levels: null, program: null, progressList: [], sessions: [], assess: [], checkins: [], presence: null });
+const freshT = () => ({ planRaw: null, plan: null, display: null, alarm: null, levels: null, program: null, progressList: [], sessions: [], assess: [], checkins: [], presence: null, levelsSeen: false, programSeen: false });
+export const tdata = id => (id && S.T[id]) || EMPTY_T;
+export const trainees = () => S.trainees.ids;
+export const isTraineeId = id => inSet(S.trainees, id);
+/* 이 기기의 사람 (체험 모드는 'local') */
+export const meId = () => S.myId || 'local';
+/* 이 기기의 사람이 훈련하는 분이면 그 id */
+export function myTrainee() {
+  if (Store.mode === 'firebase') {
+    if (!S.tsReady) return S.roleLocal === 'trainee' && S.myId ? S.myId : null;
+    return S.myId && isTraineeId(S.myId) ? S.myId : null;
+  }
+  return S.roleLocal === 'family' ? null : 'local';
 }
+/* 역할은 'trainee' 인데 아직 목록에 없는 기기 ("준비 중") */
+export const isPending = () => Store.mode === 'firebase' && !!S.tsReady && !!S.myId && !isTraineeId(S.myId) && myMemberRole() === 'trainee';
+export function role() { return myTrainee() || isPending() ? 'trainee' : 'family'; }
 export const isTrainee = () => role() === 'trainee';
+/* 가족 화면의 고른 사람: 'all' | mid | null */
+export const selTrainee = () => (isTrainee() ? myTrainee() : pickSel(S.trainees, S.selT));
+/* 한 사람을 보는 화면이 보는 사람 */
+export function focusId() {
+  if (isTrainee()) return myTrainee() || (isPending() ? S.myId : null);
+  return pickOne(S.trainees, S.selT, S.lastT);
+}
+export const traineeId = () => focusId();
+export function setSelT(v) {
+  S.selT = v; try { LS.set('bw.selT', v); } catch (e) {}
+  if (v && v !== 'all') { S.lastT = v; try { LS.set('bw.selT1', v); } catch (e) {} }
+  onData();
+}
+/* 한 사람을 보는 화면을 그 사람으로 ('모두' 보기는 그대로 둬요) */
+export function focusOn(id) {
+  if (!isTraineeId(id)) return;
+  S.lastT = id; try { LS.set('bw.selT1', id); } catch (e) {}
+  if (S.selT && S.selT !== 'all') { S.selT = id; try { LS.set('bw.selT', id); } catch (e) {} }
+}
+export const traineeLabel = (id = focusId()) => (id && isTraineeId(id) ? labelOf(S.trainees, id) : '훈련하는 분');
+const DEFAULT_PLAN = () => S._defPlan || (S._defPlan = normalizePlan(null, catalog()));
+export function getPlan(id = focusId()) { const t = id && S.T[id]; if (!t) return DEFAULT_PLAN(); return t.plan || (t.plan = normalizePlan(t.planRaw, catalog())); }
+export const planRawOf = (id = focusId()) => tdata(id).planRaw;
+export const displayOf = (id = focusId()) => tdata(id).display;
+export const alarmOf = (id = focusId()) => tdata(id).alarm;
+/* 프로그램 시작일: 내 기기는 이 기기에 저장된 것, 다른 사람은 그 사람의 문서 */
+export function programStart(id = focusId()) {
+  const p = (!id || id === myTrainee()) ? S.program : tdata(id).program;
+  return (p && p.startDate) || (S.program && S.program.startDate) || todayS();
+}
+/* 적응 난이도: 이 기기 사람(훈련하는 분)은 기기에 저장된 값, 다른 사람은 그 사람의 문서 */
+export function getLevel(gameId, id = focusId()) {
+  if (!id || id === meId()) return clampLv(S.levels[gameId] || 1);
+  const l = tdata(id).levels; return clampLv((l && l[gameId]) || 1);
+}
+export const levelsOf = (id = focusId()) => (!id || id === meId()) ? S.levels : (tdata(id).levels || {});
+export const todayS = () => ymd(new Date());
+/* 관리자 설정 (훈련 계획)은 훈련하는 분마다예요. 문서가 없어도 기본값으로 완전한 계획이 나와요. */
+export function setPlanRaw(raw, id) { if (!id) { S._defPlan = null; return; } const t = S.T[id] || (S.T[id] = freshT()); t.planRaw = raw || null; t.plan = null; }
 /* 방 주인 / 관리자. 체험 모드는 한 사람이 관리자이자 훈련하는 분이라 늘 관리자예요. */
 export function isOwnerNow() { return Store.mode !== 'firebase' || (!!S.myId && S.family.ownerMemberId === S.myId); }
 export function isAdmin() {
@@ -48,7 +96,6 @@ export function adminNames() {
   return Array.from(new Set(ids)).filter(id => ms[id] && !ms[id].leftTs && (id === S.family.ownerMemberId || ms[id].role === 'family')).map(id => String(ms[id].name || '가족'));
 }
 export const chatAvail = () => !!(Store.shared && S.myId);
-export const traineeLabel = () => (S.trainee && S.trainee.displayLabel) || '아버지';
 export function nameOf(id) { if (!id) return '가족'; const p = S.profiles[id]; return (p && p.name) || (id === S.myId && S.me && S.me.name) || '가족'; }
 export async function ensureProfiles(ids) {
   try {
@@ -65,22 +112,26 @@ export async function ensureProfiles(ids) {
     if (need.length) { if (S.screen === 'chat') refreshChat(); else if (S.screen === 'home' || S.screen === 'family') render(true); }
   } catch (e) {}
 }
-export function allSessions() {
+/* 기록의 주인: 체험 모드의 예전 기록(userId 없음)은 이 기기 사람 */
+const ownerOf = x => (x && x.userId) || meId();
+export function allSessions(id = focusId()) {
+  if (!id) return [];
   const map = new Map();
-  S.local.forEach(s => { if (s && s.id && (!Store.shared || s.userId)) map.set(s.id, s); });
-  if (S.dbSessions) S.dbSessions.forEach(s => { if (s && s.id) map.set(s.id, s); });
-  return forTrainee(Array.from(map.values())).filter(s => s && typeof s.ts === 'number' && s.date).sort((a, b) => b.ts - a.ts);
+  if (id === meId()) S.local.forEach(s => { if (s && s.id && (!Store.shared || s.userId) && ownerOf(s) === id) map.set(s.id, s); });
+  tdata(id).sessions.forEach(s => { if (s && s.id && ownerOf(s) === id) map.set(s.id, s); });
+  return Array.from(map.values()).filter(s => s && typeof s.ts === 'number' && s.date).sort((a, b) => b.ts - a.ts);
 }
-export function allAssessments() {
+export function allAssessments(id = focusId()) {
+  if (!id) return [];
   const map = new Map();
-  S.assessLocal.forEach(a => { if (a && a.ts && (!Store.shared || a.userId)) map.set(String(a.ts), a); });
-  (S.dbAssess || []).forEach(a => { if (a && a.ts) map.set(String(a.ts), a); });
-  return forTrainee(Array.from(map.values())).filter(a => a.scores && a.total != null).sort((a, b) => b.ts - a.ts);
+  if (id === meId()) S.assessLocal.forEach(a => { if (a && a.ts && (!Store.shared || a.userId) && ownerOf(a) === id) map.set(String(a.ts), a); });
+  tdata(id).assess.forEach(a => { if (a && a.ts && ownerOf(a) === id) map.set(String(a.ts), a); });
+  return Array.from(map.values()).filter(a => a.scores && a.total != null).sort((a, b) => b.ts - a.ts);
 }
-export function allCheckins() {
-  const map = {};
-  forTrainee(Object.keys(S.ciLocal).map(k => S.ciLocal[k]).filter(c => !Store.shared || (c && c.userId))).forEach(c => { if (c && c.date) map[c.date] = c; });
-  forTrainee(S.dbCheckins || []).sort((a, b) => (a.ts || 0) - (b.ts || 0)).forEach(c => { if (c && c.date) map[c.date] = c; });
+export function allCheckins(id = focusId()) {
+  const map = {}; if (!id) return map;
+  if (id === meId()) Object.keys(S.ciLocal).map(k => S.ciLocal[k]).filter(c => c && (!Store.shared || c.userId) && ownerOf(c) === id).forEach(c => { if (c.date) map[c.date] = c; });
+  tdata(id).checkins.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0)).forEach(c => { if (c && c.date && ownerOf(c) === id) map[c.date] = c; });
   return map;
 }
 export function streakOf(list, today) {
@@ -91,20 +142,20 @@ export function streakOf(list, today) {
 }
 export const dateSet = list => new Set(list.map(s => s.date));
 /* 연속 훈련일: 훈련 기록이 있는 날 + 두뇌 점검을 한 날 */
-export const streakNow = now => streakOf(allSessions().concat(allAssessments()), now || new Date());
+export const streakNow = (now, id = focusId()) => streakOf(allSessions(id).concat(allAssessments(id)), now || new Date());
 /* 오늘의 코스 상태: 진행 문서(progress)를 먼저 보고, 없으면(옛 앱) 세션 기록으로 짐작해요 */
-export function todayProgressDoc() {
-  const tid = dashTraineeId(); if (!tid) return null;
-  const id = progressId(todayS(), tid), srv = (S.progressList || []).find(p => p.id === id) || null;
+export function todayProgressDoc(tid = focusId()) {
+  if (!tid) return null;
+  const id = progressId(todayS(), tid), srv = (tdata(tid).progressList || []).find(p => p.id === id) || null;
   const loc = S._progLocal && S._progLocal.date === todayS() && S._progLocal.userId === tid ? S._progLocal : null;
   return srv && loc ? ((loc.updatedTs || 0) > (srv.updatedTs || 0) ? loc : srv) : (srv || loc);
 }
-export function courseStatus() {
-  const t = todayS(), N = courseLen(), p = todayProgressDoc(), ss = allSessions().filter(s => s.date === t && s.inCourse);
+export function courseStatus(id = focusId()) {
+  const t = todayS(), N = courseLen(id), p = todayProgressDoc(id), all = allSessions(id), ss = all.filter(s => s.date === t && s.inCourse);
   const ids = new Set(ss.map(s => s.gameId));
   const pn = p ? (p.results || []).length : 0, pdone = !!(p && p.status === 'done');
   const ts = Math.max(p ? (Number(p.doneTs) || Number(p.updatedTs) || 0) : 0, ss.length ? Math.max.apply(null, ss.map(s => s.ts)) : 0);
-  return { done: pdone || ids.size >= N, ts, any: !!p || allSessions().some(s => s.date === t), count: Math.min(Math.max(pn, ids.size), N) };
+  return { done: pdone || ids.size >= N, ts, any: !!p || all.some(s => s.date === t), count: Math.min(Math.max(pn, ids.size), N) };
 }
 function syncNoteText() {
   if (S.dbState === 'ready' && (S.dbError || S.writeFailed || S.canWrite === false)) return '가족과 함께 저장하는 데 문제가 있어요. 인터넷 연결을 확인해 주세요.';
@@ -131,7 +182,8 @@ export function saveSession(rec, newLevel, store) {
   LS.set('bw.sessions', S.local);
   if (store !== false) { S.levels[rec.gameId] = newLevel; LS.set('bw.levels', S.levels); }
   const doc = Object.assign({}, rec); delete doc.id;
-  remoteSet('sessions/' + rec.id, doc).then(ok => { if (ok && store !== false && isTrainee()) remoteSet('state/levels', { levels: S.levels, updatedTs: Date.now() }, true); });
+  const me = myTrainee();
+  remoteSet('sessions/' + rec.id, doc).then(ok => { if (ok && store !== false && me) remoteSet('trainees/' + me + '/state/levels', { levels: S.levels, updatedTs: Date.now() }, true); });
 }
 export function ensureProgram() {
   if (!S.program || !S.program.startDate) { S.program = { startDate: todayS() }; LS.set('bw.program', S.program); }
@@ -168,84 +220,119 @@ export async function connectData() {
     S.canWrite = Store.canWrite();
     const me = Store.me();
     if (Store.shared && me && me.id) { S.me = me; S.myId = me.id; if (me.name) S.profiles[me.id] = { name: me.name }; }
-    try {
-      const d = await Store.getDoc('state/levels');
-      if (d && d.levels && typeof d.levels === 'object') { Object.keys(GAMES).forEach(k => { if (d.levels[k] != null) S.levels[k] = clampLv(d.levels[k]); }); LS.set('bw.levels', S.levels); }
-    } catch (e) {}
-    try {
-      const d = await Store.getDoc('state/program');
-      if (d && /^\d{4}-\d{2}-\d{2}$/.test(d.startDate || '')) { S.program = { startDate: d.startDate }; LS.set('bw.program', S.program); }
-      else if (S.program && S.canWrite !== false) remoteSet('state/program', { startDate: S.program.startDate }, true);
-    } catch (e) {}
-    try { S.trainee = await Store.getDoc('state/trainee'); } catch (e) {}
-    // 처음 화면부터 관리자가 정한 계획·화면 설정으로 그려요 (구독이 오기 전에도)
-    try { setPlanRaw(await Store.getDoc('state/plan')); } catch (e) {}
-    try { S.displayRemote = await Store.getDoc('state/display'); } catch (e) {}
-    subscribe('state/trainee', {}, d => { S.trainee = d; onData(); });
-    subscribe('state/alarm', {}, d => { S.alarm = d; alarmTick(); if (S.screen === 'settings') render(true); });
-    // 관리자가 정하는 훈련 계획·화면 설정, 오늘의 진행 상황: 각각 구독 하나씩 (화면을 다시 그려도 늘지 않아요)
-    subscribe('state/plan', {}, d => { setPlanRaw(d); onData(); });
-    subscribe('state/display', {}, d => { S.displayRemote = d; applyDisplay(); });
-    subscribe('progress', { orderBy: ['date', 'desc'], limit: 14 }, list => { S.progressList = list; onData(); });
-    subscribe('state/levels', {}, d => { if (!isTrainee() && d && d.levels && typeof d.levels === 'object') { Object.keys(GAMES).forEach(k => { if (d.levels[k] != null) S.levels[k] = clampLv(d.levels[k]); }); if (['family', 'adminPlan'].includes(S.screen)) onData(); } });
+    if (Store.mode === 'local') { try { await seedLocalTrainees(); } catch (e) {} }   // 체험 모드: 예시 훈련하는 분 두 명
+    try { S.trainees = normalizeTrainees(await Store.getDoc('state/trainees')); S.tsReady = true; } catch (e) {}
+    subscribe('state/trainees', {}, d => { S.trainees = normalizeTrainees(d); S.tsReady = true; syncTraineeSubs(); onData(); });
     try { dbUnsubs.push(Store.watchFamily(f => { S.family = f; applyDisplay(); onData(); })); } catch (e) {}
-    subscribe('sessions', { orderBy: ['ts', 'desc'], limit: 300 }, list => { S.dbSessions = list; onData(); });
-    subscribe('assessments', { orderBy: ['ts', 'desc'], limit: 60 }, list => { S.dbAssess = list; onData(); });
-    subscribe('checkins', { orderBy: ['date', 'desc'], limit: 120 }, list => { S.dbCheckins = list; onData(); });
     if (Store.shared && S.myId) {
       subscribe('reads', {}, list => { S.reads = {}; list.forEach(d => { S.reads[d.id] = Number(d.lastReadTs) || 0; }); onData(); });
       subscribeMessages();
       try { const d = await Store.getDoc('reminders/' + S.myId); if (d) { S.myReminder = d; LS.set('bw.reminder', d); } } catch (e) {}
     }
     if (Store.mode === 'local') { try { await seedDemo(); } catch (e) {} }   // 체험 모드: 예시 문제 은행·리포트를 넣어 둬요 (예시라고 표시돼요)
-    syncBank();
+    syncTraineeSubs(); syncBank();
     connectFamilyOnly(); wasTrainee = isTrainee();
-    // 내 역할(members.role)은 state/trainee 보다 늦게 올 수 있어요: 바뀌었을 때만 다시 맞춰요
+    // 내 역할(members.role)은 목록보다 늦게 올 수 있어요: 바뀌었을 때만 다시 맞춰요
     try { if (Store.adapter && Store.adapter.onMembers) dbUnsubs.push(Store.adapter.onMembers(() => { if (roleChanged()) onData(); })); } catch (e) {}
     updateSyncNote(); applyDisplay({ noRender: true }); onData();
   } catch (e) { S.dbState = 'none'; try { console.warn('저장소 초기화 실패', e); } catch (x) {} }
   resolveReady();
 }
-/* ---- 가족 전용 자료 (설문·일상생활 체크·시계 그림·병원 검사·잠 기록·점검 과제 상세): 규칙상 role 이 'family' 인 사람만 읽을 수 있어요 ---- */
+/* ---- 훈련하는 분마다의 구독 (최대 4명 × 약 10개) ---- */
+const tSubs = {};
+function wantIds() {
+  if (!Store.adapter) return [];
+  const me = myTrainee(); if (me) return [me];
+  if (isTrainee()) return [];                 // 준비 중인 기기: 아무것도 구독하지 않아요
+  return S.trainees.ids.slice();
+}
+function dropTrainee(id) { (tSubs[id] || []).forEach(u => { try { u(); } catch (e) {} }); delete tSubs[id]; delete S.T[id]; }
+function syncTraineeSubs() {
+  const want = wantIds();
+  Object.keys(tSubs).forEach(id => { if (!want.includes(id)) dropTrainee(id); });
+  want.forEach(id => {
+    if (tSubs[id]) return;
+    const T = S.T[id] = S.T[id] || freshT(), us = tSubs[id] = [], mine = () => id === myTrainee();
+    const sub = (target, opts, cb) => { try { us.push(Store.subscribe(target, Object.assign({ onError: () => { S.dbError = true; updateSyncNote(); } }, opts), cb)); } catch (e) { S.dbError = true; } };
+    const st = 'trainees/' + id + '/state/', who = [['userId', '==', id]];
+    sub(st + 'plan', {}, d => { T.planRaw = d; T.plan = null; onData(); });
+    sub(st + 'display', {}, d => { T.display = d; applyDisplay(); if (S.screen === 'settings') render(true); });
+    sub(st + 'alarm', {}, d => { T.alarm = d; alarmTick(); if (S.screen === 'settings') render(true); });
+    sub(st + 'levels', {}, d => {
+      const lv = {}; if (d && d.levels && typeof d.levels === 'object') Object.keys(GAMES).forEach(k => { if (d.levels[k] != null) lv[k] = clampLv(d.levels[k]); });
+      T.levels = lv;
+      // 내 기기는 처음 한 번만 서버 값을 받아요 (그다음부터는 이 기기가 쓰는 쪽이에요)
+      if (mine() && !T.levelsSeen) { T.levelsSeen = true; Object.assign(S.levels, lv); LS.set('bw.levels', S.levels); }
+      if (['family', 'adminPlan', 'pick'].includes(S.screen)) onData();
+    });
+    sub(st + 'program', {}, d => {
+      const ok = d && /^\d{4}-\d{2}-\d{2}$/.test(d.startDate || '');
+      T.program = ok ? { startDate: d.startDate } : null;
+      if (mine() && !T.programSeen) {
+        T.programSeen = true;
+        if (ok) { S.program = { startDate: d.startDate }; LS.set('bw.program', S.program); }
+        else if (S.program && S.program.startDate && S.canWrite !== false) remoteSet(st + 'program', { startDate: S.program.startDate }, true);
+      }
+    });
+    sub('progress', { where: who, orderBy: ['date', 'desc'], limit: 14 }, list => { T.progressList = list; onData(); });
+    sub('sessions', { where: who, orderBy: ['ts', 'desc'], limit: mine() ? 300 : 150 }, list => { T.sessions = list; onData(); });
+    sub('assessments', { where: who, orderBy: ['ts', 'desc'], limit: 60 }, list => { T.assess = list; onData(); });
+    sub('checkins', { where: who, orderBy: ['date', 'desc'], limit: 120 }, list => { T.checkins = list; onData(); });
+    if (!mine()) sub('presence/' + id, {}, d => { T.presence = d; if (S.screen === 'home') onData(); });
+  });
+}
+/* 체험 모드: 목록이 없으면 '나'(아버지)와 예시 한 분(어머니)을 넣어 둬요. 예시 분의 오늘 진행·지난 기록도 함께. */
+export const DEMO_T2 = 'demo2';
+async function seedLocalTrainees() {
+  const A = Store.adapter, today = todayS();
+  if (!(await A.getDoc('state/trainees'))) await A.setDoc('state/trainees', { v: 1, ids: ['local', DEMO_T2], labels: { local: '아버지', [DEMO_T2]: '어머니' }, updatedBy: 'local', updatedTs: Date.now() });
+  const mark = await A.getDoc('trainees/' + DEMO_T2 + '/state/demoSeed');
+  if (mark && mark.date === today) return;
+  const ops = [{ set: 'trainees/' + DEMO_T2 + '/state/demoSeed', data: { date: today } }], now = Date.now(), G = ['cards', 'odd', 'shop', 'today', 'flash'];
+  for (let k = 1; k <= 6; k++) {
+    if (k === 3) continue;
+    const date = ymd(new Date(now - k * 864e5));
+    ops.push({ set: 'progress/' + date + '-' + DEMO_T2, data: { userId: DEMO_T2, date, v: 1, kind: 'course', planned: G, idx: 5, results: G.map((g, i) => ({ g, acc: 0.7 + (i % 3) * 0.1, sec: 60 + i * 5, level: 2 })), status: 'done', startTs: now - k * 864e5, updatedTs: now - k * 864e5 + 6e5, doneTs: now - k * 864e5 + 6e5, sts: now - k * 864e5, example: true } });
+    G.forEach((g, i) => ops.push({ set: 'sessions/demo2-' + date + '-' + g, data: { date, ts: now - k * 864e5 + i * 9e4, gameId: g, level: 2, correct: 4, total: 5, accuracy: 0.8, durationSec: 70, inCourse: true, userId: DEMO_T2, example: true } }));
+  }
+  ops.push({ set: 'progress/' + today + '-' + DEMO_T2, data: { userId: DEMO_T2, date: today, v: 1, kind: 'course', planned: G, idx: 2, current: G[2], currentTs: now - 2 * 6e4, results: G.slice(0, 2).map(g => ({ g, acc: 0.8, sec: 65, level: 2 })), status: 'started', startTs: now - 6e5, updatedTs: now - 2 * 6e4, sts: now - 2 * 6e4, example: true } });
+  ops.push({ set: 'presence/' + DEMO_T2, data: { ts: now - 6e4, lastSeen: now - 6e4, screen: 'game', device: 'Android' } });
+  await A.batch(ops);
+}
+/* ---- 가족 전용 자료 (설문·시계 그림·병원 검사·잠 기록·점검 과제 상세): 고른 훈련하는 분 것만 구독해요 ----
+ * 규칙상 role 이 'family' 이고 훈련하는 분 목록에 없는 사람만 읽을 수 있어요. [컬렉션, S 의 이름, 정렬, 개수, 사람 필드] */
 export const FAMILY_ONLY = [
-  ['surveys', 'surveys', 'ts', 100], ['clocks', 'clocks', 'ts', 40], ['clinicalTests', 'clinical', 'ts', 100],
-  ['sleeplogs', 'sleeplogs', 'date', 30], ['taskRuns', 'taskRuns', 'ts', 30]
+  ['surveys', 'surveys', 'ts', 100, 'subjectId'], ['clocks', 'clocks', 'ts', 40, 'userId'], ['clinicalTests', 'clinical', 'ts', 100, 'subjectId'],
+  ['sleeplogs', 'sleeplogs', 'date', 30, 'userId'], ['taskRuns', 'taskRuns', 'ts', 30, 'userId']
 ];
 let famUnsubs = [];
-/* 체험 모드는 한 기기에서 두 역할을 다 써 보는 곳이라 항상 읽어요. 가족방에서는 내 member 문서의 role 이 family 일 때만요. */
+/* 체험 모드는 한 기기에서 두 역할을 다 써 보는 곳이라 항상 읽어요. 가족방에서는 내 member 문서의 role 이 family 이고 목록에 없을 때만요. */
 export function myMemberRole() { return Store.mode === 'firebase' ? ((FirebaseAdapter.members()[FirebaseAdapter.mid] || {}).role || null) : null; }
-export function canReadFamilyOnly() { return Store.mode === 'local' || myMemberRole() === 'family'; }
-let famReadable = null;     // connectFamilyOnly 를 마지막으로 맞춘 때의 canReadFamilyOnly() (역할이 바뀌면 다시 맞춰요)
+export function canReadFamilyOnly() { return Store.mode === 'local' || (myMemberRole() === 'family' && !myTrainee()); }
+let famReadable = null, famFor = null;     // connectFamilyOnly 를 마지막으로 맞춘 때의 값 (바뀌면 다시 맞춰요)
 export function connectFamilyOnly() {
   famUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} });
-  famReadable = canReadFamilyOnly();
-  if (!famReadable) { FAMILY_ONLY.forEach(f => { S[f[1]] = []; }); return; }
-  FAMILY_ONLY.forEach(([coll, key, ord, lim]) => {
-    try { famUnsubs.push(Store.subscribe(coll, { orderBy: [ord, 'desc'], limit: lim, onError: () => {} }, list => { S[key] = list; onData(); })); } catch (e) {}
+  famReadable = canReadFamilyOnly(); famFor = focusId();
+  FAMILY_ONLY.forEach(f => { S[f[1]] = []; });
+  if (!famReadable || !famFor || !Store.adapter) return;
+  FAMILY_ONLY.forEach(([coll, key, ord, lim, field]) => {
+    try { famUnsubs.push(Store.subscribe(coll, { where: [[field, '==', famFor]], orderBy: [ord, 'desc'], limit: lim, onError: () => {} }, list => { S[key] = list; onData(); })); } catch (e) {}
   });
 }
 /* 가족을 나가거나 삭제한 뒤: 구독 해제 */
 export function disconnectData() {
-  famUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} }); famReadable = null; wasTrainee = null;
+  famUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} }); famReadable = null; famFor = null; wasTrainee = null;
   dbUnsubs.splice(0).forEach(u => { try { u(); } catch (e) {} });
+  Object.keys(tSubs).forEach(dropTrainee);
   resetAdminSubs(); stopBank(); aiAcc = null;
   if (S.msgUnsub) { try { S.msgUnsub(); } catch (e) {} S.msgUnsub = null; }
-  if (presUnsub) { try { presUnsub(); } catch (e) {} presUnsub = null; } presId = null; stopHeartbeat();
-}
-/* 훈련하는 분의 접속 기록(presence): 훈련하는 분이 바뀌면 구독도 새로 해요 (구독은 늘 하나) */
-let presId = null, presUnsub = null;
-function syncPresence() {
-  const t = dashTraineeId(); if (t === presId) return;
-  if (presUnsub) { try { presUnsub(); } catch (e) {} presUnsub = null; }
-  presId = t; S.presence = {}; if (!t) return;
-  try { presUnsub = Store.subscribe('presence/' + t, { onError: () => {} }, d => { S.presence[t] = d; if (S.screen === 'home') onData(); }); } catch (e) {}
+  stopHeartbeat();
 }
 /* 훈련하는 분 기기: 앱이 보이는 동안 접속 기록을 보내요 */
-function syncHeartbeat() { if (Store.adapter && isTrainee() && (S.myId || Store.mode === 'local')) startHeartbeat(); else stopHeartbeat(); }
+function syncHeartbeat() { if (Store.adapter && myTrainee()) startHeartbeat(); else stopHeartbeat(); }
 /* 역할이 바뀌었을 때(체험 모드의 미리보기 전환, 훈련하는 분 지정): 화면 설정·구독을 다시 맞춰요 */
-export function refreshRole() { applyDisplay({ noRender: true }); syncHeartbeat(); syncPresence(); }
-/* 관리자가 훈련하는 분을 바꾸거나 역할을 고치면(state/trainee, members.role) 이 기기도 다시 열지 않고 따라가요:
- * 훈련하는 분이 된 기기는 관리자가 정한 화면 설정을, 가족이 된 기기는 자기 설정과 가족 전용 자료 구독을. */
+export function refreshRole() { applyDisplay({ noRender: true }); syncTraineeSubs(); syncHeartbeat(); connectFamilyOnly(); }
+/* 관리자가 목록이나 역할을 고치면(state/trainees, members.role) 이 기기도 다시 열지 않고 따라가요 */
 let wasTrainee = null;
 function roleChanged() { return (wasTrainee !== null && wasTrainee !== isTrainee()) || (famReadable !== null && famReadable !== canReadFamilyOnly()); }
 let aiAcc = null;
@@ -255,14 +342,15 @@ function syncRole() {
   aiAcc = acc;
   if (wasTrainee !== null && wasTrainee !== tr) applyDisplay({ noRender: true });
   wasTrainee = tr;
-  if (famReadable !== null && famReadable !== canReadFamilyOnly()) connectFamilyOnly();
+  syncTraineeSubs();
+  if (famReadable !== null && (famReadable !== canReadFamilyOnly() || famFor !== focusId())) connectFamilyOnly();
 }
-/* 훈련하는 분 기기는 AI 문제 묶음(aiPacks)을 한 번 구독해요 (기기에 저장해 오프라인에서도 써요) */
-function syncBank() { if (Store.adapter && isTrainee()) startBank(subscribe); }
+/* 훈련하는 분 기기는 자기 AI 문제 묶음(trainees/{나}/aiPacks)을 한 번 구독해요 (기기에 저장해 오프라인에서도 써요) */
+function syncBank() { const me = myTrainee(); if (Store.adapter && me) startBank(subscribe, me); }
 function onData() {
-  syncRole(); syncHeartbeat(); syncPresence(); syncBank();
+  syncRole(); syncHeartbeat(); syncBank();
   alarmTick(true);
-  if (['home', 'pick', 'family', 'assess', 'settings', 'members'].includes(S.screen)) { const keep = document.activeElement; if (!(keep && /^(INPUT|TEXTAREA)$/.test(keep.tagName))) render(true); }
+  if (['home', 'pick', 'family', 'assess', 'settings', 'members', 'surveys', 'clinical', 'clocks'].includes(S.screen) || String(S.screen).indexOf('ai') === 0) { const keep = document.activeElement; if (!(keep && /^(INPUT|TEXTAREA)$/.test(keep.tagName))) render(true); }
   else if (S.screen === 'chat') refreshChat();
   else renderChrome();
   checkNudgeDialog();

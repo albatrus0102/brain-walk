@@ -1,4 +1,5 @@
 import { displayDoc, planDoc } from '../program.js';
+import { MAX_TRAINEES, normalizeTrainees, traineesDoc, withAdded, withLabel, withRemoved } from '../trainees.js';
 import { FirebaseAdapter as FA } from './firebase-adapter.js';
 import { LocalAdapter } from './local-adapter.js';
 import { Store } from './store.js';
@@ -19,7 +20,7 @@ export function normalizeCode(input) {
 export function baseUrl() { return location.origin + location.pathname.replace(/[^/]*$/, ''); }
 export const inviteLink = code => baseUrl() + '?join=' + code;
 export const transferLink = code => baseUrl() + '?transfer=' + code;
-export const inviteText = (code, label) => (label || '아버지') + '와 함께 쓰는 두뇌 산책 가족방에 초대해요.\n아래 링크를 열고 이름을 입력해 주세요.\n' + inviteLink(code) + '\n가족 코드: ' + code;
+export const inviteText = (code, label) => (label ? label + '와 함께 쓰는 ' : '') + '두뇌 산책 가족방에 초대해요.\n아래 링크를 열고 이름을 입력해 주세요.\n' + inviteLink(code) + '\n가족 코드: ' + code;
 
 const ts = ms => FA.sdk.F.Timestamp.fromMillis(ms);
 const sv = () => FA.sdk.F.serverTimestamp();
@@ -108,10 +109,9 @@ export async function createFamily({ name, role, createCode }) {
   throw lastErr;
 }
 
-/* 훈련하는 분으로 등록 (state/trainee) */
+/* 처음 가입한 훈련하는 분이 목록을 만들어요 (state/trainees 가 아직 없을 때만 규칙이 허용해요) */
 export async function setTrainee(label) {
-  const cur = await FA.getDoc('state/trainee').catch(() => null);
-  await FA.setDoc('state/trainee', { userId: FA.mid, displayLabel: label || (cur && cur.displayLabel) || '아버지' });
+  await FA.setDoc('state/trainees', traineesDoc({ ids: [FA.mid], labels: { [FA.mid]: label || '아버지' } }, FA.mid, Date.now()));
 }
 
 export async function joinFamily({ code, name, role }) {
@@ -123,14 +123,14 @@ export async function joinFamily({ code, name, role }) {
   try { await b.commit(); } catch (e) { throw { code: e && e.code === 'permission-denied' ? 'bad-code' : (e && e.code), message: '코드가 맞지 않거나 기간이 지났어요' }; }
   await FA.setMembership(fid, mid);
   await sendSystem(name + '님이 가족방에 들어왔어요');
-  // 훈련하는 분은 가족방에 한 명이에요. 이미 있으면 가족으로 들어가요 (가입 30분 안에는 본인 역할을 바꿀 수 있어요). 바꾸려면 관리자에게 부탁해요.
-  let traineeTaken = false;
+  // 훈련하는 분으로 들어왔는데 목록이 이미 있으면: 역할은 그대로 두고 관리자가 목록에 넣어 줄 때까지 "준비 중"이에요
+  let pending = false;
   if (role === 'trainee') {
-    const t = await FA.getDoc('state/trainee').catch(() => null);
-    if (!t || !t.userId) await setTrainee();
-    else if (t.userId !== mid) { traineeTaken = true; try { await FA.updateDoc('members/' + mid, { role: 'family' }); } catch (e) {} }
+    const t = await FA.getDoc('state/trainees').catch(() => null);
+    if (!t) { try { await setTrainee(); } catch (e) { pending = true; } }
+    else pending = !(Array.isArray(t.ids) && t.ids.includes(mid));
   }
-  return { fid, mid, traineeTaken, label: null };
+  return { fid, mid, pending };
 }
 
 /* ---- 기기 옮기기 ---- */
@@ -203,26 +203,39 @@ export async function setMyRole(role) { await FA.updateDoc('members/' + FA.mid, 
 /* ============ 관리자 기능 (DESIGN.md §4.2) ============
  * 어댑터는 Store.adapter(앱) 또는 FA(스모크 시험). 체험 모드에서도 계획·화면 저장은 같은 코드를 써요. */
 const A = () => Store.adapter || FA;
-/* 훈련 계획 + 알람(시간·요일)을 한 번에 저장해요. alarmTime 은 'HH:MM'. 반환: 저장한 계획 문서 */
-export async function savePlan(plan, catalog, by, alarmTime) {
-  const now = Date.now(), doc = planDoc(plan, catalog, by, now), ops = [{ set: 'state/plan', data: doc }];
-  if (/^\d{2}:\d{2}$/.test(alarmTime || '')) ops.push({ set: 'state/alarm', data: { time: alarmTime, days: doc.weekdays, updatedBy: by, updatedTs: now } });
+/* 훈련 계획 + 알람(시간·요일)을 한 번에 저장해요 (그 훈련하는 분 것). alarmTime 은 'HH:MM'. 반환: 저장한 계획 문서 */
+const tst = (mid, k) => 'trainees/' + mid + '/state/' + k;
+export async function savePlan(mid, plan, catalog, by, alarmTime) {
+  const now = Date.now(), doc = planDoc(plan, catalog, by, now), ops = [{ set: tst(mid, 'plan'), data: doc }];
+  if (/^\d{2}:\d{2}$/.test(alarmTime || '')) ops.push({ set: tst(mid, 'alarm'), data: { time: alarmTime, days: doc.weekdays, updatedBy: by, updatedTs: now } });
   await A().batch(ops);
   return doc;
 }
-export async function saveDisplay(d, by) { const doc = displayDoc(d, by, Date.now()); await A().setDoc('state/display', doc); return doc; }
-/* 훈련하는 분 정하기: state/trainee + 새 사람의 역할 + (다른 사람이었다면) 이전 분을 가족으로 */
-export async function assignTrainee(mid, label, prevMid) {
-  const ops = [{ set: 'state/trainee', data: { userId: mid, displayLabel: String(label || '아버지').slice(0, 12) } }, { update: 'members/' + mid, data: { role: 'trainee' } }];
-  if (prevMid && prevMid !== mid) ops.push({ update: 'members/' + prevMid, data: { role: 'family' } });
+export async function saveDisplay(mid, d, by) { const doc = displayDoc(d, by, Date.now()); await A().setDoc(tst(mid, 'display'), doc); return doc; }
+/* ---- 훈련하는 분 목록 (관리자): 항상 서버의 최신 목록을 읽어서 한 가지만 바꿔요 ---- */
+const myIdNow = () => (Store.me() || FA.me() || {}).id || 'local';
+async function curSet() { return normalizeTrainees(await A().getDoc('state/trainees').catch(() => null)); }
+/* 한 명 더하기: 목록 + 그 사람의 역할을 한 배치로. 다른 훈련하는 분은 그대로예요. */
+export async function addTrainee(mid, label) {
+  const cur = await curSet();
+  if (cur.ids.includes(mid)) return setTraineeLabel(mid, label);
+  if (cur.ids.length >= MAX_TRAINEES) throw { code: 'max-trainees' };
+  const ops = [{ set: 'state/trainees', data: traineesDoc(withAdded(cur, mid, String(label || '아버지').trim().slice(0, 12)), myIdNow(), Date.now()) }];
+  if (Store.mode === 'firebase' || !Store.adapter) ops.push({ update: 'members/' + mid, data: { role: 'trainee' } });
   await A().batch(ops);
 }
-export async function clearTrainee(mid) {
-  const ops = [{ del: 'state/trainee' }]; if (mid) ops.push({ update: 'members/' + mid, data: { role: 'family' } });
+/* 빼기: 목록에서 빼고 역할은 가족으로 (기록은 그대로 남아요) */
+export async function removeTrainee(mid) {
+  const cur = await curSet();
+  const ops = [{ set: 'state/trainees', data: traineesDoc(withRemoved(cur, mid), myIdNow(), Date.now()) }];
+  if (Store.mode === 'firebase' || !Store.adapter) ops.push({ update: 'members/' + mid, data: { role: 'family' } });
   await A().batch(ops);
+}
+export async function setTraineeLabel(mid, label) {
+  const cur = await curSet(); if (!cur.ids.includes(mid)) return;
+  await A().setDoc('state/trainees', traineesDoc(withLabel(cur, mid, String(label).trim().slice(0, 12)), myIdNow(), Date.now()));
 }
 export async function setMemberRole(mid, role) { await A().updateDoc('members/' + mid, { role }); }
-export async function setTraineeLabel(label) { await A().updateDoc('state/trainee', { displayLabel: String(label).trim().slice(0, 12) }); }
 async function familyDoc() { const { F, db } = FA.sdk, ref = F.doc(db, 'families', FA.fid), s = await F.getDoc(ref); return { F, ref, data: s.exists() ? s.data() : {} }; }
 /* 관리자 지정/해제: 방 주인만. 목록은 항상 새로 읽어서 고쳐요 (한 번에 한 명 더하기). */
 export async function grantAdmin(mid) { const { F, ref, data } = await familyDoc(), cur = Array.isArray(data.admins) ? data.admins : []; if (cur.includes(mid)) return; await F.updateDoc(ref, { admins: cur.concat([mid]) }); }
@@ -292,9 +305,13 @@ export async function deleteFamily() {
   const { F, db } = FA.sdk, fid = FA.fid;
   const fam = await F.getDoc(F.doc(db, 'families', fid));
   const code = fam.exists() ? fam.data().joinCode : null;
-  // 가족 전용 자료(설문 등)는 role 이 'family' 인 사람만 읽고 지울 수 있어요. 훈련하는 분이 방 주인이면 지우는 동안만 role 을 바꿔요.
-  try { await F.updateDoc(FA._ref('members/' + FA.mid), { role: 'family' }); } catch (e) {}
-  for (const c of ['messages', 'sessions', 'assessments', 'checkins', 'taskRuns', 'sleeplogs', 'surveys', 'clocks', 'clinicalTests', 'reads', 'reminders', 'progress', 'presence', 'state', 'pushState']) await deleteRefs(await refsOf(c));
+  // 가족 전용 자료(설문 등)는 role 이 'family' 이고 훈련하는 분 목록에 없는 사람만 읽고 지울 수 있어요.
+  // 방 주인이 훈련하는 분이면 먼저 목록에서 빼고 role 을 바꿔요 (한 배치).
+  const set = normalizeTrainees(await FA.getDoc('state/trainees').catch(() => null));
+  if (set.ids.includes(FA.mid)) { try { await removeTrainee(FA.mid); } catch (e) {} }
+  else { try { await F.updateDoc(FA._ref('members/' + FA.mid), { role: 'family' }); } catch (e) {} }
+  for (const id of set.ids) for (const k of ['plan', 'display', 'alarm', 'levels', 'program']) { try { await F.deleteDoc(FA._ref('trainees/' + id + '/state/' + k)); } catch (e) {} }
+  for (const c of ['messages', 'sessions', 'assessments', 'checkins', 'taskRuns', 'sleeplogs', 'surveys', 'clocks', 'clinicalTests', 'reads', 'reminders', 'progress', 'presence', 'pushState']) await deleteRefs(await refsOf(c));
   // AI 문항 기록·메모·안내 동의·검토 결정 (읽을 수 없는 칸이 있어도 삭제는 계속해요. 서버가 만든 aiStats·aiReports 등은 서버가 하루 안에 지워요)
   for (const c of ['itemLogs', 'aiNotes', 'consents', 'aiReview']) { try { await deleteRefs(await refsOf(c)); } catch (e) {} }
   const memberRefs = await refsOf('members');

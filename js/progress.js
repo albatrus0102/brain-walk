@@ -1,4 +1,4 @@
-import { dbReady, isTrainee, remoteSet, todayS } from './data.js';
+import { dbReady, myTrainee, remoteSet, tdata, todayS } from './data.js';
 import { HEARTBEAT_MS, progressFinish, progressId, progressStart, shouldBeat } from './program.js';
 import { ASSESS_STEPS } from './session.js';
 import { S } from './state.js';
@@ -10,12 +10,12 @@ const me = () => S.myId || 'local';
 export const progressDocId = () => progressId(todayS(), me());
 /* 오늘 내 진행 문서: 서버에서 온 것과 방금 쓴 것(낙관적) 중 더 새것 */
 export function todayProgress() {
-  const id = progressDocId(), srv = (S.progressList || []).find(p => p.id === id) || null, loc = S._progLocal && S._progLocal.date === todayS() ? S._progLocal : null;
+  const id = progressDocId(), srv = (tdata(me()).progressList || []).find(p => p.id === id) || null, loc = S._progLocal && S._progLocal.date === todayS() ? S._progLocal : null;
   if (srv && loc) return (loc.updatedTs || 0) > (srv.updatedTs || 0) ? loc : srv;
   return srv || loc || null;
 }
 const strip = p => { if (!p) return null; const o = Object.assign({}, p); delete o.id; return o; };
-const canWrite = () => !!Store.adapter && isTrainee();
+const canWrite = () => !!Store.adapter && !!myTrainee();
 function write(doc) {
   S._progLocal = doc;      // 낙관적: 스냅샷이 오면 서버 것이 이어받아요
   remoteSet('progress/' + progressId(doc.date, me()), doc, true);

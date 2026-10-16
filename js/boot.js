@@ -1,5 +1,5 @@
 import { alarmTick } from './alarm.js';
-import { allAssessments, connectData, ensureProgram, isTrainee, setPlanRaw } from './data.js';
+import { allAssessments, connectData, ensureProgram, getPlan, myTrainee, setPlanRaw } from './data.js';
 import { checkNudgeDialog } from './nudge.js';
 import { startAssessment } from './session.js';
 import { S } from './state.js';
@@ -24,7 +24,7 @@ function askDialog(title, text, actions) { return new Promise(res => dialog(titl
 export async function startFlow() {
   S.firstRunBusy = true;
   try {
-    if (isTrainee() && S.plan && S.plan.checkEveryWeeks && !allAssessments().length && !LS.get('bw.offered', false)) {
+    if (myTrainee() && getPlan().checkEveryWeeks && !allAssessments().length && !LS.get('bw.offered', false)) {
       LS.set('bw.offered', true);
       await askDialog('두뇌 건강 점검을 먼저 해 볼까요?', '약 15분', [
         { label: '점검 시작하기', kind: 'filled', run: () => { S.firstRunBusy = false; startAssessment(); } }, { label: '나중에 할게요', kind: 'text' }]);

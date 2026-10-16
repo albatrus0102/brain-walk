@@ -3,7 +3,7 @@ import { LS, parseYmd, shuffle, ymd } from '../util.js';
 import { weekKey, weekStart } from './kdate.js';
 
 /* ================= AI 문제 은행: 받아서 기기에 저장하고, 꺼내 쓰기 (CLIENT-CONTRACT §2) =================
- * families/{fid}/aiPacks 를 한 번 구독해요 (data.js 가 startBank 를 불러요). 받은 묶음은 localStorage 에도 저장해서 오프라인에서도 써요.
+ * families/{fid}/trainees/{나}/aiPacks 를 한 번 구독해요 (data.js 가 startBank 를 불러요). 받은 묶음은 localStorage 에도 저장해서 오프라인에서도 써요.
  *   훈련 묶음 '{영역}-L{단계}'   : itemsJson (문자열) = 아직 안 본 훈련 문항 최대 40개
  *   기준·앵커 묶음 'measure-{주}': referenceJson / anchorJson (문자열)
  * 문항 글은 모두 "자료"예요. 이 파일은 글을 해석만 하고, 화면에 그릴 때는 늘 textContent 로만 넣어요. */
@@ -66,9 +66,9 @@ export function ingest(list) {
   saveCache();
 }
 /* 훈련하는 분 기기에서만 구독해요. subscribeFn(path, opts, cb) = data.js 의 subscribe */
-export function startBank(subscribeFn) {
-  if (AI.subscribed) return; AI.subscribed = true;
-  subscribeFn('aiPacks', {}, ingest);
+export function startBank(subscribeFn, mid) {
+  if (AI.subscribed || !mid) return; AI.subscribed = true;
+  subscribeFn('trainees/' + mid + '/aiPacks', {}, ingest);
 }
 export function stopBank() { AI.subscribed = false; }
 

@@ -1,18 +1,19 @@
 import { Store } from '../store/store.js';
 import { S } from '../state.js';
-import { writeErrMsg, traineeId } from '../data.js';
+import { focusId, writeErrMsg } from '../data.js';
 import { SURVEYS, bandOf } from './content.js';
 import { toast } from '../ui/dom.js';
 import { ymd } from '../util.js';
 
-/* 설문 기록: surveys/{id} = { kind, version, answers[], score, ts, date, mode, answeredBy, subjectId?, relation? } */
+/* 설문 기록: surveys/{id} = { kind, version, answers[], score, ts, date, mode, answeredBy, subjectId, relation? } (subjectId = 훈련하는 분) */
 export const recordsOf = kind => (S.surveys || []).filter(x => x && x.kind === kind && typeof x.ts === 'number').sort((a, b) => b.ts - a.ts);
 export const scoreOf = (kind, answers) => SURVEYS[kind].score(answers);
 
 export async function saveSurvey(kind, answers, mode, relation) {
   const sv = SURVEYS[kind], now = new Date();
   const doc = { kind, version: sv.version, answers: answers.slice(), score: sv.score(answers), ts: Date.now(), date: ymd(now), mode, answeredBy: S.myId || 'local' };
-  if (traineeId()) doc.subjectId = traineeId();
+  const subj = focusId(); if (!subj) { toast('훈련하는 분이 아직 없어요'); return null; }
+  doc.subjectId = subj;
   if (relation) doc.relation = String(relation).slice(0, 20);
   const id = Date.now() + '-' + Math.random().toString(36).slice(2, 7);
   try { await Store.setDoc('surveys/' + id, doc); return Object.assign({ id }, doc); }

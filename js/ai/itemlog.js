@@ -1,4 +1,4 @@
-import { dbReady, isTrainee, todayS, traineeId } from '../data.js';
+import { dbReady, myTrainee, todayS } from '../data.js';
 import { effectiveSound, synth } from '../sound.js';
 import { S } from '../state.js';
 import { Store } from '../store/store.js';
@@ -11,9 +11,9 @@ export { LOG_V, entryOf } from './itemlog-doc.js';
 export const deviceKind = () => { const u = (typeof navigator !== 'undefined' && navigator.userAgent) || ''; return /Android/i.test(u) ? 'android' : /iPhone|iPad|iPod/i.test(u) ? 'ios' : 'desktop'; };
 /* 이 기기가 문항 기록을 써도 되는지: 체험 모드의 훈련하는 분 역할, 또는 가족방에서 지정된 훈련하는 분 본인의 기기 */
 export function canLog() {
-  if (!isTrainee()) return false;
+  const me = myTrainee(); if (!me) return false;
   if (Store.mode === 'local') return true;
-  return Store.mode === 'firebase' && !!S.myId && traineeId() === S.myId;
+  return Store.mode === 'firebase' && !!S.myId && me === S.myId;
 }
 /* 이 판의 기록 쌓기 */
 export function pushEntry(s, o) { (s.items = s.items || []).push(entryOf(o)); }

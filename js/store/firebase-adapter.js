@@ -7,7 +7,7 @@ import { loadSdk } from './firebase-sdk.js';
  *  - 저장 모양이 앱 모양과 다른 곳은 여기서 변환해요:
  *      reactions  앱 {이모지:[id]}  <->  저장 {memberId:[이모지]}   (규칙이 반복문을 못 써서)
  *      messages   쓸 때 sts / push / expireAt 추가, 읽을 때 제거
- *      nudge      members/{me}.lastNudgeAt 와 한 번에 묶어서 저장
+ *      nudge      members/{me}.nudgeAt.{받는 사람} 과 한 번에 묶어서 저장 (toId 는 읽을 때도 남겨요)
  *      sessions   roundSec 배열 -> 평균 초(숫자). 규칙이 숫자만 허용해요.
  */
 const DAY = 864e5;
@@ -139,7 +139,7 @@ export const FirebaseAdapter = {
     if (/^messages\//.test(path) || path === 'messages') {
       const o = Object.assign({}, d);
       o.reactions = toUiReactions(d.reactions);
-      delete o.sts; delete o.push; delete o.expireAt; delete o.toId;
+      delete o.sts; delete o.push; delete o.expireAt;
       return o;
     }
     return d;
@@ -176,12 +176,12 @@ export const FirebaseAdapter = {
     const doc = Object.assign({}, data, { sts: F.serverTimestamp(), push: data.kind === 'summary' ? 'none' : 'pending', expireAt: F.Timestamp.fromMillis(Date.now() + 365 * DAY) });
     if (data.kind === 'nudge') {
       if (this._offline()) throw { code: 'offline-nudge', message: '알림은 인터넷이 연결되어야 보낼 수 있어요' };
-      const t = await this.getDoc('state/trainee');
-      if (!t || !t.userId || t.userId === me) throw { code: 'no-trainee', message: '훈련하는 분이 아직 없어요' };
-      doc.toId = t.userId;
+      const to = data.toId, t = await this.getDoc('state/trainees');
+      if (!to || to === me || !t || !Array.isArray(t.ids) || !t.ids.includes(to)) throw { code: 'no-trainee', message: '훈련하는 분이 아직 없어요' };
+      doc.toId = to;
       const b = F.writeBatch(db);
       b.set(ref, doc);
-      b.update(this._ref('members/' + me), { lastNudgeAt: F.serverTimestamp() });
+      b.update(this._ref('members/' + me), new F.FieldPath('nudgeAt', to), F.serverTimestamp());
       return b.commit();
     }
     return this._commit(F.setDoc(ref, doc));

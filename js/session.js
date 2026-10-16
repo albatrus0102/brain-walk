@@ -1,7 +1,7 @@
 import { hasAny } from './ai/bank.js';
 import { flushItemLog } from './ai/itemlog.js';
 import { pmMidReminder, pmStart } from './ai/pm.js';
-import { allAssessments, allCheckins, chatAvail, courseStatus, getLevel, getPlan, isTrainee, remoteSet, saveSession, todayProgressDoc, todayS } from './data.js';
+import { allAssessments, allCheckins, chatAvail, courseStatus, getLevel, getPlan, isTrainee, myTrainee, remoteSet, saveSession, todayProgressDoc, todayS } from './data.js';
 import { DOMAINS, GAMES, catalog } from './games/registry.js';
 import { assessTotal } from './logic.js';
 import { sendMessage } from './messages.js';
@@ -21,7 +21,7 @@ export function buildToday(plan, date, cat) {
 /* ================= 세션 진행 ================= */
 export { catalog };
 /* 오늘 코스의 게임 수: 시작한 코스가 있으면 그 길이(진행 중에는 계획이 바뀌어도 그대로), 아니면 계획대로 */
-export const courseLen = () => (S.course && S.course.date === todayS() && S.course.games ? S.course.games.length : buildToday(getPlan(), todayS(), catalog()).length);
+export const courseLen = id => ((id == null || id === myTrainee()) && S.course && S.course.date === todayS() && S.course.games ? S.course.games.length : buildToday(getPlan(id == null ? undefined : id), todayS(), catalog()).length);
 /* opts: inCourse(오늘의 코스로 기록), flow(코스 흐름 안: 끝나면 쉬는 화면), assess, level, rounds, key */
 export function startSession(id, opts) {
   opts = opts || {};

@@ -92,6 +92,7 @@ const SHELL_FILES = /*SHELL_START*/ [
   "./js/surveys/content.js",
   "./js/surveys/engine.js",
   "./js/sw-update.js",
+  "./js/trainees.js",
   "./js/ui/acts.js",
   "./js/ui/chat.js",
   "./js/ui/dashboard.js",

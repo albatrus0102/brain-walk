@@ -6,7 +6,7 @@ import { nextWeekKey, sundayOf, weekKey, weekStart } from './kdate.js';
  * Firebase 없이도 AI 문제 은행 게임과 관리자 AI 리포트 화면을 둘러볼 수 있게, 가짜 문제 묶음·리포트·숫자를 넣어 둬요.
  * 모든 문서에 example:true 가 있고, 화면에도 "예시예요"라고 써요. 실제 기록이 아니에요. 서버가 만든 모양은 CLIENT-CONTRACT 와 같아요.
  * LS 'bw.aiDemo' 가 false 이면 넣지 않아요 (시험에서 예전 화면 흐름을 그대로 볼 때). */
-const SEED_V = 1;
+const SEED_V = 2;
 const hex = (s, n) => { let h1 = 0x811c9dc5, h2 = 0x1b873593; for (let i = 0; i < s.length; i++) { h1 = Math.imul(h1 ^ s.charCodeAt(i), 16777619) >>> 0; h2 = Math.imul(h2 + s.charCodeAt(i) * 31, 2246822519) >>> 0; } return (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0') + ((h1 ^ (h2 >>> 3)) >>> 0).toString(16).padStart(8, '0')).slice(0, n); };
 const bkId = k => 'bk_' + hex(k, 20);
 
@@ -263,35 +263,43 @@ export async function seedDemo() {
   const mark = await A.getDoc('aiState/demoSeed');
   if (mark && mark.v === SEED_V && mark.date === today) return;
   const ops = [], ex = { example: true };
-  // 훈련 묶음 (같은 칸의 문항을 모아요)
+  const reg = await A.getDoc('state/trainees'), ids = (reg && Array.isArray(reg.ids) && reg.ids.length ? reg.ids : ['local']);
+  // 훈련 묶음 (같은 칸의 문항을 모아요): 이 기기 사람('local') 것
   const cells = {}; trainingItems(today).forEach(it => { if (it.format === 'reminiscence') return; (cells[cellOf(it)] = cells[cellOf(it)] || []).push(it); });
   trainingItems(today).filter(it => it.format === 'reminiscence').forEach(it => { (cells['reminiscence-L2'] = cells['reminiscence-L2'] || []).push(it); });
-  Object.keys(cells).forEach(k => { const m = /^([a-z]+)-L(\d)$/.exec(k); ops.push({ set: 'aiPacks/' + k, data: Object.assign({ v: 1, cd: m[1], lv: Number(m[2]), n: cells[k].length, itemsJson: JSON.stringify(cells[k]), builtTs: Date.now() }, ex) }); });
-  // 이번 주부터 세 주치 기준·앵커 묶음
   const M = measureItems(), wk = weekKey(today);
-  for (let k = 0; k < 3; k++) {
-    const key = nextWeekKey(wk, k);
-    ops.push({ set: 'aiPacks/measure-' + key, data: Object.assign({ v: 1, week: key, start: weekStart(key), specVer: 'ref-v1', nRef: M.ref.length, nAnchor: k === 0 ? M.anchor.length : 0, referenceJson: JSON.stringify(M.ref), anchorJson: JSON.stringify(k === 0 ? M.anchor : []), anchorSet: k === 0 ? 'A' : null, plan: { perDay: 5, firstPosition: 1 }, noFeedback: true, ready: true, builtTs: Date.now() }, ex) });
+  // 관리자용 숫자·리포트: 훈련하는 분마다 (trainees/{id}/…)
+  for (const id of ids) {
+    const T = rest => 'trainees/' + id + '/' + rest;
+    if (id === 'local') {
+      Object.keys(cells).forEach(k => { const m = /^([a-z]+)-L(\d)$/.exec(k); ops.push({ set: T('aiPacks/' + k), data: Object.assign({ v: 1, cd: m[1], lv: Number(m[2]), n: cells[k].length, itemsJson: JSON.stringify(cells[k]), builtTs: Date.now() }, ex) }); });
+      // 이번 주부터 세 주치 기준·앵커 묶음
+      for (let k = 0; k < 3; k++) {
+        const key = nextWeekKey(wk, k);
+        ops.push({ set: T('aiPacks/measure-' + key), data: Object.assign({ v: 1, week: key, start: weekStart(key), specVer: 'ref-v1', nRef: M.ref.length, nAnchor: k === 0 ? M.anchor.length : 0, referenceJson: JSON.stringify(M.ref), anchorJson: JSON.stringify(k === 0 ? M.anchor : []), anchorSet: k === 0 ? 'A' : null, plan: { perDay: 5, firstPosition: 1 }, noFeedback: true, ready: true, builtTs: Date.now() }, ex) });
+      }
+    }
+    const D = adminDocs(today);
+    D.reports.forEach(r => { const rid = r.id; delete r.id; ops.push({ set: T('aiReports/' + rid), data: r }); });
+    ops.push({ set: T('aiStats/summary'), data: Object.assign({ weeks: D.weeks, anchorCmp: D.cmp }, ex) });
+    D.cmp.forEach((c, i) => { ops.push({ set: T('aiStats/' + c.prevWk), data: Object.assign({ wk: c.prevWk, anchorRows: D.anchorRows(c.prevWk, 0) }, ex) }, { set: T('aiStats/' + c.wk), data: Object.assign({ wk: c.wk, anchorRows: D.anchorRows(c.wk, 1 + i) }, ex) }); });
+    ops.push({ set: T('aiState/plan'), data: Object.assign({ startDate: D.weeks[0].start, startWeek: D.startWk, phase: 'monitoring', refLevels: { memory: 3, attention: 3, executive: 3, language: 3, visuospatial: 3 }, specVer: 'ref-v1', changePoints: [{ date: D.weeks[16].start, kind: 'device' }] }, ex) });
+    ops.push({ set: T('aiOps/health'), data: Object.assign({ gen: { lastSubmitTs: D.now - 5 * 36e5, lastRunId: D.dt(0).replace(/-/g, '') + '-0331', lastAccepted: 63, lastRejected: 12, lastOkDate: D.dt(0), okDays: [6, 5, 4, 3, 2, 1, 0].map(D.dt) }, rep: { lastReportTs: D.now - 2 * 36e5, lastAggId: 'a-' + D.dt(0).replace(/-/g, '') + '-0650', lastGeneratedBy: 'routine', lastKind: 'daily' }, server: { lastRun: D.now - 4 * 6e4, lastTick: D.now - 4 * 6e4, state: 'ok', reason: null }, tg: { lastKind: 'daily', lastResult: 'sent', lastTs: D.now - 2 * 36e5 }, phase: 'monitoring', thresholdsVer: 'v1' }, ex) });
+    ops.push({ set: T('aiOps/wakes'), data: Object.assign({ days: { [D.dt(3)]: 1 }, lastWake: {}, log: [], open: [], deferred: [] }, ex) });
+    ops.push({ set: T('aiOps/thresholds'), data: Object.assign({ current: { ver: 'v1' }, history: [] }, ex) });
+    // 사용자가 직접 고친 것은 덮어쓰지 않아요: 관심사 낱말, 메모
+    if (!(await A.getDoc(T('aiState/themes')))) ops.push({ set: T('aiState/themes'), data: { words: ['낚시', '등산', '트로트'], updatedBy: 'local', updatedTs: Date.now(), example: true } });
+    if (!(await A.query(T('aiNotes'), {})).length) {
+      ops.push({ set: T('aiNotes/nexample1'), data: { from: D.noteFrom, to: D.noteTo, codes: ['illness', 'sleep'], text: '예시: 기침약 3일 드심', by: 'local', ts: Date.now(), example: true } });
+      ops.push({ set: T('aiNotes/nexample2'), data: { from: addDays(D.noteFrom, 28), to: null, codes: ['device'], text: '예시: 새 휴대폰으로 바꿈', by: 'local', ts: Date.now(), example: true } });
+    }
   }
-  // 관리자용 숫자·리포트
+  // 가족 전체: 문제 은행·검토·AI 켜기
   const D = adminDocs(today);
-  D.reports.forEach(r => { const id = r.id; delete r.id; ops.push({ set: 'aiReports/' + id, data: r }); });
-  ops.push({ set: 'aiStats/summary', data: Object.assign({ weeks: D.weeks, anchorCmp: D.cmp }, ex) });
-  D.cmp.forEach((c, i) => { ops.push({ set: 'aiStats/' + c.prevWk, data: Object.assign({ wk: c.prevWk, anchorRows: D.anchorRows(c.prevWk, 0) }, ex) }, { set: 'aiStats/' + c.wk, data: Object.assign({ wk: c.wk, anchorRows: D.anchorRows(c.wk, 1 + i) }, ex) }); });
-  ops.push({ set: 'aiState/plan', data: Object.assign({ startDate: D.weeks[0].start, startWeek: D.startWk, phase: 'monitoring', refLevels: { memory: 3, attention: 3, executive: 3, language: 3, visuospatial: 3 }, specVer: 'ref-v1', changePoints: [{ date: D.weeks[16].start, kind: 'device' }] }, ex) });
-  ops.push({ set: 'aiOps/health', data: Object.assign({ gen: { lastSubmitTs: D.now - 5 * 36e5, lastRunId: D.dt(0).replace(/-/g, '') + '-0331', lastAccepted: 63, lastRejected: 12, lastOkDate: D.dt(0), okDays: [6, 5, 4, 3, 2, 1, 0].map(D.dt) }, rep: { lastReportTs: D.now - 2 * 36e5, lastAggId: 'a-' + D.dt(0).replace(/-/g, '') + '-0650', lastGeneratedBy: 'routine', lastKind: 'daily' }, server: { lastRun: D.now - 4 * 6e4, lastTick: D.now - 4 * 6e4, state: 'ok', reason: null }, tg: { lastKind: 'daily', lastResult: 'sent', lastTs: D.now - 2 * 36e5 }, phase: 'monitoring', thresholdsVer: 'v1' }, ex) });
-  ops.push({ set: 'aiOps/wakes', data: Object.assign({ days: { [D.dt(3)]: 1 }, lastWake: {}, log: [], open: [], deferred: [] }, ex) });
   ops.push({ set: 'aiOps/bank', data: Object.assign({ cells: D.cells, review: 3, quarantine: 1, total: 400, anchors: { A: true, B: true, C: true }, reservedWeeks: [0, 1, 2].map(k => nextWeekKey(wk, k)), intake: D.intake }, ex) });
   ops.push({ set: 'aiOps/review', data: Object.assign({ n: D.review.length, itemsJson: JSON.stringify(D.review) }, ex) });
-  ops.push({ set: 'aiOps/thresholds', data: Object.assign({ current: { ver: 'v1' }, history: [] }, ex) });
   ops.push({ set: 'aiState/demoSeed', data: { v: SEED_V, date: today } });
-  // 사용자가 직접 고친 것은 덮어쓰지 않아요: 관심사 낱말, AI 켜기, 메모
-  if (!(await A.getDoc('aiState/themes'))) ops.push({ set: 'aiState/themes', data: { words: ['낚시', '등산', '트로트'], updatedBy: 'local', updatedTs: Date.now(), example: true } });
   if (!(await A.getDoc('aiState/switch'))) ops.push({ set: 'aiState/switch', data: { enabled: true, updatedBy: 'local', updatedTs: Date.now(), example: true } });
-  if (!(await A.query('aiNotes', {})).length) {
-    ops.push({ set: 'aiNotes/nexample1', data: { from: D.noteFrom, to: D.noteTo, codes: ['illness', 'sleep'], text: '예시: 기침약 3일 드심', by: 'local', ts: Date.now(), example: true } });
-    ops.push({ set: 'aiNotes/nexample2', data: { from: addDays(D.noteFrom, 28), to: null, codes: ['device'], text: '예시: 새 휴대폰으로 바꿈', by: 'local', ts: Date.now(), example: true } });
-  }
   await A.batch(ops);
 }
 void WD;

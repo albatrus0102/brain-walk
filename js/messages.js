@@ -13,7 +13,7 @@ export async function sendMessage(o) {
   const doc = { authorId: S.myId, text: String(o.text || '').slice(0, 500), ts, kind: o.kind || 'text', reactions: {} };
   if (o.replyTo) doc.replyTo = o.replyTo;
   if (o.record) doc.record = o.record;
-  if (doc.kind === 'nudge') doc.acks = {};
+  if (doc.kind === 'nudge') { doc.acks = {}; doc.toId = o.toId; }
   S.pendingMsgs[id] = Object.assign({}, doc, { id }); rebuildMessages(); if (S.screen === 'chat') refreshChat();
   try {
     if (S.canWrite === false) throw new Error('read-only');

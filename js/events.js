@@ -4,7 +4,7 @@ import { clinicalInput, deleteClinical, openClinicalForm, saveClinical, shareCli
 import { openClock } from './ui/screens/clock.js';
 import { answerSurvey } from './ui/screens/surveys.js';
 import { togglePush } from './ui/room-settings.js';
-import { NO_WRITE_MSG, allCheckins, allSessions, isTrainee, remoteSet, todayS } from './data.js';
+import { NO_WRITE_MSG, allCheckins, allSessions, focusOn, isTrainee, remoteSet, todayS } from './data.js';
 import { applyDisplay } from './display.js';
 import { recordOfCheck, recordOfSession, shareSummary, talkAbout } from './records.js';
 import { beginAssessStep, completeAssessment, resumeAssessment, saveAssessLater, finishSession, nextCourseStep, startAssessment, startCourse, startSession } from './session.js';
@@ -80,7 +80,7 @@ document.addEventListener('click', e => {
     S.ci = {};
     if (S.ciFlow) { S.ciFlow = false; go('courseDone'); } else go('home');
   }
-  else if (a === 'nudgego') { go('family'); setTimeout(() => { const n = $('#nudge-card'); if (n) n.scrollIntoView({ block: 'center' }); }, 60); }
+  else if (a === 'nudgego') { if (b.dataset.to) { focusOn(b.dataset.to); S.nudgeTo = b.dataset.to; } go('family'); setTimeout(() => { const n = $('#nudge-card'); if (n) n.scrollIntoView({ block: 'center' }); }, 60); }
   else if (a === 'sharesummary') shareSummary();
   else if (a === 'talk') { const s = allSessions().find(x => x.id === b.dataset.id); if (s) talkAbout(recordOfSession(s)); }
   else if (a === 'talkcheck') { const c = allCheckins()[todayS()]; if (c) talkAbout(recordOfCheck(c)); }
