@@ -55,7 +55,7 @@ for (const dark of [false, true]) {
   must(n.ma === 1 && n.base === 1 && n.band === 1 && n.zone === 1 && n.note >= 1 && n.anchors >= 3 && n.raw >= 20 && /^0 0 \d+ \d+$/.test(n.vb), (dark ? '어두운 화면: ' : '') + '그래프: 4주 평균 선·기준선·평소 범위 띠·기준선 기간·메모 표시·앵커 ◆·주별 점');
   // 눈금에 맞게 그려졌는지: 점의 높이(cy)가 값에 선형
   const fit = await page.evaluate(async () => {
-    const db = JSON.parse(localStorage.getItem('bw.localdb')), W = db['aiStats/summary'].weeks.slice(-26), pts = [...document.querySelectorAll('.ch-raw')].map(c => +c.getAttribute('cy'));
+    const db = JSON.parse(localStorage.getItem('bw.localdb')), W = db['trainees/local/aiStats/summary'].weeks.slice(-26), pts = [...document.querySelectorAll('.ch-raw')].map(c => +c.getAttribute('cy'));
     const vals = W.filter(w => w.n > 0).map(w => w.sum / w.n * 100).slice(-pts.length);
     const nn = Math.min(vals.length, pts.length), xs = vals.slice(-nn), ys = pts.slice(-nn), mx = xs.reduce((a, b) => a + b, 0) / nn, my = ys.reduce((a, b) => a + b, 0) / nn;
     let sxy = 0, sxx = 0, syy = 0; for (let i = 0; i < nn; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) ** 2; syy += (ys[i] - my) ** 2; }
@@ -96,11 +96,11 @@ for (const dark of [false, true]) {
   await page.click('#ai-n-c-sleep'); await page.click('#ai-n-c-illness');
   await page.fill('#ai-n-text', '기침약 3일 <b>드심</b>'); must((await page.innerText('#ai-n-count')) === '16/200', '글자 수 표시');
   await page.click('#ai-n-save'); await page.waitForTimeout(400);
-  const db = await readDb(page), k = Object.keys(db).filter(x => x.startsWith('aiNotes/n') && !x.includes('example'))[0], d = db[k];
+  const db = await readDb(page), k = Object.keys(db).filter(x => x.startsWith('trainees/local/aiNotes/n') && !x.includes('example'))[0], d = db[k];
   must(d && d.from === '2027-02-28' && d.to === '2027-03-06' && d.codes.join() === 'sleep,illness' && d.text === '기침약 3일 <b>드심</b>' && d.by === 'local' && typeof d.ts === 'number' && Object.keys(d).sort().join() === 'by,codes,from,text,to,ts', '메모 문서: from·to·codes·text·by·ts (계약 모양)');
   must((await page.innerText('#screen')).includes('<b>드심</b>') && (await page.locator('.ai-note b').count()) === 0, '자유 글은 글자 그대로');
   await page.click('#ai-n-ongoing'); await page.click('#ai-n-c-event'); await page.click('#ai-n-save'); await page.waitForTimeout(300);
-  const d2 = Object.entries(await readDb(page)).filter(([x]) => x.startsWith('aiNotes/n') && !x.includes('example') && x !== k).map(e => e[1])[0];
+  const d2 = Object.entries(await readDb(page)).filter(([x]) => x.startsWith('trainees/local/aiNotes/n') && !x.includes('example') && x !== k).map(e => e[1])[0];
   must(d2 && d2.to === null && d2.codes.join() === 'event', '"아직 계속" 은 to:null');
   await noHScroll(page, '메모(최대 글자·360px)'); await page.screenshot({ path: SHOTS + '/ai-notes.png', fullPage: true });
   await page.click('#ai-n-del-' + k.slice(8)); await page.waitForSelector('.dialog'); await page.click('#dlg-btn-1'); await page.waitForTimeout(300);
@@ -146,7 +146,7 @@ for (const dark of [false, true]) {
   must((await page.innerText('#ai-theme-count')) === '8/8', '8개까지 (' + (await page.innerText('#ai-theme-count')) + ')');
   await page.fill('#ai-theme-in', '여행'); await page.click('#ai-theme-add'); must(/8개까지/.test(await page.innerText('#snackbar')), '9번째는 받지 않아요');
   await page.click('#ai-theme-x-0'); await page.click('#ai-theme-save'); await page.waitForTimeout(300);
-  const th = (await readDb(page))['aiState/themes'];
+  const th = (await readDb(page))['trainees/local/aiState/themes'];
   must(th && th.words.length === 7 && th.words.every(w => /^[가-힣]{1,10}$/.test(w)) && th.updatedBy === 'local' && typeof th.updatedTs === 'number' && Object.keys(th).sort().join() === 'updatedBy,updatedTs,words' || th.example, '관심사 저장: {words, updatedBy, updatedTs}');
   await page.screenshot({ path: SHOTS + '/ai-settings.png', fullPage: true });
   await page.click('#btn-ai-switch'); await page.waitForSelector('.dialog'); must((await page.innerText('#dlg-text')).includes('가명 집계를 지워요'), '끄기 확인: 집계·깨우기 멈추고 가명 집계를 지워요');
@@ -178,11 +178,11 @@ for (const dark of [false, true]) {
   await startDemo(page); await page.waitForSelector('#nav-family');
   await page.evaluate(async evil => {
     const db = JSON.parse(localStorage.getItem('bw.localdb'));
-    const k = Object.keys(db).find(x => x.startsWith('aiReports/') && db[x].kind === 'daily' && db[x].generatedBy === 'routine');
+    const k = Object.keys(db).find(x => x.startsWith('trainees/local/aiReports/') && db[x].kind === 'daily' && db[x].generatedBy === 'routine');
     db[k].report.headline = evil + '머리글'; db[k].report.summary = [evil]; db[k].report.domains[0].sentence = evil; db[k].report.notable = [{ text: evil }]; db[k].report.glossary = [{ key: evil, plain: evil, analogy: evil }];
     db[k].numbers.comp_ma4 = evil;
     const rv = JSON.parse(db['aiOps/review'].itemsJson); rv[0].prompt = evil; rv[0].choices[0].t = evil; rv[0].basis = evil; db['aiOps/review'].itemsJson = JSON.stringify(rv);
-    db['aiNotes/nexample1'].text = evil;
+    db['trainees/local/aiNotes/nexample1'].text = evil;
     localStorage.setItem('bw.localdb', JSON.stringify(db));
   }, evil);
   await page.reload(); await page.waitForSelector('#nav-family'); await page.click('#nav-family'); await page.waitForSelector('#tab-assess'); await page.click('#tab-assess'); await page.click('#hub-ai'); await page.waitForSelector('.airow-btn');

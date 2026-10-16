@@ -118,7 +118,7 @@ const openCourse = async (page) => { await startDemo(page); await page.waitForSe
   const { page: p } = await newPage(browser, { tag: 'datewin', seed: Object.assign(planOf('today', Object.assign({}, noSeed(), pack('orientation', 3, [old, cur]))), {}) });
   await startDemo(p);
   // 오늘은 며칠? 게임을 3단계 고정으로
-  await p.evaluate(() => { const db = JSON.parse(localStorage.getItem('bw.localdb')); db['state/plan'].games.today = { on: true, mode: 'fixed', level: 3 }; localStorage.setItem('bw.localdb', JSON.stringify(db)); });
+  await p.evaluate(() => { const db = JSON.parse(localStorage.getItem('bw.localdb')); db['trainees/local/state/plan'].games.today = { on: true, mode: 'fixed', level: 3 }; localStorage.setItem('bw.localdb', JSON.stringify(db)); });
   await p.reload(); await p.waitForSelector('#btn-main'); await p.click('#btn-main'); await p.waitForSelector('#g-title');
   const seen = [];
   await playGame(p, { onRound: async () => { seen.push(await p.innerText('#prompt')); } });

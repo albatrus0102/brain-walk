@@ -56,7 +56,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   // 저장: 계획과 알람이 한 번에
   await page.click('#plan-save'); await page.waitForTimeout(500);
   must(await page.locator('#snackbar').isHidden(), '저장해도 안내 스낵바는 없어요');
-  const d = await db(page), p = d['state/plan'], a = d['state/alarm'];
+  const d = await db(page), p = d['trainees/local/state/plan'], a = d['trainees/local/state/alarm'];
   must(p && p.gamesPerDay === 2 && p.roundsPerGame === 3 && p.autoNextSec === 15 && p.checkEveryWeeks === 0 && p.showScore === true && p.targetMin === 10 && JSON.stringify(p.weekdays) === '[1,2,3,4,5]' && p.order === 'fixed', 'state/plan 저장 내용');
   must(a && a.time === '08:30' && JSON.stringify(a.days) === '[1,2,3,4,5]', 'state/alarm 도 함께 저장 (시간·요일)');
   must(await page.isDisabled('#plan-save'), '저장한 뒤에는 저장 버튼이 꺼져요');
@@ -118,7 +118,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   await page.screenshot({ path: SHOTS + '/admin-display.png', fullPage: true });
   await page.click('#dd-save'); await page.waitForTimeout(500);
   must(await page.locator('#snackbar').isHidden(), '저장해도 안내 스낵바는 없어요');
-  const d = (await db(page))['state/display'];
+  const d = (await db(page))['trainees/local/state/display'];
   must(d && d.font === 'noto' && d.size === 'max' && d.contrast === true && d.voice === true && d.rate === 1.05, 'state/display 저장 내용');
   must((await page.evaluate(() => document.documentElement.getAttribute('data-size'))) === 'normal', '이 기기(가족)의 글자 크기는 그대로');
   await page.click('#btn-back'); await page.click('#btn-role-switch'); await page.click('#dlg-btn-1'); await page.waitForSelector('#btn-main');
@@ -170,7 +170,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   const dis2 = await page.evaluate(() => [...document.querySelectorAll('#screen .seg button, #screen .switch')].filter(e => !e.disabled).length);
   must(dis2 === 0 && !(await vis(page, '#dd-save')), '화면 설정도 읽기 전용');
   await page.click('#dd-font-system', { force: true }).catch(() => {});
-  must(!(await db(page))['state/display'], '눌러도 저장되지 않아요');
+  must(!(await db(page))['trainees/local/state/display'], '눌러도 저장되지 않아요');
   await page.close();
 }
 
@@ -239,7 +239,7 @@ const openCard = async (page, k) => { if ((await page.getAttribute('#xpc-' + k, 
   must(subs1 === subs0 + 1 || subs1 === subs0, '구독 개수가 늘지 않아요 (' + subs0 + ' → ' + subs1 + ': 접속 기록 구독 1개만)');
   // 쉬는 날
   const wd = [0, 1, 2, 3, 4, 5, 6].filter(d => d !== new Date().getDay());
-  await put('state/plan', { weekdays: wd }); await put('progress/' + today + '-local', Object.assign({}, full, { status: 'started', results: [], idx: 0 }));
+  await put('trainees/local/state/plan', { weekdays: wd }); await put('progress/' + today + '-local', Object.assign({}, full, { status: 'started', results: [], idx: 0 }));
   await page.evaluate(async t => { const s = window.__Store; await s.deleteDoc('progress/' + t + '-local'); }, today);
   await page.waitForSelector('#dash[data-state="rest"]'); must((await text(page, '#dash-status')) === '오늘은 쉬는 날이에요', '현황: 쉬는 날');
   await page.close();

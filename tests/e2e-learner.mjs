@@ -2,7 +2,7 @@
 // 체험 모드(훈련하는 분 역할)로 돌려요. 사용법은 tests/README.md
 import { BASE, SHOTS, done, errors, finishGame, launch, must, newPage, noHScroll, out, startDemo, vis, mainSub } from './e2e-lib.mjs';
 const browser = await launch();
-const plan = o => ({ 'bw.localdb': { 'state/plan': o } });
+const plan = o => ({ 'bw.localdb': { 'trainees/local/state/plan': o } });
 
 /* ---------- 1) 기본 홈 + 톱니바퀴 ---------- */
 {
