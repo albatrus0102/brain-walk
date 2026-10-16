@@ -271,8 +271,8 @@ function reviewCard(it) {
     h('summary', null, h('span', { class: 'ai-sum' }, h('span', { class: 'ai-sum-top' }, h('strong', { text: FORMAT_NAMES[it.format] || it.format }), (WHY_NAMES[it.why] || '검토') === (FORMAT_NAMES[it.format] || it.format) ? null : h('span', { class: 'ai-brief', text: WHY_NAMES[it.why] || '검토' })), h('span', { class: 'ai-line', text: (it.prompt || '').slice(0, 60) })), h('span', { class: 'ai-more' }, '보기', svgIcon('expand'))), body);
 }
 SCREENS.aiBank = screen('문제 은행', root => {
-  const bk = AD.bank, hl = AD.health, cells = (bk && bk.cells) || {};
-  const gen = hl && hl.gen;
+  const bk = AD.bank, cells = (bk && bk.cells) || {};
+  const gen = (AD.famHealth && AD.famHealth.gen) || (AD.health && AD.health.gen);
   root.append(h('p', { class: 't-body', id: 'ai-bank-last', text: '마지막 생성 ' + (gen && gen.lastSubmitTs ? when(msOf(gen.lastSubmitTs)) + (gen.lastRejected != null && gen.lastAccepted != null ? ' (받은 ' + (gen.lastAccepted + gen.lastRejected) + '개 중 ' + gen.lastAccepted + '개 통과)' : '') : '기록 없음') }));
   const tb = h('table', { class: 'ai-table bank', id: 'ai-bank-table' }, h('caption', { class: 'sr', text: '아직 안 쓴 훈련 문항 개수 (목표: 칸마다 20개)' }),
     h('thead', null, h('tr', null, h('th', { scope: 'col', text: '영역' }), [1, 2, 3, 4, 5].map(l => h('th', { scope: 'col', 'aria-label': l + '단계', text: String(l) })))),
@@ -309,7 +309,7 @@ ACTS['ai-rv'] = b => {
 const ago = ms => { if (!ms) return '기록 없음'; const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? '방금' : m < 60 ? m + '분 전' : m < 1440 ? Math.round(m / 60) + '시간 전' : Math.round(m / 1440) + '일 전'; };
 const statusRow = (id, name, ok, ...lines) => h('li', { class: 'ai-st', id }, h('span', { class: 'ai-st-n' }, h('strong', { text: name }), ok == null ? null : h('span', { class: 'st-mark ' + (ok ? 'ok' : 'warn'), text: ok ? '✓' : '⚠' })), lines.filter(Boolean).map(t => h('span', { class: 'ai-line', text: t })));
 SCREENS.aiOps = screen('루틴 상태', root => {
-  const hl = AD.health || {}, g = hl.gen || {}, rp = hl.rep || {}, sv = hl.server || {}, tg = hl.tg || {}, wk = AD.wakes || {};
+  const hl = AD.health || {}, g = (AD.famHealth && AD.famHealth.gen) || hl.gen || {}, rp = hl.rep || {}, fh = AD.famHealth || {}, sv = hl.server || fh.server || {}, tg = hl.tg || fh.tg || {}, wk = AD.wakes || {};
   if (!AD.health) root.append(section(null, note(AD.ready.health ? '아직 루틴 기록이 없어요.' : '불러오는 중이에요…')));
   const ok7 = (g.okDays || []).filter(d => d >= addDays(ymd(new Date()), -6)).length;
   const today = ymd(new Date()), mo = today.slice(0, 7), days = (wk.days || {}), moN = Object.keys(days).filter(d => d.slice(0, 7) === mo).reduce((s, d) => s + days[d], 0);

@@ -9,7 +9,7 @@ import { render } from '../ui/shell.js';
  * 고른 사람이 바뀌면 다시 구독해요. 문제 은행(aiOps/bank·review)·검토 결정·AI 끄기는 가족 전체 것이에요.
  * 서버가 쓰는 문서이고, 앱은 읽기만 해요. 쓰는 것은 메모(aiNotes), 관심사 낱말(aiState/themes), AI 끄기(aiState/switch), 검토 결정(aiReview) 뿐이에요. */
 const fresh = () => ({
-  reports: [], stats: null, plan: null, themes: null, sw: null, notes: [], signals: [], health: null, wakes: null, bank: null, review: null, thresholds: null, decisions: [], consents: [],
+  reports: [], stats: null, plan: null, themes: null, sw: null, famHealth: null, notes: [], signals: [], health: null, wakes: null, bank: null, review: null, thresholds: null, decisions: [], consents: [],
   denied: false, ready: {}, subscribed: false, weekDocs: {}, mid: null, latest: {}
 });
 export const AD = fresh();
@@ -55,7 +55,7 @@ export function ensureAdminSubs() {
   list(T('aiSignals'), { limit: 30 }, 'signals');
   doc(T('aiOps/health'), 'health'); doc(T('aiOps/wakes'), 'wakes'); doc(T('aiOps/thresholds'), 'thresholds');
   // 가족 전체
-  doc('aiState/switch', 'sw'); doc('aiOps/bank', 'bank'); doc('aiOps/review', 'review');
+  doc('aiState/switch', 'sw'); doc('aiOps/bank', 'bank'); doc('aiOps/review', 'review'); doc('aiOps/health', 'famHealth');   // famHealth.gen = 문제 만들기 루틴 (가족 전체)
   list('aiReview', { limit: 80 }, 'decisions');
   list('consents', { limit: 20 }, 'consents');
 }
