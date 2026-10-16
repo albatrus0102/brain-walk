@@ -27,11 +27,11 @@ AI 문제 은행·리포트 규칙(DESIGN-AI 부록 C)은 넷째 가족(`fam4`)�
 - 순수 시험 `npm run test:ai:unit` (= `cd ../functions && npm test`, 에뮬레이터 필요 없음): 형식마다 좋은 문항과 일부러 틀린 문항으로 검사기의 모든 확인(정답 재계산, 손잡이 값, 금지어, 개인정보, 중복, 검사 문항 지문, 품질 기록, 역할), 리포트 검사·채우기·간단판, 통계 함수(알려진 값), 신호 규칙 S1–S6·메모 낮추기·앵커 판정, 시뮬레이션(변화 없는 자료에서 주황 1년 1회 이하, 일부러 넣은 하락은 잡힘), 이모지 13.0·명절 표(KASI 대조)·사전, 로그가 내용·키를 버리는지, 텔레그램 문구, 깨우기 판단, 검사기 사본(vendor)이 서버와 같은지.
 - 에뮬레이터 시험 `npm run test:ai` (Functions + Firestore 에뮬레이터, `functions/` 에서 `npm install` 먼저): 두 함수의 503/401/200/400/405/413/429, 키가 응답에 없는지; 문항 올리기 → 검사 트리거 → 은행·거절·묶음; 12주 가짜 기록 → 집계 → 신호 → 루틴 깨우기(가짜 API) → 루틴이 작업 읽기 → 리포트 올리기 → 검사·채운 리포트 저장 → 텔레그램(가짜) → 숫자 섞인 리포트는 간단판으로 → 깨우기 실패는 간단판 + 규칙 알림; 하루 한도·조용한 시간, 08:00/08:30 처리, 보관 삭제(지운 가족 포함). 이어서 `ai-client-contract.test.mjs` 가 **앱이 실제로 만드는 문서**(앱이 쓰는 순수 함수 `js/ai/itemlog-doc.js`·`consent-doc.js`·`admin-docs.js` + 앱의 FirebaseAdapter)를 실제 규칙으로 써 보고, 배포된 함수가 버리지 않는지 확인해요: 문항 기록(은행·기준·앵커·이야기 #qN·DELAY_LOSS·코드 문항·속도 proc·그만둔 판·🌼·25문항 나눔) → 규칙 통과 → aiOnItemLog 노출 기록 → 서버 sanitizeLog/weekStats 가 문항·오류 코드를 모두 유지, 안내 동의(만들기·철회·다시 확인 → 서버 eligibility), 메모, 검토 결정(aiOnReview), 관심사 낱말·AI 끄기. 실행기(`ai-run-emu.mjs`)는 에뮬레이터와 함수 로그를 포함한 **모든 출력**에 루틴 키·해시·비밀값·문항 글·이름·점수 글자가 있으면 실패해요. 시험용 가짜 `functions/.env.local`·`.secret.local` 을 잠깐 만들었다가 되돌려요.
 
-## 1-1) 순수 로직 시험 — `program.test.mjs` (에뮬레이터 필요 없음)
-훈련 계획 기본값·범위 맞추기, 오늘의 코스(예전 코스와 2년치 날짜가 똑같은지 포함), 고정/자동 난이도와 범위, 훈련 요일, 월간 점검 주기, 진행 상황 문서, 가족 화면의 오늘 상태·7일 띠·마지막으로 본 시간.
+## 1-1) 순수 로직 시험 — `program.test.mjs`, `trainees.test.mjs` (에뮬레이터 필요 없음)
+훈련 계획 기본값·범위 맞추기, 오늘의 코스(예전 코스와 2년치 날짜가 똑같은지 포함), 고정/자동 난이도와 범위, 훈련 요일, 월간 점검 주기, 진행 상황 문서, 가족 화면의 오늘 상태·7일 띠·마지막으로 본 시간. `trainees.test.mjs` 는 `js/trainees.js`: 목록 정리(깨진 문서·겹치는 id·4명 넘김), 더하기·빼기·호칭 바꾸기, 최대 4명, 호칭 이어 붙이기, 가족 화면 선택 규칙(`pickSel`/`pickOne`), 문서 모양(`traineesDoc`), `{{who}}` 채우기.
 
 ```
-npm run test:unit      # = node --test program.test.mjs
+npm run test:unit      # = node --test program.test.mjs trainees.test.mjs
 ```
 
 ## 2) FirebaseAdapter 스모크 시험 — `adapter-smoke.mjs`
