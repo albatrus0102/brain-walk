@@ -270,10 +270,15 @@ for (const g of NEW.flatMap(x => [x, Object.assign({}, x, { dark: true })])) {
   const cardT = bk({ format: 'card_theme', cdomain: 'memory', level: 1, body: { theme: '과일', cards: [[evil(2), '사과' + evil(3)], ['🍌', '바나나'], ['🍇', '포도']] } });
   const { page } = await newPage(browser, { tag: 'xss-cards', seed: planOf('cards', Object.assign({}, noSeed(), pack('memory', 1, [cardT]))) });
   await openCourse(page);
-  for (let i = 0; i < 6; i++) await page.click('#card-' + i).catch(() => {});
+  // 카드 위치는 매번 섞이고 짝이 다 맞으면 판이 끝나요: 카드를 하나 누를 때마다 보이는 글자와 <img> 개수를 모아 확인해요
+  let t = '', imgs = 0;
+  for (let i = 0; i < 6; i++) {
+    await page.click('#card-' + i).catch(() => {});
+    t += ' ' + await page.evaluate(() => [...document.querySelectorAll('#board .mcard')].map(b => b.textContent).join(' '));
+    imgs += await page.locator('#board img').count();
+  }
   await page.waitForTimeout(300);
-  const t = await page.evaluate(() => [...document.querySelectorAll('#board .mcard')].map(b => b.textContent).join(' '));
-  must(t.includes('<img') && (await page.locator('#board img').count()) === 0 && await page.evaluate(() => window.__xss === undefined), '카드 짝 맞추기: 은행 카드의 그림·이름은 글자로 (실행 안 됨)');
+  must(t.includes('<img') && imgs === 0 && await page.evaluate(() => window.__xss === undefined), '카드 짝 맞추기: 은행 카드의 그림·이름은 글자로 (실행 안 됨)');
   await page.close();
   const emo = bk({ format: 'emoji_set', cdomain: 'attention', level: 1, body: { pairs: [[evil(4), '🙂']] } });
   for (const gid of ['odd', 'flash']) {
