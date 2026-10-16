@@ -14,6 +14,19 @@ import { esc } from '../../util.js';
 /* 가족 구성원 (DESIGN-MULTI §6.5): 누가 훈련하는 분(최대 4명)이고 관리자인지 보고, 관리자는 훈련하는 분을 더하거나 빼고, 모르는 사람은 내보내요. */
 const ms = () => FirebaseAdapter.members();
 const joined = m => (m.joinedTs && m.joinedTs.toMillis ? m.joinedTs.toMillis() : Number(m.joinedTs) || 0);
+/* 처음 들어온 날(joinedTs)과 마지막 접속(presence.lastSeen): 관리자만 봐요 */
+const seen = {};
+let seenAt = 0;
+const msOf = v => (v && v.toMillis ? v.toMillis() : Number(v) || 0);
+const p2 = n => String(n).padStart(2, '0');
+const fmtDay = t => { const d = new Date(t); return d.getFullYear() + '.' + p2(d.getMonth() + 1) + '.' + p2(d.getDate()); };
+const fmtAt = t => fmtDay(t) + ' ' + p2(new Date(t).getHours()) + ':' + p2(new Date(t).getMinutes());
+const dates = (id, m) => { const j = joined(m), l = msOf((seen[id] || {}).lastSeen); return '처음 ' + (j ? fmtDay(j) : '-') + ' · 마지막 ' + (l ? fmtAt(l) : '-'); };
+async function loadSeen() {
+  const ids = Object.keys(ms());
+  await Promise.all(ids.map(async id => { try { seen[id] = (await Store.getDoc('presence/' + id)) || {}; } catch (e) { seen[id] = {}; } }));
+  if (S.screen === 'members' && document.getElementById('sheet').hidden) render(true);
+}
 const isAdminId = id => id === S.family.ownerMemberId || ((S.family.admins || []).includes(id) && (ms()[id] || {}).role === 'family');
 function rows() {
   const all = Object.entries(ms()).filter(([, m]) => m && !m.leftTs), T = trainees(), o = S.family.ownerMemberId;
@@ -34,6 +47,7 @@ SCREENS.members = {
       '<ul class="mlist" id="mem-list">' + rows().map(([id, m], i) => {
         const badges = (isTraineeId(id) ? '<span class="pill tr">훈련하는 분 · ' + esc(traineeLabel(id)) + '</span>' : '') + (id === S.family.ownerMemberId ? '<span class="pill">방 주인</span>' : '') + (isAdminId(id) ? '<span class="pill ad">관리자</span>' : '') + (id === me ? '<span class="pill me">나</span>' : '');
         return '<li><button type="button" class="hub-item mrow" id="mem-' + i + '" data-act="mem-open" data-id="' + esc(id) + '"><span><strong>' + esc(m.name || '가족') + '</strong><span class="badges">' + badges + '</span>' +
+          (admin ? '<span class="sub" id="mem-dates-' + i + '">' + dates(id, m) + '</span>' : '') +
           (admin && pendingOf(id, m) ? '<span class="sub pend" id="mem-pend-' + i + '">준비 중</span>' : '') +
           (admin && wrongRole(id, m) ? '<span class="sub warn" id="mem-warn-' + i + '">역할이 맞지 않아요</span>' : '') + '</span><span class="t-title-m" aria-hidden="true">›</span></button></li>';
       }).join('') + '</ul>' +
@@ -43,6 +57,7 @@ SCREENS.members = {
     if (Store.mode !== 'firebase') return;
     const off = FirebaseAdapter.onMembers(() => { if (S.screen === 'members' && document.getElementById('sheet').hidden) render(true); });
     S.onLeave = () => off();
+    if (isAdmin() && Date.now() - seenAt > 30000) { seenAt = Date.now(); loadSeen(); }   // 다시 그릴 때마다 읽지 않게 30초에 한 번
   }
 };
 function openMember(id) {
@@ -52,6 +67,7 @@ function openMember(id) {
     const tags = [isT ? '훈련하는 분 · ' + traineeLabel(id) : (pendingOf(id, m) ? '준비 중' : ''), owner ? '방 주인' : '', isAdminId(id) ? '관리자' : (isT ? '' : '가족')].filter(Boolean);
     body.append(h('p', { class: 't-body muted', id: 'mem-desc', text: tags.join(' · ') }));
     if (!admin) { body.append(btn('닫기', 'text', closeSheet, 'mem-close')); return; }
+    body.append(h('p', { class: 't-body muted', id: 'mem-dates', text: dates(id, m) }));
     if (wrongRole(id, m)) body.append(btn('역할 고치기', 'filled', async () => { try { await setMemberRole(id, 'trainee'); closeSheet(); toast('고쳤어요.'); await refresh(); } catch (e) { fail(e); } }, 'mem-fix'));
     if (!isT && trainees().length < MAX_TRAINEES) body.append(btn('훈련하는 분으로 정하기', pendingOf(id, m) ? 'filled' : 'tonal', () => openLabel(id, nm, true), 'mem-assign'));
     if (isT) {
