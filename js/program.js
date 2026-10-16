@@ -148,6 +148,21 @@ export function buildCourse(planRaw, date, catalog) {
   for (const id of extra) { if (out.length >= want) break; out.push(id); }
   return out;
 }
+/* 약한 영역: 어제까지 14일 동안 영역별 평균 정답률을 보고, 가장 낮은 영역이 나머지 평균보다 10점 이상 낮으면 그 영역.
+ * 영역마다 2판 이상, 비교할 영역이 2개 이상일 때만. 오늘 기록은 빼요 (하루 안에서 코스가 바뀌지 않게). */
+export function weakDomain(sessions, today, domainOf) {
+  const from = addDays(today, -14), by = {};
+  for (const s of sessions || []) {
+    if (!s || !s.date || s.date >= today || s.date < from) continue;
+    const dom = s.domain || (domainOf && domainOf(s.gameId)); if (!dom) continue;
+    (by[dom] = by[dom] || []).push(Number(s.accuracy) || 0);
+  }
+  const avg = Object.entries(by).filter(([, xs]) => xs.length >= 2).map(([d, xs]) => [d, xs.reduce((a, b) => a + b, 0) / xs.length]);
+  if (avg.length < 2) return null;
+  avg.sort((a, b) => a[1] - b[1]);
+  const [wd, wa] = avg[0], rest = avg.slice(1).reduce((a, x) => a + x[1], 0) / (avg.length - 1);
+  return rest - wa >= 0.10 ? wd : null;
+}
 /* 대략 걸리는 시간(분): 기본 분량 게임 하나 ≈ 3분 */
 export function estimateMinutes(planRaw, date, catalog) {
   const plan = normalizePlan(planRaw, catalog), by = Object.fromEntries((catalog || []).map(g => [g.id, g]));

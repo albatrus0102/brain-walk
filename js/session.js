@@ -1,27 +1,39 @@
 import { hasAny } from './ai/bank.js';
 import { flushItemLog } from './ai/itemlog.js';
 import { pmMidReminder, pmStart } from './ai/pm.js';
-import { allAssessments, allCheckins, chatAvail, courseStatus, getLevel, getPlan, isTrainee, meId, myTrainee, remoteSet, saveSession, todayProgressDoc, todayS } from './data.js';
+import { allAssessments, allCheckins, allSessions, chatAvail, courseStatus, getLevel, getPlan, isTrainee, meId, myTrainee, remoteSet, saveSession, todayProgressDoc, todayS } from './data.js';
 import { DOMAINS, GAMES, catalog } from './games/registry.js';
 import { assessTotal } from './logic.js';
 import { sendMessage } from './messages.js';
-import { buildCourse, effectiveLevel, estimateMinutes, nextLevelFor, roundsFor } from './program.js';
+import { buildCourse, normalizePlan, weakDomain, effectiveLevel, estimateMinutes, nextLevelFor, roundsFor } from './program.js';
 import { progressGameFinish, progressGameStart, progressMarkDone } from './progress.js';
 import { S } from './state.js';
 import { go } from './ui/shell.js';
 import { LS, mean, rnd, ymd } from './util.js';
 
 /* 오늘 코스: 계획대로 만들되, 문제 은행이 비어 있는 새 AI 게임은 빼요 (은행이 비면 앱은 예전처럼 돌아가요) */
-export function buildToday(plan, date, cat) {
-  const base = buildCourse(plan, date, cat), ok = base.filter(id => !GAMES[id].bank || hasAny(GAMES[id].cd, GAMES[id].formats));
-  if (ok.length === base.length) return base;
-  return ok.length ? ok : buildCourse(plan, date, cat.filter(g => !GAMES[g.id].bank));
+const usable = id => !GAMES[id].bank || hasAny(GAMES[id].cd, GAMES[id].formats);
+export function buildToday(plan, date, cat, who) {
+  const base = buildCourse(plan, date, cat), ok = base.filter(usable);
+  const out = ok.length === base.length ? base : ok.length ? ok : buildCourse(plan, date, cat.filter(g => !GAMES[g.id].bank));
+  return withWeak(out, plan, date, cat, who);
+}
+/* 약한 영역 게임 하나 더 (돌아가며 짜는 코스만, 관리자가 순서를 고정했으면 그대로): 최근 2주 점수가 가장 낮은 영역에서, 오늘 코스에 없는 게임을 가운데쯤에 넣어요 */
+function withWeak(games, plan, date, cat, who) {
+  const np = normalizePlan(plan, cat);
+  if (!games.length || np.order === 'fixed') return games;
+  const dom = weakDomain(allSessions(who || undefined), date, gid => GAMES[gid] && GAMES[gid].domain); if (!dom) return games;
+  const on = gid => !!(np.games[gid] && np.games[gid].on);
+  const pool = cat.filter(g => g.domain === dom && on(g.id) && !games.includes(g.id) && usable(g.id)).map(g => g.id);
+  if (!pool.length) return games;
+  const add = pool[Number(String(date).replace(/-/g, '')) % pool.length], at = Math.ceil(games.length / 2);
+  return games.slice(0, at).concat([add], games.slice(at));
 }
 
 /* ================= 세션 진행 ================= */
 export { catalog };
 /* 오늘 코스의 게임 수: 시작한 코스가 있으면 그 길이(진행 중에는 계획이 바뀌어도 그대로), 아니면 계획대로 */
-export const courseLen = id => ((id == null || id === myTrainee()) && S.course && S.course.date === todayS() && S.course.games ? S.course.games.length : buildToday(getPlan(id == null ? undefined : id), todayS(), catalog()).length);
+export const courseLen = id => ((id == null || id === myTrainee()) && S.course && S.course.date === todayS() && S.course.games ? S.course.games.length : buildToday(getPlan(id == null ? undefined : id), todayS(), catalog(), id).length);
 /* opts: inCourse(오늘의 코스로 기록), flow(코스 흐름 안: 끝나면 쉬는 화면), assess, level, rounds, key */
 export function startSession(id, opts) {
   opts = opts || {};
